@@ -10,7 +10,7 @@ from typing import Literal
 from .detect import Detector, RegexDetector, Span, resolve_overlaps
 from .detect.ner import NerDetector
 from .lang import Lang, detect_language, has_cjk, languages_in
-from .mapping import PERSON, RestoreResult, Session, name_aliases
+from .mapping import COMMON_SURNAMES, PERSON, RestoreResult, Session, find_all, name_aliases
 from .models import ModelSpec, is_installed
 from .speakers import speaker_spans
 
@@ -25,20 +25,6 @@ class ObfuscateResult:
     code_spans: list[Span]  # where the codes sit in the output
     originals: list[str]    # what each code span replaced
     model_used: bool        # False when no model is installed for `lang`
-
-
-def find_all(text: str, values: dict[str, str]) -> list[Span]:
-    """Every occurrence of each value (value -> label). Values that start/end with an
-    ASCII letter or digit must not touch another one, so "Al" won't match in "Alice"."""
-    spans: list[Span] = []
-    for value, label in values.items():
-        if not value.strip():
-            continue
-        left = r"(?<![A-Za-z0-9])" if value[0].isascii() and value[0].isalnum() else ""
-        right = r"(?![A-Za-z0-9])" if value[-1].isascii() and value[-1].isalnum() else ""
-        for m in re.finditer(left + re.escape(value) + right, text):
-            spans.append(Span(m.start(), m.end(), label, value))
-    return spans
 
 
 CLAUSE_RE = re.compile(r"[^。！？；，、,;!?\n]+")
@@ -57,6 +43,25 @@ def clause_names(model: Detector, text: str) -> list[Span]:
             if s.label == PERSON:
                 spans.append(Span(s.start + m.start(), s.end + m.start(), s.label, s.text, s.score))
     return spans
+
+
+# After a lone surname, these start a title or a function word, not a given name.
+NOT_GIVEN_NAME = set("經副先小老醫董總主教律博同太護的了是在和跟與及說把被給向對也都就還又而並但或會要請已再")
+
+
+def extend_surnames(text: str, spans: list[Span]) -> list[Span]:
+    """The Chinese model sometimes tags only the surname ("給[顧]秀"): take the given name
+    too, one or two Chinese characters, unless a title or function word follows (王經理)."""
+    out: list[Span] = []
+    for s in spans:
+        if s.label == PERSON and len(s.text) == 1 and s.text in COMMON_SURNAMES:
+            end = s.end
+            while end < min(s.end + 2, len(text)) and "\u3400" <= text[end] <= "\u9fff" \
+                    and text[end] not in NOT_GIVEN_NAME:
+                end += 1
+            s = Span(s.start, end, PERSON, text[s.start:end], s.score)
+        out.append(s)
+    return out
 
 
 class Pipeline:
@@ -94,7 +99,7 @@ class Pipeline:
                 continue
             found = model.detect(text)
             if x == "zh":
-                found += clause_names(model, text)
+                found = extend_surnames(text, found + clause_names(model, text))
             if x != "zh":  # non-Chinese models only see Chinese characters as noise
                 found = [s for s in found if not has_cjk(s.text)]
             spans += found
@@ -102,8 +107,9 @@ class Pipeline:
         spans = [s for s in spans if s.text not in ignore]
         # Names are what models miss most: once a value is found anywhere in this text,
         # or already has a code in the session, replace every occurrence of it.
-        values = dict(known or {})
-        values.update({s.text: s.label for s in spans})
+        # A single character is too common to replace everywhere ("明" would hit "明天").
+        values = {v: label for v, label in (known or {}).items() if len(v) > 1}
+        values.update({s.text: s.label for s in spans if len(s.text) > 1})
         # Chat logs: once one speaker is a known person, the other speakers are too.
         speakers = speaker_spans(text, {v for v, label in values.items() if label == PERSON})
         for s in speakers:

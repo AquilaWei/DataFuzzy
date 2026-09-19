@@ -161,3 +161,61 @@ def test_restore_recommends_matching_code_file(qtbot, tmp_path):
 
     win.input.setPlainText("沒有代號")
     assert win.recommend_hint.text() == ""
+
+
+def select(chat, needle, occurrence):
+    """Select the `occurrence`-th appearance of `needle` in the transcript."""
+    doc = chat.toPlainText()
+    pos = -1
+    for _ in range(occurrence + 1):
+        pos = doc.index(needle, pos + 1)
+    cursor = chat.textCursor()
+    cursor.setPosition(pos)
+    cursor.setPosition(pos + len(needle), cursor.MoveMode.KeepAnchor)
+    chat.setTextCursor(cursor)
+
+
+def test_mark_missed_value_in_replies_and_future_input(qtbot, tmp_path):
+    win, store = make_window(qtbot, tmp_path)  # no models: names are missed
+    send(win, "顧秀的信箱是 a@b.co")
+    send(win, "請顧秀回電")
+    session = store.list()[0]
+
+    select(win.chat, "顧秀", 0)  # in the user's own message: not a reply
+    assert win.chat.selected_mark() is None
+    select(win.chat, "顧秀", 1)  # in the first reply
+    assert win.chat.selected_mark() == (0, "顧秀")
+    menu = win.chat.context_menu(win.chat.cursorRect().center())
+    sub = menu.actions()[0].menu()
+    assert menu.actions()[0].text() == "將「顧秀」標記為敏感資料"
+    assert [a.text() for a in sub.actions()] == ["人名", "組織", "地點", "其他"]
+    doc = win.chat.toPlainText()  # from the first reply into the next message
+    cursor = win.chat.textCursor()
+    cursor.setPosition(doc.index("[EMAIL_A]"))
+    cursor.setPosition(doc.index("請顧秀") + 1, cursor.MoveMode.KeepAnchor)
+    win.chat.setTextCursor(cursor)
+    assert win.chat.selected_mark() is None
+
+    with qtbot.waitSignal(win.chat.mark_requested) as marked:
+        sub.actions()[0].trigger()
+    assert marked.args == [0, "顧秀", "PERSON"]
+    assert win.chat.reply_text(0) == "[PERSON_A]的信箱是 [EMAIL_A]"
+    assert win.chat.reply_text(1) == "請[PERSON_A]回電"
+    assert "已將「顧秀」標記為 [PERSON_A]，替換 2 處" in win.chat.toPlainText()
+    assert store.load(session.id).to_code["顧秀"] == "[PERSON_A]"
+    assert win.panel.table.rowCount() == 2
+
+    send(win, "顧秀明天請假")
+    assert win.chat.reply_text(2) == "[PERSON_A]明天請假"
+
+    win.unmark(0, "[PERSON_A]")  # un-mark, then mark again: the old code comes back
+    win.mark(0, "顧秀", "PERSON")
+    assert win.chat.reply_text(0) == "[PERSON_A]的信箱是 [EMAIL_A]"
+
+
+def test_mark_rejects_selection_with_a_code(qtbot, tmp_path):
+    win, store = make_window(qtbot, tmp_path)
+    send(win, "顧秀的信箱是 a@b.co")
+    win.mark(0, "是 [EMAIL_A]", "OTHER")
+    assert win.chat.reply_text(0) == "顧秀的信箱是 [EMAIL_A]"
+    assert "選取範圍不能包含代號" in win.chat.toPlainText()

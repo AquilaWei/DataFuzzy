@@ -1,4 +1,5 @@
-from datafuzzy.core.mapping import Session, letters, recommend, revert_code
+from datafuzzy.core.detect import Span
+from datafuzzy.core.mapping import Session, apply_codes, letters, recommend, revert_code
 from datafuzzy.core.pipeline import Pipeline
 
 
@@ -103,3 +104,40 @@ def test_revert_code_puts_originals_back():
     assert text == "a@b.co, [IP_A] and a@b.co"
     assert [text[s.start:s.end] for s in spans] == ["[IP_A]"]
     assert originals == ["10.0.0.1"]
+
+
+def test_mark_codes_a_missed_value():
+    s = Session(label="t")
+    text, spans = s.obfuscate("王小明和顧秀開會", [Span(0, 3, "PERSON", "王小明")])
+    assert s.mark("顧秀", "PERSON") == {"顧秀": "[PERSON_B]"}
+    text, spans, originals = apply_codes(text, spans, ["王小明"], {"顧秀": "[PERSON_B]"})
+    assert text == "[PERSON_A]和[PERSON_B]開會"
+    assert [(sp.text, text[sp.start:sp.end]) for sp in spans] == [
+        ("[PERSON_A]", "[PERSON_A]"), ("[PERSON_B]", "[PERSON_B]")]
+    assert originals == ["王小明", "顧秀"]
+    assert s.restore(text).text == "王小明和顧秀開會"
+
+
+def test_mark_person_includes_given_name():
+    s = Session(label="t")
+    values = s.mark("陳美玲", "PERSON")
+    assert values == {"陳美玲": "[PERSON_A]", "美玲": "[PERSON_A]"}
+    text, _, originals = apply_codes("美玲說陳美玲會來", [], [], values)
+    assert text == "[PERSON_A]說[PERSON_A]會來"
+    assert originals == ["美玲", "陳美玲"]
+
+
+def test_mark_after_unmark_brings_back_the_old_code():
+    s = Session(label="t")
+    s.obfuscate("Apple", [Span(0, 5, "ORG", "Apple")])
+    s.unmark("[ORG_A]")
+    assert s.mark("Apple", "ORG") == {"Apple": "[ORG_A]"}
+    assert "Apple" not in s.ignored
+    assert s.mark("Pear", "ORG") == {"Pear": "[ORG_B]"}
+
+
+def test_apply_codes_respects_word_boundaries_and_existing_codes():
+    text, spans, originals = apply_codes("Al met Alice and Al", [], [], {"Al": "[OTHER_A]"})
+    assert text == "[OTHER_A] met Alice and [OTHER_A]"
+    text, _, _ = apply_codes(text, spans, originals, {"OTHER": "[ORG_A]"})
+    assert text == "[OTHER_A] met Alice and [OTHER_A]"  # never inside an existing code
