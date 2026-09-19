@@ -321,3 +321,30 @@ def test_address_is_not_cut_back_to_a_known_place():
     p.models["zh"] = FindNer([("新北市板橋區 文化路 188 號", "LOC"), ("新北市板橋區", "LOC")])
     text = "地址：新北市板橋區 文化路 188 號\n住在新北市板橋區"
     assert "188" not in p.obfuscate(text, Session(label="t"), "zh").text
+
+
+def test_departments_headings_and_acronyms_are_not_entities():
+    p = Pipeline()
+    p.models["en"] = FindNer([("Platform", "ORG"), ("Legal", "PERSON"), ("TIMELINE", "ORG"),
+                              ("CISO", "ORG"), ("Hannah Price", "PERSON"), ("Contoso Health", "ORG")])
+    text = "TIMELINE\nThe Platform team told the CISO, Legal (Hannah Price) and Contoso Health."
+    assert p.obfuscate(text, Session(label="t"), "en").text == (
+        "TIMELINE\nThe Platform team told the CISO, Legal ([PERSON_A]) and [ORG_A].")
+
+
+def test_disease_named_after_a_person_is_not_a_person():
+    p = Pipeline()
+    p.models["en"] = FindNer([("Parkinson", "PERSON"), ("Alan Hsu", "PERSON")])
+    text = "treated for Parkinson's disease by Alan Hsu"
+    assert p.obfuscate(text, Session(label="t"), "en").text == "treated for Parkinson's disease by [PERSON_A]"
+    p.models["zh"] = FindNer([("帕金森", "PERSON")])
+    assert p.obfuscate("診斷為帕金森氏症", Session(label="t"), "zh").text == "診斷為帕金森氏症"
+
+
+def test_tagged_code_prefix_codes_the_whole_code():
+    p = Pipeline()
+    p.models["en"] = FindNer([("SEC", "ORG")])
+    session = Session(label="t")
+    result = p.obfuscate("Ticket: SEC-2026-0419 is open", session, "en")
+    assert result.text == "Ticket: [ID_A] is open"
+    assert p.restore(result.text, session).text == "Ticket: SEC-2026-0419 is open"
