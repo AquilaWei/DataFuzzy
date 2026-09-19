@@ -1,0 +1,88 @@
+name: Release
+
+# Tags vX.Y.Z build the installers, smoke-test them with the real models and publish a
+# GitHub Release. Run it by hand (Actions → Release → Run workflow) to only build and test.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  DATAFUZZY_MODELS_DIR: ${{ github.workspace }}/models/installed
+  DATAFUZZY_REQUIRE_MODEL: "1"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14      # Apple Silicon
+            script: packaging/build_dmg.sh
+          - os: ubuntu-22.04  # oldest glibc the Qt wheels support, so the AppImage runs widely
+            script: packaging/build_appimage.sh
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install Qt runtime libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3 libxcb-cursor0
+      - run: uv sync --frozen
+      - uses: actions/cache@v4
+        with:
+          path: models/installed
+          key: models-${{ hashFiles('src/datafuzzy/models_manifest.json') }}
+      - name: Download NER models (for the smoke test only; never bundled)
+        run: >
+          uv run python -c "from datafuzzy.core.models import *;
+          [download_model(s, models_dir()) for s in load_manifest() if not is_installed(s, models_dir())]"
+      - run: ${{ matrix.script }}
+      - name: Smoke-test the installer
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then
+            hdiutil attach dist/*.dmg -mountpoint /tmp/dfdmg -nobrowse
+            /tmp/dfdmg/DataFuzzy.app/Contents/MacOS/DataFuzzy --self-test
+            hdiutil detach /tmp/dfdmg
+          else
+            APPIMAGE_EXTRACT_AND_RUN=1 dist/*.AppImage --self-test
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.os }}
+          path: |
+            dist/*.dmg
+            dist/*.AppImage
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # This version's CHANGELOG section, plus install notes.
+          awk -v v="$version" '/^## \[/ { on = index($0, "[" v "]") > 0; next } on' CHANGELOG.md > notes.md
+          cat >> notes.md <<'EOF'
+
+          ---
+          **macOS (Apple Silicon)：** 下載 `.dmg` → 把 DataFuzzy 拖進「應用程式」。App 沒有 Apple 簽章，第一次開啟請見 README「安裝」。
+          **Linux (x86_64)：** 下載 `.AppImage` → `chmod +x` → 執行。
+          模型不含在安裝檔內，第一次啟動時在 App 內下載。
+          EOF
+          (cd dist && sha256sum * > SHA256SUMS.txt)
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag \
+            --title "DataFuzzy $version" --notes-file notes.md
