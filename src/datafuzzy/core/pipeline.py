@@ -12,6 +12,7 @@ from .detect.ner import NerDetector
 from .lang import Lang, detect_language, has_cjk, languages_in
 from .mapping import PERSON, RestoreResult, Session, name_aliases
 from .models import ModelSpec, is_installed
+from .speakers import speaker_spans
 
 LangChoice = Literal["auto", "en", "zh"]
 
@@ -37,6 +38,24 @@ def find_all(text: str, values: dict[str, str]) -> list[Span]:
         right = r"(?![A-Za-z0-9])" if value[-1].isascii() and value[-1].isalnum() else ""
         for m in re.finditer(left + re.escape(value) + right, text):
             spans.append(Span(m.start(), m.end(), label, value))
+    return spans
+
+
+CLAUSE_RE = re.compile(r"[^。！？；，、,;!?\n]+")
+
+
+def clause_names(model: Detector, text: str) -> list[Span]:
+    """Names found by running the model on each clause alone, without its punctuation.
+    The Chinese model misses some names in context ("這是何文明的報帳單，請...") that it
+    finds in a shorter piece, so this second look only adds people."""
+    clauses = [m for m in CLAUSE_RE.finditer(text) if m.group().strip()]
+    if len(clauses) < 2 and (not clauses or clauses[0].group() == text):
+        return []
+    spans: list[Span] = []
+    for m in clauses:
+        for s in model.detect(m.group()):
+            if s.label == PERSON:
+                spans.append(Span(s.start + m.start(), s.end + m.start(), s.label, s.text, s.score))
     return spans
 
 
@@ -74,6 +93,8 @@ class Pipeline:
             if not model:
                 continue
             found = model.detect(text)
+            if x == "zh":
+                found += clause_names(model, text)
             if x != "zh":  # non-Chinese models only see Chinese characters as noise
                 found = [s for s in found if not has_cjk(s.text)]
             spans += found
@@ -83,6 +104,11 @@ class Pipeline:
         # or already has a code in the session, replace every occurrence of it.
         values = dict(known or {})
         values.update({s.text: s.label for s in spans})
+        # Chat logs: once one speaker is a known person, the other speakers are too.
+        speakers = speaker_spans(text, {v for v, label in values.items() if label == PERSON})
+        for s in speakers:
+            if s.text not in ignore:
+                values.setdefault(s.text, PERSON)
         # A first or last name on its own ("John" after "John Smith") is the same person.
         persons = {v: v for v, label in values.items() if label == PERSON}
         values.update({part: PERSON for part in name_aliases(persons)})

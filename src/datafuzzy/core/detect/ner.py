@@ -17,6 +17,8 @@ STRIDE = 64
 # reaches this probability, even if "O" is slightly higher. Missing a name leaks it;
 # over-masking only costs readability.
 ENTITY_THRESHOLD = 0.4
+# Names matter most, and the model is least sure of lone given names ("Emma: ok").
+PERSON_THRESHOLD = 0.25
 # Characters that join parts of one name: Wei-Chuang, O'Brien, 阿里·巴巴.
 JOINERS = {"", "-", "\u2010", "'", "\u2019", "\u00b7", "\u30fb"}
 
@@ -34,6 +36,7 @@ def decode_entities(
     scores: list[float],
     labels: dict[str, str],
     min_score: float = ENTITY_THRESHOLD,
+    person_min: float = PERSON_THRESHOLD,
 ) -> list[Span]:
     """Turn per-token BIO / BIOES tags into character spans.
 
@@ -58,7 +61,7 @@ def decode_entities(
     def flush() -> None:
         if current and current[0] in labels:
             mean = float(np.mean(current[3]))
-            if mean >= min_score:
+            if mean >= (person_min if labels[current[0]] == "PERSON" else min_score):
                 s, e = current[1], current[2]
                 spans.append(Span(s, e, labels[current[0]], text[s:e], mean))
 
@@ -93,11 +96,13 @@ class NerDetector:
     """Loads lazily (first detect) so an installed-but-unused model costs no memory."""
 
     def __init__(self, model_dir: Path, labels: dict[str, str], name: str = "ner",
-                 min_score: float = ENTITY_THRESHOLD) -> None:
+                 min_score: float = ENTITY_THRESHOLD,
+                 person_min: float = PERSON_THRESHOLD) -> None:
         self.name = name
         self.model_dir = Path(model_dir)
         self.labels = labels
         self.min_score = min_score
+        self.person_min = person_min
         self._lock = threading.Lock()
         self._session = None
         self._tokenizer = None
@@ -138,6 +143,9 @@ class NerDetector:
             self._cls = tok.token_to_id("[CLS]")
             self._sep = tok.token_to_id("[SEP]")
 
+    def _threshold(self, kind: str) -> float:
+        return self.person_min if self.labels.get(kind) == "PERSON" else self.min_score
+
     def _tag(self, probs: np.ndarray) -> tuple[list[str], list[float]]:
         """Per token: (B-/I- tag, probability of its entity type)."""
         tags: list[str] = []
@@ -147,7 +155,7 @@ class NerDetector:
             for kind, ids in self._type_ids.items():
                 if kind and (p := float(row[ids].sum())) > best_p:
                     best_type, best_p = kind, p
-            if best_p >= self.min_score:
+            if best_p >= self._threshold(best_type):
                 begin = float(row[self._begin_ids.get(best_type, [])].sum())
                 tags.append(("B-" if begin >= best_p - begin else "I-") + best_type)
                 scores.append(best_p)
@@ -176,7 +184,7 @@ class NerDetector:
             logits = self._session.run(None, {k: v for k, v in feeds.items() if k in names})[0][0]
             tags, scores = self._tag(_softmax(logits[1:-1]))
             spans += decode_entities(text, enc.word_ids[start:end], enc.offsets[start:end], tags,
-                                     scores, self.labels, self.min_score)
+                                     scores, self.labels, self.min_score, self.person_min)
             if end >= len(enc.ids):
                 break
             start = end - STRIDE
