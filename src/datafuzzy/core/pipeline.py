@@ -28,6 +28,25 @@ class ObfuscateResult:
 
 
 CLAUSE_RE = re.compile(r"[^。！？；，、,;!?\n]+")
+LINE_RE = re.compile(r"[^\n]+")
+
+
+def detect_pieces(model: Detector, pieces: list[re.Match[str]]) -> list[Span]:
+    spans: list[Span] = []
+    for m in pieces:
+        for s in model.detect(m.group()):
+            spans.append(Span(s.start + m.start(), s.end + m.start(), s.label, s.text, s.score))
+    return spans
+
+
+def line_entities(model: Detector, text: str) -> list[Span]:
+    """Entities found line by line. Unrelated lines of a form (病歷號、身分證、地址...) run
+    together confuse the models: an address found on its own line is lost or broken into
+    single characters when the lines above it are in the same input."""
+    lines = [m for m in LINE_RE.finditer(text) if m.group().strip()]
+    spans = detect_pieces(model, lines)
+    # A lone character is a fragment of a missed name, not an organization or place.
+    return [s for s in spans if len(s.text.strip()) > 1 or s.label == PERSON]
 
 
 def clause_names(model: Detector, text: str) -> list[Span]:
@@ -37,12 +56,7 @@ def clause_names(model: Detector, text: str) -> list[Span]:
     clauses = [m for m in CLAUSE_RE.finditer(text) if m.group().strip()]
     if len(clauses) < 2 and (not clauses or clauses[0].group() == text):
         return []
-    spans: list[Span] = []
-    for m in clauses:
-        for s in model.detect(m.group()):
-            if s.label == PERSON:
-                spans.append(Span(s.start + m.start(), s.end + m.start(), s.label, s.text, s.score))
-    return spans
+    return [s for s in detect_pieces(model, clauses) if s.label == PERSON]
 
 
 # After a lone surname, these start a title or a function word, not a given name.
@@ -97,7 +111,7 @@ class Pipeline:
             model = self.models.get(x)
             if not model:
                 continue
-            found = model.detect(text)
+            found = line_entities(model, text)
             if x == "zh":
                 found = extend_surnames(text, found + clause_names(model, text))
             if x != "zh":  # non-Chinese models only see Chinese characters as noise
