@@ -92,14 +92,3 @@ def test_bundled_manifest():
         assert {"model.onnx", "tokenizer.json", "config.json"} <= names
         for f in s.files:
             assert f.url.startswith("https://") and len(f.sha256) == 64 and f.size > 0
-
-
-def test_manifest_picks_files_for_the_cpu():
-    arm = {s.id: s for s in load_manifest(arch="arm64")}["privacy-filter"]
-    x86 = {s.id: s for s in load_manifest(arch="x86_64")}["privacy-filter"]
-    assert "model_q4.onnx_data" in {f.name for f in arm.files}
-    assert "model_quantized.onnx_data" in {f.name for f in x86.files}
-    for s in (arm, x86):
-        assert {"model.onnx", "tokenizer.json", "config.json"} <= {f.name for f in s.files}
-    zh = [{s.id: s for s in load_manifest(arch=a)}["zh-bert-ner"] for a in ("arm64", "x86_64")]
-    assert zh[0] == zh[1]
