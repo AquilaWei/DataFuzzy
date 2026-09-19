@@ -31,6 +31,40 @@
           "sha256": "a73a2eccc921bbdea95a94b49a157d3694b5c2abbae7a6f3000e14404a9c31a8"
         }
       ]
+    },
+    {
+      "id": "zh-bert-ner",
+      "lang": "zh",
+      "name": "中文 NER (CKIP BERT base, int8)",
+      "source": "ckiplab/bert-base-chinese-ner",
+      "license": "GPL-3.0",
+      "labels": {
+        "PERSON": "PERSON",
+        "ORG": "ORG",
+        "GPE": "LOC",
+        "LOC": "LOC",
+        "FAC": "LOC"
+      },
+      "files": [
+        {
+          "name": "model.onnx",
+          "url": "https://huggingface.co/Xenova/bert-base-chinese-ner/resolve/be592940bc954f32492c831bdd1d086a04036597/onnx/model_quantized.onnx",
+          "size": 102959365,
+          "sha256": "7f8e1a4dac9c65d880b41c8ebedda02f074536f5ab249bdae66cfe41ae709dee"
+        },
+        {
+          "name": "tokenizer.json",
+          "url": "https://huggingface.co/Xenova/bert-base-chinese-ner/resolve/be592940bc954f32492c831bdd1d086a04036597/tokenizer.json",
+          "size": 439125,
+          "sha256": "48cea5d44424912a6fd1ea647bf4fe50b55ab8b1e5879c3275f80e339e8fae26"
+        },
+        {
+          "name": "config.json",
+          "url": "https://huggingface.co/Xenova/bert-base-chinese-ner/resolve/be592940bc954f32492c831bdd1d086a04036597/config.json",
+          "size": 3892,
+          "sha256": "fbcd62e5b97cf06ce28fb6eaf8f39d6e1e6c82ea9519e3df9c5adfb8571bff32"
+        }
+      ]
     }
   ]
 }

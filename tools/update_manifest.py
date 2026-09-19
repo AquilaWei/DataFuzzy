@@ -34,6 +34,21 @@ MODELS = [
             "config.json": "config.json",
         },
     },
+    {
+        "id": "zh-bert-ner",
+        "lang": "zh",
+        "name": "中文 NER (CKIP BERT base, int8)",
+        "source": "ckiplab/bert-base-chinese-ner",
+        "license": "GPL-3.0",
+        "labels": {"PERSON": "PERSON", "ORG": "ORG", "GPE": "LOC", "LOC": "LOC", "FAC": "LOC"},
+        "repo": "Xenova/bert-base-chinese-ner",
+        "revision": "be592940bc954f32492c831bdd1d086a04036597",
+        "files": {
+            "model.onnx": "onnx/model_quantized.onnx",
+            "tokenizer.json": "tokenizer.json",
+            "config.json": "config.json",
+        },
+    },
 ]
 
 
