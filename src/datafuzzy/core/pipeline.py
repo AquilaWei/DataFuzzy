@@ -59,6 +59,26 @@ def clause_names(model: Detector, text: str) -> list[Span]:
     return [s for s in detect_pieces(model, clauses) if s.label == PERSON]
 
 
+ORG = "ORG"
+
+
+def trim_to_known_orgs(spans: list[Span], known_orgs: set[str]) -> list[Span]:
+    """An organization followed by a unit ("羅東博愛醫院 家醫科") is cut back to the
+    organization when that is also found on its own, so one hospital gets one code.
+    Only organizations: cutting an address back would expose the house number."""
+    orgs = known_orgs | {s.text for s in spans if s.label == ORG}
+    out: list[Span] = []
+    for s in spans:
+        if s.label == ORG:
+            heads = [o for o in orgs if len(o) < len(s.text) and s.text.startswith(o)
+                     and s.text[len(o)].isspace()]
+            if heads:
+                head = max(heads, key=len)
+                s = Span(s.start, s.start + len(head), ORG, head, s.score)
+        out.append(s)
+    return out
+
+
 # After a lone surname, these start a title or a function word, not a given name.
 NOT_GIVEN_NAME = set("經副先小老醫董總主教律博同太護的了是在和跟與及說把被給向對也都就還又而並但或會要請已再")
 
@@ -119,6 +139,7 @@ class Pipeline:
             spans += found
         model_used = resolved in self.models
         spans = [s for s in spans if s.text not in ignore]
+        spans = trim_to_known_orgs(spans, {v for v, label in (known or {}).items() if label == ORG})
         # Names are what models miss most: once a value is found anywhere in this text,
         # or already has a code in the session, replace every occurrence of it.
         # A single character is too common to replace everywhere ("明" would hit "明天").
