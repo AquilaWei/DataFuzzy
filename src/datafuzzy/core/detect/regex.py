@@ -72,6 +72,24 @@ TW_ADDRESS = re.compile(
 )
 
 
+_US_SUFFIX = (r"(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct"
+              r"|Place|Pl|Terrace|Ter|Parkway|Pkwy|Circle|Cir|Highway|Hwy|Square|Sq|Trail|Trl)\.?")
+# US street address: house number, capitalized street name and suffix, then optionally
+# the unit (", Apt 3B"), and ", City, ST 12345".
+US_ADDRESS = re.compile(
+    _L + r"\d{1,6}[A-Z]?\s+(?:(?:[A-Z][A-Za-z'.-]*|\d+(?:st|nd|rd|th))\s+){1,4}"
+    + _US_SUFFIX + r"(?![A-Za-z])"
+    r"(?:\s+(?:NE|NW|SE|SW|[NSEW])(?![A-Za-z]))?"
+    r"(?:,?\s+(?:Apt|Apartment|Suite|Ste|Unit|Floor|Fl|Room|Rm)\.?\s*#?[A-Za-z0-9-]+|,?\s+#[A-Za-z0-9-]+)?"
+    r"(?:,\s*[A-Z][A-Za-z.]*(?:\s+[A-Z][A-Za-z.]*){0,3},\s*[A-Z]{2}(?:\s+\d{5}(?:-\d{4})?)?(?!\w))?"
+)
+
+
+def _ssn_ok(candidate: str) -> bool:
+    area, group, serial = candidate.split("-")
+    return area not in ("000", "666") and area[0] != "9" and group != "00" and serial != "0000"
+
+
 @dataclass(frozen=True)
 class Rule:
     label: str
@@ -108,7 +126,9 @@ RULES: list[Rule] = [
         r"|\(\d{3}\)\s?\d{3}-\d{4}|\d{3}-\d{3}-\d{4}"    # North America
         r")(?!\d)"
     )),
+    Rule("SSN", re.compile(_L + r"\d{3}-\d{2}-\d{4}" + _R), _ssn_ok),
     Rule("LOC", TW_ADDRESS),
+    Rule("LOC", US_ADDRESS),
 ]
 
 
