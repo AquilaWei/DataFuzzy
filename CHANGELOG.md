@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.5.2] - 2026-09-19
+
+### Fixed
+- Multi-line, form-like text (a medical record with 病歷號、身分證、地址... on separate
+  lines) no longer hides organizations and places from the models. The models now see
+  one line at a time; on a test record, organizations went from 0/4 to 4/4 and places
+  from 1/6 to 6/6.
+- A single character is no longer coded as an organization or place (`羅[東]博愛醫院`).
+
 ## [0.5.1] - 2026-09-19
 
 Test build of the installers, for hands-on checks on an Apple Silicon Mac before 0.6.0.
