@@ -112,4 +112,4 @@ print(rss / (1 << 20) if sys.platform == "darwin" else rss / 1024)  # bytes on m
 """
     out = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=True)
     rss_mb = float(out.stdout.strip().splitlines()[-1])
-    assert rss_mb < 1800, rss_mb
+    assert rss_mb < 1200, rss_mb
