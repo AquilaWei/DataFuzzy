@@ -3,12 +3,63 @@
 from __future__ import annotations
 
 import atexit
+import os
 import signal
 import sys
 
 
+def self_test() -> int:
+    """Headless smoke check for packaged builds: every runtime piece loads and a text
+    round-trips. With DATAFUZZY_REQUIRE_MODEL set, every model must be installed and used."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    import ssl
+
+    import certifi
+    from PySide6.QtWidgets import QApplication
+
+    from . import __version__
+    from .core.models import load_manifest, models_dir
+    from .core.pipeline import Pipeline
+    from .core.store import SessionStore
+    from .ui.main_window import MainWindow
+
+    ssl.create_default_context(cafile=certifi.where())  # model downloads need the CA bundle
+    app = QApplication([])
+    specs, root = load_manifest(), models_dir()
+    pipeline = Pipeline()
+    pipeline.load_models(specs, root)
+    store = SessionStore()
+    try:
+        MainWindow(pipeline, store, specs, root)
+        session = store.new_session()
+        text = "請 John Smith 跟王小明確認，信寄到 alice@acme.com。"
+        result = pipeline.obfuscate(text, session)
+        assert "alice@acme.com" not in result.text, result.text
+        assert pipeline.restore(result.text, session).text == text
+        if os.environ.get("DATAFUZZY_REQUIRE_MODEL"):
+            assert sorted(pipeline.models) == sorted(s.lang for s in specs), pipeline.models
+            for name in ("John Smith", "王小明"):
+                assert name not in result.text, result.text
+        print(f"DataFuzzy {__version__} self-test OK; models: {sorted(pipeline.models)}; "
+              f"{result.text}")
+    finally:
+        store.cleanup()
+        app.quit()
+    return 0
+
+
 def main() -> int:
+    if "--version" in sys.argv[1:]:
+        from . import __version__
+        print(f"DataFuzzy {__version__}")
+        return 0
+    if "--self-test" in sys.argv[1:]:
+        return self_test()
+
+    from importlib.resources import files
+
     from PySide6.QtCore import QSettings, QTimer
+    from PySide6.QtGui import QIcon
     from PySide6.QtWidgets import QApplication
 
     from .core.models import is_installed, load_manifest, models_dir
@@ -22,6 +73,7 @@ def main() -> int:
 
     app = QApplication(sys.argv)
     app.setApplicationName("DataFuzzy")
+    app.setWindowIcon(QIcon(str(files("datafuzzy").joinpath("icon.png"))))
     app.aboutToQuit.connect(store.cleanup)
 
     # Qt's event loop blocks Python signal handlers; a periodic no-op timer lets them run,
