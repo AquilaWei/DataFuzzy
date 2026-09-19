@@ -11,6 +11,30 @@ from .detect.base import Span
 
 CODE_RE = re.compile(r"\[([A-Z]+)_([A-Z]+)\]")
 
+PERSON = "PERSON"
+TITLES = {"Mr", "Mrs", "Ms", "Miss", "Dr", "Prof", "Sir", "Madam"}
+NAME_PART_RE = re.compile(r"[A-Z][A-Za-z'’\-·・]+")
+
+
+def name_parts(name: str) -> list[str]:
+    """Parts of a multi-word name that can stand for the whole person on their own:
+    "John Smith" -> ["John", "Smith"]. Single words and CJK names have none."""
+    words = name.split()
+    if len(words) < 2:
+        return []
+    return [w for w in words if NAME_PART_RE.fullmatch(w) and w not in TITLES]
+
+
+def name_aliases(names: dict[str, str]) -> dict[str, str]:
+    """Map each unambiguous name part to its full name's key (name -> any key, e.g. a code).
+    A part shared by two different people ("John" in John Smith and John Doe) is dropped."""
+    owners: dict[str, set[str]] = {}
+    for name, key in names.items():
+        for part in name_parts(name):
+            owners.setdefault(part, set()).add(key)
+    return {part: next(iter(keys)) for part, keys in owners.items()
+            if len(keys) == 1 and part not in names}
+
 
 def letters(n: int) -> str:
     """0 -> A, 25 -> Z, 26 -> AA, 27 -> AB ... (bijective base-26)."""
@@ -41,13 +65,42 @@ class Session:
 
     @property
     def to_original(self) -> dict[str, str]:
-        return {code: orig for orig, code in self.to_code.items()}
+        """Code -> original. A linked person restores to the longest form, i.e. the full name."""
+        out: dict[str, str] = {}
+        for orig, code in self.to_code.items():
+            if len(orig) > len(out.get(code, "")):
+                out[code] = orig
+        return out
+
+    def person_aliases(self) -> dict[str, str]:
+        """Unambiguous parts of full person names in this session -> their code."""
+        names = {o: c for o, c in self.to_code.items() if c.startswith(f"[{PERSON}_")}
+        return name_aliases(names)
+
+    def linked_person_code(self, original: str) -> str | None:
+        """An existing code for the same person: "John" after "John Smith", or the reverse."""
+        alias = self.person_aliases().get(original)
+        if alias:
+            return alias
+        originals: dict[str, list[str]] = {}
+        for orig, code in self.to_code.items():
+            if code.startswith(f"[{PERSON}_"):
+                originals.setdefault(code, []).append(orig)
+        # A full name whose part was coded on its own earlier, and that code isn't yet
+        # another full name (John -> A, then John Smith and John Doe must not both be A).
+        candidates = {self.to_code[part] for part in name_parts(original)
+                      if part in self.to_code and self.to_code[part] in originals
+                      and not any(name_parts(o) for o in originals[self.to_code[part]])}
+        return candidates.pop() if len(candidates) == 1 else None
 
     def code_for(self, original: str, label: str) -> str:
         if original not in self.to_code:
-            n = self.counters.get(label, 0)
-            self.counters[label] = n + 1
-            self.to_code[original] = f"[{label}_{letters(n)}]"
+            code = self.linked_person_code(original) if label == PERSON else None
+            if code is None:
+                n = self.counters.get(label, 0)
+                self.counters[label] = n + 1
+                code = f"[{label}_{letters(n)}]"
+            self.to_code[original] = code
         return self.to_code[original]
 
     def obfuscate(self, text: str, spans: list[Span]) -> tuple[str, list[Span]]:

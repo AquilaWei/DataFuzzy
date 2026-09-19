@@ -2,7 +2,7 @@
 
 from datafuzzy.core.detect import Span
 from datafuzzy.core.detect.ner import decode_entities
-from datafuzzy.core.mapping import Session
+from datafuzzy.core.mapping import Session, name_parts
 from datafuzzy.core.pipeline import Pipeline, find_all
 
 LABELS = {"PER": "PERSON", "ORG": "ORG"}
@@ -88,3 +88,57 @@ def test_model_used_flag():
     assert p.obfuscate("hello", Session(label="t"), "en").model_used is False
     p.models["en"] = FakeNer([])
     assert p.obfuscate("hello", Session(label="t"), "en").model_used is True
+
+
+def test_name_parts():
+    assert name_parts("John Smith") == ["John", "Smith"]
+    assert name_parts("Dr John Smith") == ["John", "Smith"]
+    assert name_parts("Mary-Jane O'Neil") == ["Mary-Jane", "O'Neil"]
+    assert name_parts("Maria") == []
+    assert name_parts("王小明") == []
+
+
+def test_short_name_reuses_full_name_code():
+    p = Pipeline()
+    p.models["en"] = FakeNer(["John Smith"])
+    session = Session(label="t")
+    result = p.obfuscate("John Smith called. Later John wrote and Smith agreed.", session, "en")
+    assert result.text == "[PERSON_A] called. Later [PERSON_A] wrote and [PERSON_A] agreed."
+    assert p.restore("[PERSON_A] said hi", session).text == "John Smith said hi"
+
+
+def test_short_name_linked_in_later_input():
+    p = Pipeline()
+    session = Session(label="t")
+    p.models["en"] = FakeNer(["John Smith"])
+    p.obfuscate("Meet John Smith", session, "en")
+    p.models["en"] = FakeNer([])
+    assert p.obfuscate("John is late", session, "en").text == "[PERSON_A] is late"
+
+
+def test_full_name_reuses_earlier_short_name_code():
+    session = Session(label="t")
+    assert session.code_for("John", "PERSON") == "[PERSON_A]"
+    assert session.code_for("John Smith", "PERSON") == "[PERSON_A]"
+    assert session.to_original["[PERSON_A]"] == "John Smith"
+
+
+def test_shared_first_name_is_not_linked():
+    session = Session(label="t")
+    assert session.code_for("John Smith", "PERSON") == "[PERSON_A]"
+    assert session.code_for("John Doe", "PERSON") == "[PERSON_B]"
+    assert session.code_for("John", "PERSON") == "[PERSON_C]"  # ambiguous: own code
+    assert session.code_for("Doe", "PERSON") == "[PERSON_B]"
+
+
+def test_short_name_not_linked_to_two_full_names():
+    session = Session(label="t")
+    session.code_for("John", "PERSON")
+    assert session.code_for("John Smith", "PERSON") == "[PERSON_A]"
+    assert session.code_for("John Doe", "PERSON") == "[PERSON_B]"
+
+
+def test_linking_only_applies_to_people():
+    session = Session(label="t")
+    assert session.code_for("Acme Corp", "ORG") == "[ORG_A]"
+    assert session.code_for("Acme", "ORG") == "[ORG_B]"
