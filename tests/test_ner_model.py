@@ -1,7 +1,6 @@
 """Tests against the real English model; skipped when it isn't available locally."""
 
 import os
-import resource
 import sys
 
 import pytest
@@ -64,9 +63,19 @@ def test_round_trip_with_model(ner):
     assert session.restore(result.text).text == text.replace("Later, John", "Later, John Smith")
 
 
-def test_memory_budget(ner):
-    ner.load()
-    ner.detect("Alice Chen met Bob at Google.")
-    rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    rss_mb = rss / (1 << 20) if sys.platform == "darwin" else rss / 1024  # bytes on macOS
+def test_memory_budget():
+    """Measured in a fresh process: earlier tests (e.g. name recall) load both models into
+    this one, which would count against the English model."""
+    import subprocess
+
+    script = f"""
+import resource, sys
+from pathlib import Path
+from datafuzzy.core.detect.ner import NerDetector
+NerDetector(Path({str(MODEL)!r}), {LABELS!r}).detect("Alice Chen met Bob at Google.")
+rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+print(rss / (1 << 20) if sys.platform == "darwin" else rss / 1024)  # bytes on macOS
+"""
+    out = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=True)
+    rss_mb = float(out.stdout.strip().splitlines()[-1])
     assert rss_mb < 600, rss_mb
