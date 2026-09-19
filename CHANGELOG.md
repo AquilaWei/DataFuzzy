@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.2.1] - 2026-09-19
+
+### Fixed
+- A first or last name on its own now gets the same code as the full name
+  (`John Smith` and later `John` / `Smith` → `[PERSON_A]`), in the same input and later ones.
+  A part shared by two people (`John` in John Smith and John Doe) is not linked.
+  Restoring a linked code gives the full name.
+
 ## [0.2.0] - 2026-09-19
 
 ### Added
