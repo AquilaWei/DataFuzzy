@@ -31,6 +31,13 @@ def labels(text):
         ("戶籍：台中市北屯區崇德路二段 312 巷 15 號", ("LOC", "台中市北屯區崇德路二段 312 巷 15 號")),
         ("公司位於中山北路三段25號", ("LOC", "中山北路三段25號")),
         ("住在民生東路5段69巷2弄7號3樓", ("LOC", "民生東路5段69巷2弄7號3樓")),
+        ("SSN (payroll only): 219-09-9999", ("SSN", "219-09-9999")),
+        ("Home: 742 Maple Grove Avenue, Apt 3B, Austin, TX 78704",
+         ("LOC", "742 Maple Grove Avenue, Apt 3B, Austin, TX 78704")),
+        ("office at 500 Congress Avenue, Suite 1200.", ("LOC", "500 Congress Avenue, Suite 1200")),
+        ("He lives at 1600 Pennsylvania Ave NW, Washington, DC 20500.",
+         ("LOC", "1600 Pennsylvania Ave NW, Washington, DC 20500")),
+        ("Send it to 350 5th Ave, New York, NY 10118-0110", ("LOC", "350 5th Ave, New York, NY 10118-0110")),
     ],
 )
 def test_detects(text, expected):
@@ -56,3 +63,15 @@ def test_rejects(text):
                                   "我們在忠孝東路口見"])
 def test_not_addresses(text):
     assert not {l for l, _ in labels(text)} & {"LOC"}
+
+
+@pytest.mark.parametrize("text", ["In 2026 Dr Smith said", "the 2 Senior Engineers left",
+                                  "treated at St. Vincent Medical Center"])
+def test_not_us_addresses(text):
+    assert not {l for l, _ in labels(text)} & {"LOC"}
+
+
+@pytest.mark.parametrize("text", ["SSN 000-12-3456", "ref 912-34-5678", "id 123-00-4567",
+                                  "call 415-555-0187"])
+def test_not_ssn(text):
+    assert "SSN" not in {l for l, _ in labels(text)}
