@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml/badge.svg)](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/AquilaWei/DataFuzzy/graph/badge.svg)](https://codecov.io/gh/AquilaWei/DataFuzzy)
-![Version](https://img.shields.io/badge/version-0.2.1-blue)
+![Version](https://img.shields.io/badge/version-0.3.0-blue)
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
@@ -18,15 +18,15 @@
 - 🔁 **跨文本還原** — 貼回任何含代號的新文字，選擇代號檔即可換回原文
 - 🧹 **關閉即刪除** — 代號檔加密暫存，軟體關閉（或被中止）時全部刪除
 - 🧠 **名稱辨識** — 本機 NER 模型辨識人名、組織、地點；同一名稱在全文與後續輸入都換成同一代號
-- 🌏 **中英文** — 自動偵測語言；目前提供英文模型，中文模型規劃中（見 [Roadmap](#-roadmap)）
+- 🌏 **中英文** — 中文、英文各一個模型；中英混合的文字會同時用兩個模型
 
 目前可偵測：
 
 | 類別 | 代號 | 範例 |
 |---|---|---|
-| 人名 | `PERSON` | `John Smith`、`Wei-Chuang Huang`（需安裝模型） |
-| 組織 | `ORG` | `Acme Corporation`（需安裝模型） |
-| 地點 | `LOC` | `Berlin`、`San Francisco`（需安裝模型） |
+| 人名 | `PERSON` | `王小明`、`歐陽娜娜`、`John Smith`、`Wei-Chuang Huang`（需安裝模型） |
+| 組織 | `ORG` | `台積電`、`Acme Corporation`（需安裝模型） |
+| 地點 | `LOC` | `台北`、`San Francisco`（需安裝模型） |
 | Email | `EMAIL` | `bob@corp.io` |
 | 電話 | `PHONE` | `0912-345-678`、`+886 912 345 678`、`(02) 2345-6789` |
 | 身分證字號 | `TWID` | `A123456789`（驗證檢查碼） |
@@ -46,7 +46,7 @@ uv sync
 uv run datafuzzy
 ```
 
-**第一次啟動**會跳出「模型管理」，按 **下載** 取得英文模型（約 110 MB，只需一次）。之後可從選單 **模型 → 模型管理…** 新增或刪除。不下載也能用，只是人名等名稱不會被替換。
+**第一次啟動**會跳出「模型管理」，按 **下載** 取得中文（約 103 MB）與英文（約 110 MB）模型，只需一次。之後可從選單 **模型 → 模型管理…** 新增或刪除。不下載也能用，只是人名等名稱不會被替換。
 
 ![模型管理](docs/assets/model-manager.png)
 
@@ -60,15 +60,17 @@ uv run datafuzzy
 
 1. **模糊化**：選「模糊化」→ 代號檔選「＋ 新代號檔」→ 貼上文字 → **⌘/Ctrl + Enter**
    ```
-   Hi Maria, please ask John Smith at Acme Corporation to email john.smith@acme.com
-   → Hi [PERSON_A], please ask [PERSON_B] at [ORG_A] to email [EMAIL_A]
+   王小明明天跟台積電的陳大華開會，會後小明再寄信給 John Smith
+   → [PERSON_A]明天跟[ORG_A]的[PERSON_B]開會，會後[PERSON_A]再寄信給 [PERSON_C]
    ```
 2. **還原**：選「還原」→ 選要用的代號檔 → 貼上含代號的文字
    ```
-   [PERSON_A] told [PERSON_B] that [ORG_A] approved it
-   → Maria told John Smith that Acme Corporation approved it
+   [PERSON_A] 已與 [PERSON_C] 確認
+   → 王小明 已與 John Smith 確認
    ```
 3. 點回覆旁的 **複製** 即可取用結果。
+
+**語言**選「自動偵測」時，文字含中文就用中文模型、含英文就用英文模型，混合時兩個都用；手動選 English / 中文 則只用該語言的模型。
 
 ## 🛡️ 隱私與安全
 
@@ -80,8 +82,8 @@ uv run datafuzzy
 ## ⚠️ 已知限制
 
 - 英文模型區分大小寫：全小寫的名字（`john smith`）可能漏掉
-- 單獨出現的名或姓會沿用全名的代號（`John Smith`、`John` → `[PERSON_A]`），還原時一律還原成全名；一個名字一旦在代號檔中連到某人，之後出現同名的另一人也不會改變
-- 中文名字（`王小明` ↔ `小明`）尚未連結
+- 單獨出現的名或姓會沿用全名的代號（`John Smith`、`John` → `[PERSON_A]`；`王小明`、`小明` → `[PERSON_A]`），還原時一律還原成全名；一個名字一旦在代號檔中連到某人，之後出現同名的另一人也不會改變
+- 中文只連結「名」，單獨的姓（`王先生`）不連結；中文模型以繁體中文訓練，簡體中文效果可能較差
 - 產品名稱偶爾會被當成人名或組織而替換（寧可多遮，不要漏遮）
 
 ## 🏗️ 架構
@@ -90,7 +92,7 @@ uv run datafuzzy
 flowchart LR
     A[輸入文字] --> B{語言偵測}
     B --> C[規則偵測器<br/>regex]
-    B --> D[NER 模型<br/>ONNX Runtime]
+    B --> D[NER 模型 中文 / 英文<br/>ONNX Runtime]
     C --> E[合併重疊區段]
     D --> E
     E --> K[同名全文替換<br/>+ 已知名稱]
@@ -117,7 +119,7 @@ src/datafuzzy/
 
 - [x] 0.1 — 規則偵測、代號對應、加密暫存、對話介面
 - [x] 0.2 — 模型下載管理 + 英文 NER（`dslim/bert-base-NER`）
-- [ ] 0.3 — 中文 NER（`ckiplab/bert-base-chinese-ner`）
+- [x] 0.3 — 中文 NER（`ckiplab/bert-base-chinese-ner`）、中英混合文字
 - [ ] 0.4 — 代號檔管理（命名、預覽、自動推薦）
 - [ ] 0.5 — Mac `.dmg` / Linux AppImage（不含模型，安裝後下載）
 
@@ -130,7 +132,7 @@ tools/test_arm64.sh      # 在 arm64 + 8GB 限制的容器中測試（模擬 App
 uv run tools/update_manifest.py  # 更新模型版本後重新產生 models_manifest.json
 ```
 
-模型相關測試需要本機有英文模型（在 App 內下載，或先跑 `tools/update_manifest.py`），否則會自動略過；CI 一定會下載並執行。
+模型相關測試需要本機有對應的模型（在 App 內下載，或先跑 `tools/update_manifest.py`），否則會自動略過；CI 一定會下載並執行。
 
 - **Commit 格式：** `<type>: <description>`（英文），type 為 `feat` `fix` `docs` `style` `refactor` `perf` `test` `chore`
 - **版號：** `MAJOR.MINOR.PATCH` — 新功能測試通過升 MINOR，bug 修正升 PATCH；變更記錄於 [CHANGELOG](CHANGELOG.md)
@@ -142,6 +144,6 @@ uv run tools/update_manifest.py  # 更新模型版本後重新產生 models_mani
 | 模型 | 授權 | 下載來源（int8 ONNX） |
 |---|---|---|
 | [`dslim/bert-base-NER`](https://huggingface.co/dslim/bert-base-NER) | MIT | [`Xenova/bert-base-NER`](https://huggingface.co/Xenova/bert-base-NER) |
-| [`ckiplab/bert-base-chinese-ner`](https://huggingface.co/ckiplab/bert-base-chinese-ner)（規劃中） | GPL-3.0，© CKIP Lab | [`Xenova/bert-base-chinese-ner`](https://huggingface.co/Xenova/bert-base-chinese-ner) |
+| [`ckiplab/bert-base-chinese-ner`](https://huggingface.co/ckiplab/bert-base-chinese-ner) | GPL-3.0，© CKIP Lab | [`Xenova/bert-base-chinese-ner`](https://huggingface.co/Xenova/bert-base-chinese-ner) |
 
 模型不隨程式散布，由使用者在 App 內自行下載。
