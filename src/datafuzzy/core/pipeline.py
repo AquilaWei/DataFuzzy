@@ -79,6 +79,47 @@ def trim_to_known_orgs(spans: list[Span], known_orgs: set[str]) -> list[Span]:
     return out
 
 
+# Departments, section headings and common acronyms the English model takes for
+# organizations or people ("Platform team", "Legal", "TIMELINE", "CISO"). A span made only
+# of these words names no one. Company suffixes (Inc, Corp, Bank...) are left out on purpose.
+GENERIC_WORDS = frozenset("""
+    platform billing legal security operations people benefits finance financial accounting
+    engineering marketing sales support customer success product design research development
+    compliance procurement purchasing payroll hr it qa devops infrastructure data analytics
+    communications pr facilities admin administration management executive leadership team
+    department dept office division desk help service services recruiting talent acquisition
+    human resources risk audit internal privacy trust safety growth partnerships business
+    strategy quality logistics supply chain shipping backend frontend mobile web cloud network
+    networking database claims underwriting treasury tax investor relations
+    summary timeline background overview introduction conclusion actions action items affected
+    systems impact next steps notes details appendix references agenda minutes attendees
+    incident report status severity root cause resolution findings recommendations scope
+    purpose description
+    ip dob ssn mrn ceo cto cfo coo ciso cio cmo vp svp evp pm ui ux api vpn sla kpi okr faq eta
+    utc gmt id
+""".split())
+# A person's name used for a disease is not a person ("Parkinson's disease", "帕金森氏症").
+EPONYM_RE = re.compile(r"(?:'s|’s)\s+(?:disease|syndrome|sign|law|palsy)|氏(?:症|病)", re.I)
+# The model tags the letters of a code ("SEC" in "SEC-2026-0419"); the whole code is an ID.
+ID_TAIL_RE = re.compile(r"(?:-[A-Za-z0-9]*\d[A-Za-z0-9]*)+")
+ID_RE = re.compile(r"[A-Za-z]{1,6}(?:-[A-Za-z0-9]+)*-[A-Za-z0-9]*\d[A-Za-z0-9-]*")
+
+
+def clean_model_spans(text: str, spans: list[Span]) -> list[Span]:
+    """Drop what the models tag but names no one; widen a tagged code prefix to the code."""
+    out: list[Span] = []
+    for s in spans:
+        words = [w for w in re.split(r"[\s&/,.-]+", s.text.lower()) if w]
+        if all(w in GENERIC_WORDS for w in words) or EPONYM_RE.match(text, s.end):
+            continue
+        if s.text.isascii() and (tail := ID_TAIL_RE.match(text, s.end)):
+            s = Span(s.start, tail.end(), s.label, text[s.start:tail.end()], s.score)
+        if ID_RE.fullmatch(s.text):
+            s = Span(s.start, s.end, "ID", s.text, s.score)
+        out.append(s)
+    return out
+
+
 # After a lone surname, these start a title or a function word, not a given name.
 NOT_GIVEN_NAME = set("經副先小老醫董總主教律博同太護的了是在和跟與及說把被給向對也都就還又而並但或會要請已再")
 
@@ -136,6 +177,7 @@ class Pipeline:
                 found = extend_surnames(text, found + clause_names(model, text))
             if x != "zh":  # non-Chinese models only see Chinese characters as noise
                 found = [s for s in found if not has_cjk(s.text)]
+            found = clean_model_spans(text, found)
             spans += found
         model_used = resolved in self.models
         spans = [s for s in spans if s.text not in ignore]
