@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.5.6] - 2026-09-19
+
+### Fixed
+- Departments, section headings and common acronyms the English model tagged are left
+  readable: `Platform team`, `Legal`, `People Operations`, `TIMELINE`, `CISO`, `DOB`, `IP`.
+  A tag made only of such words names no one; company names (`Contoso Health`,
+  `Dell Technologies`) are still coded.
+- A disease named after a person is no longer coded as that person:
+  `Parkinson's disease`, `帕金森氏症`.
+- When the model tags the letters of a code (`SEC` in `SEC-2026-0419`, a license plate
+  `BRT-2291`), the whole code becomes one `[ID_A]` instead of `[ORG_A]-2026-0419`.
+
 ## [0.5.5] - 2026-09-19
 
 ### Fixed
