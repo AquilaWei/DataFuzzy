@@ -9,7 +9,12 @@ requires-python = ">=3.12,<3.14"
 authors = [{ name = "AquilaWei" }]
 dependencies = [
     "PySide6>=6.7",
+    "certifi>=2026.7.22",
     "cryptography>=43",
+    "numpy>=1.26",
+    "onnxruntime>=1.19",
+    "platformdirs>=4",
+    "tokenizers>=0.20",
 ]
 
 [project.scripts]

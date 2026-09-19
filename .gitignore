@@ -4,7 +4,7 @@ CLAUDE.md
 .claude/
 
 # Models are downloaded at runtime, never committed
-models/
+/models/
 *.onnx
 
 # Python
