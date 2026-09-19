@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.4.1] - 2026-09-19
+
+### Changed
+- Higher name recall (measured on a mixed test set: Chinese ~97.6% → ~98.5%, English
+  ~99% → 100%, chat logs → 100%):
+  - Person names use a lower confidence threshold (0.25) than other entities (0.4).
+  - Chinese text gets a second look clause by clause, which only adds people.
+  - Chat logs: once one line-start speaker (`王小明：`, `10:23\t王小明\t`, `[10:23] Emma:`)
+    is a known person, the other speakers are coded too.
+
+### Added
+- Name recall regression test against the real models.
+
 ## [0.4.0] - 2026-09-19
 
 ### Added

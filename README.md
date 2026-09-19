@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml/badge.svg)](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/AquilaWei/DataFuzzy/graph/badge.svg)](https://codecov.io/gh/AquilaWei/DataFuzzy)
-![Version](https://img.shields.io/badge/version-0.4.0-blue)
+![Version](https://img.shields.io/badge/version-0.4.1-blue)
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
@@ -19,6 +19,7 @@
 - 🗂️ **代號檔管理** — 命名、預覽對應表、刪除；誤判的代號點一下就能取消標記
 - 🧹 **關閉即刪除** — 代號檔加密暫存，軟體關閉（或被中止）時全部刪除
 - 🧠 **名稱辨識** — 本機 NER 模型辨識人名、組織、地點；同一名稱在全文與後續輸入都換成同一代號
+- 🎯 **人名優先** — 人名採較寬的門檻，中文逐句再檢查一次；聊天紀錄（`張明：好的`、LINE 匯出）的說話者也會一併代號化。測試集人名召回率約 98%（中文）/ 100%（英文）
 - 🌏 **中英文** — 中文、英文各一個模型；中英混合的文字會同時用兩個模型
 
 目前可偵測：
@@ -90,7 +91,7 @@ uv run datafuzzy
 - 單獨出現的名或姓會沿用全名的代號（`John Smith`、`John` → `[PERSON_A]`；`王小明`、`小明` → `[PERSON_A]`），還原時一律還原成全名；一個名字一旦在代號檔中連到某人，之後出現同名的另一人也不會改變
 - 中文只連結「名」，單獨的姓（`王先生`）不連結；中文模型以繁體中文訓練，簡體中文效果可能較差
 - 產品名稱偶爾會被當成人名或組織而替換（寧可多遮，不要漏遮），可點代號取消標記
-- 長句中的地名偶爾會漏掉；目前還不能手動補標記
+- 人名仍可能漏掉（約 1–2%，多為少見的兩字名），送出前請快速看一下；長句中的地名偶爾會漏掉；目前還不能手動補標記
 
 ## 🏗️ 架構
 
