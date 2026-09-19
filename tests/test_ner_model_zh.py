@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import real_model_dir, real_pipeline
+from conftest import peak_rss_mb, real_model_dir, real_pipeline
 from datafuzzy.core.detect.ner import NerDetector
 from datafuzzy.core.mapping import Session
 from datafuzzy.core.models import load_manifest
@@ -95,21 +95,13 @@ def test_mixed_text_uses_both_models():
 
 @needs_all
 def test_memory_budget_with_both_models():
-    """Like the app: Qt plus one copy of each model, measured in a fresh process so other
-    tests' allocations don't count."""
-    import subprocess
-    import sys
-
-    script = f"""
-import resource, sys
+    """Like the app: Qt plus one copy of each model."""
+    rss_mb = peak_rss_mb(f"""
+import sys
 sys.path.insert(0, {str(Path(__file__).parent)!r})
 from PySide6.QtWidgets import QApplication
 from conftest import real_pipeline
 app = QApplication([])
 real_pipeline().detect("王小明 met John Smith at Google in Taipei, john@x.com, born 1990-01-02.")
-rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-print(rss / (1 << 20) if sys.platform == "darwin" else rss / 1024)  # bytes on macOS
-"""
-    out = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=True)
-    rss_mb = float(out.stdout.strip().splitlines()[-1])
+""")
     assert rss_mb < 1200, rss_mb

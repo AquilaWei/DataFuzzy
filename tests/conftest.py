@@ -65,6 +65,27 @@ def file_server():
     server.httpd.shutdown()
 
 
+_PEAK_MB = """
+import resource, sys
+try:  # Linux: ru_maxrss would include the parent's peak (it survives fork + exec)
+    peak = next(int(l.split()[1]) for l in open("/proc/self/status") if l.startswith("VmHWM")) / 1024
+except OSError:  # macOS: ru_maxrss is this process's own peak, in bytes
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1 << 20)
+print(peak)
+"""
+
+
+def peak_rss_mb(script: str) -> float:
+    """Peak memory of `script` run in a fresh Python process, so what earlier tests loaded
+    into this one doesn't count."""
+    import subprocess
+    import sys
+
+    out = subprocess.run([sys.executable, "-c", script + _PEAK_MB],
+                         capture_output=True, text=True, check=True)
+    return float(out.stdout.strip().splitlines()[-1])
+
+
 def real_model_dir(model_id: str) -> Path | None:
     """The model `model_id` from the manifest, if available locally (cached by
     tools/update_manifest.py or installed)."""
