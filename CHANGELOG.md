@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.3.0] - 2026-09-19
+
+### Added
+- Chinese NER (`ckiplab/bert-base-chinese-ner`, GPL-3.0, int8 ONNX) for **person,
+  organization and location names**, including compound surnames (歐陽娜娜) and
+  nicknames (阿明、老王). ~0.2 s load, <10 ms per sentence.
+- Mixed Chinese / English text: in auto mode both models run and their results are merged.
+- A Chinese given name on its own gets the full name's code (`王小明`, `小明` → `[PERSON_A]`).
+- NER decoding supports BIOES tags as well as BIO.
+
 ## [0.2.1] - 2026-09-19
 
 ### Fixed
