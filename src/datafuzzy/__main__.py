@@ -8,9 +8,10 @@ import sys
 
 
 def main() -> int:
-    from PySide6.QtCore import QTimer
+    from PySide6.QtCore import QSettings, QTimer
     from PySide6.QtWidgets import QApplication
 
+    from .core.models import is_installed, load_manifest, models_dir
     from .core.pipeline import Pipeline
     from .core.store import SessionStore, sweep_stale
     from .ui.main_window import MainWindow
@@ -31,8 +32,18 @@ def main() -> int:
     keepalive.timeout.connect(lambda: None)
     keepalive.start(250)
 
-    window = MainWindow(Pipeline(), store)
+    specs = load_manifest()
+    root = models_dir()
+    pipeline = Pipeline()
+    pipeline.load_models(specs, root)
+    window = MainWindow(pipeline, store, specs, root)
     window.show()
+
+    # First launch without any model: offer the download once.
+    settings = QSettings("DataFuzzy", "DataFuzzy")
+    if not any(is_installed(s, root) for s in specs) and not settings.value("models/prompted", False, bool):
+        settings.setValue("models/prompted", True)
+        QTimer.singleShot(0, window.open_model_manager)
     return app.exec()
 
 
