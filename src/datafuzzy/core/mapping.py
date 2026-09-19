@@ -76,6 +76,9 @@ class Session:
     created_at: str = field(default_factory=lambda: datetime.now().isoformat(timespec="seconds"))
     to_code: dict[str, str] = field(default_factory=dict)
     counters: dict[str, int] = field(default_factory=dict)
+    # Originals the user un-marked as false positives -> the code they had. They are
+    # never coded again in this session, but text already sent out can still be restored.
+    ignored: dict[str, str] = field(default_factory=dict)
 
     @property
     def to_original(self) -> dict[str, str]:
@@ -85,6 +88,28 @@ class Session:
             if len(orig) > len(out.get(code, "")):
                 out[code] = orig
         return out
+
+    def _lookup(self) -> dict[str, str]:
+        """Code -> original for restoring, including codes retired by `unmark`."""
+        return {**{code: orig for orig, code in self.ignored.items()}, **self.to_original}
+
+    def rows(self) -> list[tuple[str, list[str]]]:
+        """(code, originals) for previewing the mapping, ordered by label then code."""
+        grouped: dict[str, list[str]] = {}
+        for orig, code in self.to_code.items():
+            grouped.setdefault(code, []).append(orig)
+        order = lambda code: (code[1:].rsplit("_", 1)[0], len(code), code)  # noqa: E731
+        return [(code, sorted(grouped[code], key=len, reverse=True))
+                for code in sorted(grouped, key=order)]
+
+    def unmark(self, code: str) -> list[str]:
+        """Stop treating `code`'s originals as sensitive. Returns them, longest first.
+        The code is never reused, so it can't restore to a different value later."""
+        originals = sorted((o for o, c in self.to_code.items() if c == code), key=len, reverse=True)
+        for orig in originals:
+            del self.to_code[orig]
+            self.ignored[orig] = code
+        return originals
 
     def person_aliases(self) -> dict[str, str]:
         """Unambiguous parts of full person names in this session -> their code."""
@@ -136,7 +161,7 @@ class Session:
         return "".join(out), code_spans
 
     def restore(self, text: str) -> RestoreResult:
-        lookup = self.to_original
+        lookup = self._lookup()
         unknown: list[str] = []
         restored = 0
 
@@ -154,7 +179,7 @@ class Session:
 
     def match_count(self, text: str) -> int:
         """How many distinct codes in `text` this session can restore."""
-        lookup = self.to_original
+        lookup = self._lookup()
         return len({m.group(0) for m in CODE_RE.finditer(text)} & lookup.keys())
 
     def to_dict(self) -> dict:
@@ -164,6 +189,7 @@ class Session:
             "created_at": self.created_at,
             "to_code": self.to_code,
             "counters": self.counters,
+            "ignored": self.ignored,
         }
 
     @classmethod
@@ -174,7 +200,30 @@ class Session:
             created_at=data["created_at"],
             to_code=dict(data["to_code"]),
             counters=dict(data["counters"]),
+            ignored=dict(data.get("ignored", {})),
         )
+
+
+def revert_code(text: str, code_spans: list[Span], originals: list[str],
+                code: str) -> tuple[str, list[Span], list[str]]:
+    """Put the originals back wherever `code` sits in an obfuscated text.
+    `originals[i]` is what `code_spans[i]` replaced. Returns the new text, spans, originals."""
+    out: list[str] = []
+    spans: list[Span] = []
+    kept: list[str] = []
+    pos = 0
+    shift = 0
+    for span, orig in zip(code_spans, originals):
+        if span.text != code:
+            spans.append(Span(span.start + shift, span.end + shift, span.label, span.text))
+            kept.append(orig)
+            continue
+        out.append(text[pos:span.start])
+        out.append(orig)
+        pos = span.end
+        shift += len(orig) - len(span)
+    out.append(text[pos:])
+    return "".join(out), spans, kept
 
 
 def recommend(text: str, sessions: list[Session]) -> Session | None:

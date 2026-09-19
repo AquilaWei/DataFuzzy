@@ -94,3 +94,70 @@ def test_model_manager_download_and_delete(qtbot, tmp_path, file_server):
     row.button.click()
     assert row.button.text() == "下載"
     assert win.pipeline.models == {}
+
+
+def test_unmark_code_updates_replies_and_future_input(qtbot, tmp_path):
+    from PySide6.QtCore import QUrl
+
+    win, store = make_window(qtbot, tmp_path)
+    send(win, "主機 10.0.0.8，寄給 a@b.co")
+    send(win, "再查 10.0.0.8")
+    session = store.list()[0]
+
+    with qtbot.waitSignal(win.chat.code_clicked) as clicked:
+        win.chat.anchorClicked.emit(QUrl("code:0:0"))
+    assert clicked.args == [0, "[IP_A]"]
+
+    win.unmark(0, "[IP_A]")
+    assert win.chat.reply_text(0) == "主機 10.0.0.8，寄給 [EMAIL_A]"
+    assert win.chat.reply_text(1) == "再查 10.0.0.8"
+    assert [s.text for s in win.chat.replies[0].spans] == ["[EMAIL_A]"]
+    assert "已取消標記 「10.0.0.8」" in win.chat.toPlainText()
+    assert store.load(session.id).ignored == {"10.0.0.8": "[IP_A]"}
+    assert win.panel.table.rowCount() == 1
+
+    send(win, "10.0.0.8 與 10.0.0.9")
+    assert win.chat.reply_text(2) == "10.0.0.8 與 [IP_B]"
+
+
+def test_panel_rename_preview_and_delete(qtbot, tmp_path):
+    win, store = make_window(qtbot, tmp_path)
+    send(win, "John Smith? no: a@b.co and 10.0.0.8")
+    session = store.list()[0]
+    assert win.panel.current_id == session.id
+    assert win.panel.table.rowCount() == 2
+    assert win.panel.table.item(0, 0).text() == "[EMAIL_A]"
+    assert win.panel.table.item(0, 1).text() == "a@b.co"
+
+    item = win.panel.list.item(0)
+    win.panel.start_rename(item)
+    item.setText("客戶 A")  # what committing the inline editor does
+    assert store.sessions[session.id].label == "客戶 A"
+    assert win.session_box.currentText().startswith("客戶 A")
+    assert win.panel.list.item(0).text().startswith("客戶 A\n")
+
+    win.delete_session(session.id)
+    assert store.list() == [] and not list(store.dir.glob("*.dfmap"))
+    assert win.panel.list.count() == 0 and win.panel.table.rowCount() == 0
+    assert win.chat.replies[0].session_id is None
+
+
+def test_restore_recommends_matching_code_file(qtbot, tmp_path):
+    win, store = make_window(qtbot, tmp_path)
+    send(win, "a@b.co")
+    win.session_box.setCurrentIndex(win.session_box.findData(NEW_SESSION))
+    send(win, "c@d.co 與 10.0.0.8")
+    first, second = store.list()
+
+    win.restore_btn.setChecked(True)
+    win.input.setPlainText("請 [EMAIL_A] 看 [IP_A]")
+    assert win.session_box.currentData() == second.id
+    assert "可還原 2 個代號" in win.recommend_hint.text()
+
+    # A manual choice sticks while the best match stays the same.
+    win.session_box.setCurrentIndex(win.session_box.findData(first.id))
+    win.input.setPlainText("請 [EMAIL_A] 看 [IP_A]。")
+    assert win.session_box.currentData() == first.id
+
+    win.input.setPlainText("沒有代號")
+    assert win.recommend_hint.text() == ""

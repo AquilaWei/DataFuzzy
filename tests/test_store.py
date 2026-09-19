@@ -59,3 +59,12 @@ def test_session_dict_round_trip():
     s = Session(label="x")
     s.code_for("a", "PERSON")
     assert Session.from_dict(s.to_dict()) == s
+
+
+def test_rename_saves_label(tmp_path):
+    store = SessionStore(tmp_path)
+    session = store.new_session()
+    store.rename(session.id, "  客戶 A  ")
+    assert store.load(session.id).label == "客戶 A"
+    store.rename(session.id, "   ")  # blank names are ignored
+    assert store.sessions[session.id].label == "客戶 A"

@@ -5,13 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QKeySequence, QShortcut
+from PySide6.QtGui import QAction, QCursor, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QButtonGroup,
     QComboBox,
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMenu,
+    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QSplitter,
@@ -20,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__
+from ..core.mapping import recommend, revert_code
 from ..core.models import ModelSpec
 from ..core.pipeline import ObfuscateResult, Pipeline
 from ..core.store import SessionStore
@@ -41,6 +44,7 @@ class MainWindow(QMainWindow):
         self.specs = specs or []
         self.models_root = models_root
         self._task = None
+        self._recommended: str | None = None
         self.setWindowTitle(f"DataFuzzy {__version__}")
         self.resize(960, 640)
 
@@ -56,13 +60,18 @@ class MainWindow(QMainWindow):
             btn.setCheckable(True)
             self.mode_group.addButton(btn)
         self.obfuscate_btn.setChecked(True)
-        self.mode_group.buttonToggled.connect(lambda *_: self._refresh_sessions())
+        self.mode_group.buttonToggled.connect(self._mode_changed)
 
         self.lang_box = QComboBox()
         for text, value in LANGS:
             self.lang_box.addItem(text, value)
         self.session_box = QComboBox()
         self.session_box.setMinimumWidth(200)
+        self.session_box.currentIndexChanged.connect(
+            lambda _: self.panel.select(self.session_box.currentData()))
+        self.recommend_hint = QLabel()
+        self.recommend_hint.setStyleSheet("color: gray;")
+        self.recommend_hint.hide()
         self.model_status = QLabel()
         self.model_status.setStyleSheet("color: gray;")
 
@@ -81,7 +90,11 @@ class MainWindow(QMainWindow):
         # Chat + side panel
         self.chat = ChatView()
         self.chat.open_models.connect(self.open_model_manager)
+        self.chat.code_clicked.connect(self._code_menu)
         self.panel = SessionPanel()
+        self.panel.selected.connect(self._panel_selected)
+        self.panel.rename_requested.connect(self.rename_session)
+        self.panel.delete_requested.connect(self._confirm_delete)
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self.chat)
         splitter.addWidget(self.panel)
@@ -95,6 +108,7 @@ class MainWindow(QMainWindow):
         self.send_btn = QPushButton("送出")
         self.send_btn.clicked.connect(self.submit)
         QShortcut(QKeySequence("Ctrl+Return"), self.input, activated=self.submit)
+        self.input.textChanged.connect(self._recommend)
         bottom = QHBoxLayout()
         bottom.addWidget(self.input)
         bottom.addWidget(self.send_btn, alignment=Qt.AlignmentFlag.AlignBottom)
@@ -103,6 +117,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(root)
         layout.addLayout(top)
         layout.addWidget(splitter, 1)
+        layout.addWidget(self.recommend_hint)
         layout.addLayout(bottom)
         self.setCentralWidget(root)
 
@@ -143,12 +158,12 @@ class MainWindow(QMainWindow):
         if not self.restoring:
             self.session_box.addItem("＋ 新代號檔", NEW_SESSION)
         for s in self.store.list():
-            self.session_box.addItem(f"{s.label}（{len(s.to_code)} 筆）", s.id)
+            self.session_box.addItem(f"{s.label}（{len(s.rows())} 個代號）", s.id)
         idx = self.session_box.findData(current)
         if idx >= 0:
             self.session_box.setCurrentIndex(idx)
-        self.session_box.setEnabled(self.session_box.count() > 0)
-        self.panel.refresh(self.store.list())
+        self.session_box.setEnabled(self.session_box.count() > 0 and not self.busy)
+        self.panel.refresh(self.store.list(), select=self.session_box.currentData())
 
     def _set_busy(self, task) -> None:
         self._task = task
@@ -179,7 +194,7 @@ class MainWindow(QMainWindow):
             self._set_busy(None)
             self.store.save(session)
             note = f"{session.label} · 替換 {len(result.spans)} 處 · 語言 {result.lang}"
-            self.chat.add_reply(result.text, result.code_spans, note)
+            self.chat.add_reply(result.text, result.code_spans, note, result.originals, session.id)
             if not result.model_used:
                 lang_name = LANG_NAMES.get(result.lang, result.lang)
                 self.chat.add_notice(f"未安裝{lang_name}模型，本次只用規則偵測，人名等名稱不會被替換。",
@@ -205,3 +220,95 @@ class MainWindow(QMainWindow):
         if result.unknown:
             note += " · 找不到：" + "、".join(result.unknown)
         self.chat.add_reply(result.text, note=note)
+
+    def _mode_changed(self, *_) -> None:
+        self._recommended = None
+        self._refresh_sessions()
+        self._recommend()
+
+    def _recommend(self) -> None:
+        """In restore mode, pick the code file that can restore the most codes in the input.
+        Only switches when the best match changes, so a manual choice sticks while typing."""
+        if not self.restoring:
+            self._hint("")
+            return
+        text = self.input.toPlainText()
+        best = recommend(text, self.store.list())
+        if best is None:
+            self._recommended = None
+            self._hint("")
+            return
+        if best.id != self._recommended:
+            self._recommended = best.id
+            self.session_box.setCurrentIndex(self.session_box.findData(best.id))
+        self._hint(f"已依代號自動選擇「{best.label}」：可還原 {best.match_count(text)} 個代號")
+
+    def _hint(self, text: str) -> None:
+        self.recommend_hint.setText(text)
+        self.recommend_hint.setVisible(bool(text))
+
+    def _panel_selected(self, session_id: str) -> None:
+        idx = self.session_box.findData(session_id)
+        if idx >= 0 and not self.busy:
+            self.session_box.setCurrentIndex(idx)
+
+    def rename_session(self, session_id: str, label: str) -> None:
+        if session_id in self.store.sessions:
+            self.store.rename(session_id, label)
+        self._refresh_sessions()
+
+    def _confirm_delete(self, session_id: str) -> None:
+        session = self.store.sessions.get(session_id)
+        if session is None:
+            return
+        answer = QMessageBox.question(
+            self, "刪除代號檔", f"刪除「{session.label}」？刪除後就無法用它還原。")
+        if answer == QMessageBox.StandardButton.Yes:
+            self.delete_session(session_id)
+
+    def delete_session(self, session_id: str) -> None:
+        if self.busy:  # the running task would save the file again
+            self.chat.add_notice("處理中，請稍後再刪除代號檔。")
+            return
+        session = self.store.sessions.get(session_id)
+        if session is None:
+            return
+        self.store.delete(session_id)
+        for reply in self.chat.replies:
+            if reply.session_id == session_id:
+                reply.session_id = None  # its codes can no longer be un-marked
+        self.chat.rerender()
+        self.chat.add_notice(f"已刪除「{session.label}」。")
+        self._recommended = None
+        self._refresh_sessions()
+
+    def _code_menu(self, reply_idx: int, code: str) -> None:
+        reply = self.chat.replies[reply_idx]
+        session = self.store.sessions.get(reply.session_id or "")
+        originals = [o for o, c in session.to_code.items() if c == code] if session else []
+        if not originals or self.busy:
+            return
+        menu = QMenu(self)
+        shown = max(originals, key=len)
+        menu.addAction(f"取消標記「{shown}」（不是敏感資料）", lambda: self.unmark(reply_idx, code))
+        menu.popup(QCursor.pos())
+
+    def unmark(self, reply_idx: int, code: str) -> None:
+        """Treat `code`'s original as not sensitive: put it back in every reply of this code
+        file, and never code it again in this code file."""
+        session_id = self.chat.replies[reply_idx].session_id
+        session = self.store.sessions.get(session_id or "")
+        if session is None or self.busy:
+            return
+        originals = session.unmark(code)
+        if not originals:
+            return
+        self.store.save(session)
+        for i, reply in enumerate(self.chat.replies):
+            if reply.session_id == session_id and any(s.text == code for s in reply.spans):
+                self.chat.update_reply(i, *revert_code(reply.text, reply.spans, reply.originals, code))
+        self.chat.rerender()
+        names = "、".join(f"「{o}」" for o in originals)
+        self.chat.add_notice(f"已取消標記 {names}，{session.label} 之後不會再替換它。"
+                             "先前複製出去的 " + code + " 仍可還原。")
+        self._refresh_sessions()
