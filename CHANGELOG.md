@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.5.3] - 2026-09-19
+
+### Fixed
+- An organization followed by its department (`羅東博愛醫院 家醫科`) gets the same code
+  as the organization on its own, in the same text or an earlier message, so one
+  hospital no longer shows up as two: `[ORG_B] 家醫科` … `[ORG_B]`.
+
 ## [0.5.2] - 2026-09-19
 
 ### Fixed
