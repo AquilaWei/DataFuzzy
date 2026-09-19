@@ -1,0 +1,34 @@
+[project]
+name = "datafuzzy"
+version = "0.0.0"
+description = "Local-first text obfuscation: replace sensitive data with reversible codes."
+readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+requires-python = ">=3.12,<3.14"
+authors = [{ name = "AquilaWei" }]
+dependencies = [
+    "PySide6>=6.7",
+    "cryptography>=43",
+]
+
+[project.scripts]
+datafuzzy = "datafuzzy.__main__:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-qt>=4.4",
+    "pytest-cov>=5",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/datafuzzy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
