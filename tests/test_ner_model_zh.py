@@ -73,13 +73,25 @@ def test_mixed_text_uses_both_models(ner):
 
 
 @pytest.mark.skipif(EN_MODEL is None, reason="English model not available")
-def test_memory_budget_with_both_models(ner):
-    import resource
+def test_memory_budget_with_both_models():
+    """Like the app: Qt plus one copy of each model, measured in a fresh process so other
+    tests' allocations don't count."""
+    import subprocess
     import sys
 
-    en = next(s for s in load_manifest() if s.lang == "en")
-    NerDetector(EN_MODEL, en.labels).detect("Alice Chen met Bob at Google.")
-    ner.detect("王小明在台北。")
-    rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    rss_mb = rss / (1 << 20) if sys.platform == "darwin" else rss / 1024  # bytes on macOS
+    script = f"""
+import resource, sys
+from pathlib import Path
+from PySide6.QtWidgets import QApplication
+from datafuzzy.core.detect.ner import NerDetector
+from datafuzzy.core.models import load_manifest
+app = QApplication([])
+dirs = {{"en": Path({str(EN_MODEL)!r}), "zh": Path({str(MODEL)!r})}}
+for spec in load_manifest():
+    NerDetector(dirs[spec.lang], spec.labels).detect("王小明 met John Smith at Google in Taipei.")
+rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+print(rss / (1 << 20) if sys.platform == "darwin" else rss / 1024)  # bytes on macOS
+"""
+    out = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=True)
+    rss_mb = float(out.stdout.strip().splitlines()[-1])
     assert rss_mb < 600, rss_mb
