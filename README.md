@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml/badge.svg)](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/AquilaWei/DataFuzzy/graph/badge.svg)](https://codecov.io/gh/AquilaWei/DataFuzzy)
-![Version](https://img.shields.io/badge/version-0.3.0-blue)
+![Version](https://img.shields.io/badge/version-0.4.0-blue)
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
@@ -15,7 +15,8 @@
 
 - 🔒 **完全本機處理** — 文字不會離開你的電腦
 - 🏷️ **可還原的代號** — `alice@acme.com` → `[EMAIL_A]`；同一個值永遠是同一個代號
-- 🔁 **跨文本還原** — 貼回任何含代號的新文字，選擇代號檔即可換回原文
+- 🔁 **跨文本還原** — 貼回任何含代號的新文字，自動選出對應的代號檔並換回原文
+- 🗂️ **代號檔管理** — 命名、預覽對應表、刪除；誤判的代號點一下就能取消標記
 - 🧹 **關閉即刪除** — 代號檔加密暫存，軟體關閉（或被中止）時全部刪除
 - 🧠 **名稱辨識** — 本機 NER 模型辨識人名、組織、地點；同一名稱在全文與後續輸入都換成同一代號
 - 🌏 **中英文** — 中文、英文各一個模型；中英混合的文字會同時用兩個模型
@@ -63,12 +64,16 @@ uv run datafuzzy
    王小明明天跟台積電的陳大華開會，會後小明再寄信給 John Smith
    → [PERSON_A]明天跟[ORG_A]的[PERSON_B]開會，會後[PERSON_A]再寄信給 [PERSON_C]
    ```
-2. **還原**：選「還原」→ 選要用的代號檔 → 貼上含代號的文字
+2. **還原**：選「還原」→ 貼上含代號的文字（會自動選出能還原最多代號的代號檔，也可手動改選）
    ```
    [PERSON_A] 已與 [PERSON_C] 確認
    → 王小明 已與 John Smith 確認
    ```
 3. 點回覆旁的 **複製** 即可取用結果。
+4. **誤判**：點回覆中的代號 →「取消標記」，原文會放回所有回覆，這個代號檔之後也不再替換它；先前已複製出去的代號仍可還原
+5. **管理代號檔**：右側清單 **雙擊** 重新命名、**右鍵** 刪除，下方預覽「代號 ↔ 原文」對應表
+
+![screenshot](docs/assets/screenshot.png)
 
 **語言**選「自動偵測」時，文字含中文就用中文模型、含英文就用英文模型，混合時兩個都用；手動選 English / 中文 則只用該語言的模型。
 
@@ -84,7 +89,8 @@ uv run datafuzzy
 - 英文模型區分大小寫：全小寫的名字（`john smith`）可能漏掉
 - 單獨出現的名或姓會沿用全名的代號（`John Smith`、`John` → `[PERSON_A]`；`王小明`、`小明` → `[PERSON_A]`），還原時一律還原成全名；一個名字一旦在代號檔中連到某人，之後出現同名的另一人也不會改變
 - 中文只連結「名」，單獨的姓（`王先生`）不連結；中文模型以繁體中文訓練，簡體中文效果可能較差
-- 產品名稱偶爾會被當成人名或組織而替換（寧可多遮，不要漏遮）
+- 產品名稱偶爾會被當成人名或組織而替換（寧可多遮，不要漏遮），可點代號取消標記
+- 長句中的地名偶爾會漏掉；目前還不能手動補標記
 
 ## 🏗️ 架構
 
@@ -99,7 +105,9 @@ flowchart LR
     K --> F[代號對應<br/>Session]
     F --> G[模糊化文字]
     F <--> H[(加密代號檔<br/>關閉即刪)]
-    I[含代號文字] --> F
+    L[點代號取消標記] -.-> F
+    I[含代號文字] --> R[自動推薦代號檔]
+    R --> F
     F --> J[還原文字]
 ```
 
@@ -120,7 +128,7 @@ src/datafuzzy/
 - [x] 0.1 — 規則偵測、代號對應、加密暫存、對話介面
 - [x] 0.2 — 模型下載管理 + 英文 NER（`dslim/bert-base-NER`）
 - [x] 0.3 — 中文 NER（`ckiplab/bert-base-chinese-ner`）、中英混合文字
-- [ ] 0.4 — 代號檔管理（命名、預覽、自動推薦）
+- [x] 0.4 — 代號檔管理（命名、預覽、自動推薦）、誤判取消標記
 - [ ] 0.5 — Mac `.dmg` / Linux AppImage（不含模型，安裝後下載）
 
 ## 🤝 參與貢獻
