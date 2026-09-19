@@ -3,6 +3,32 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.6.0] - 2026-09-19
+
+### Added
+- Scope "只處理人名": only people are coded; emails, phones, addresses, dates, IDs,
+  companies and places stay readable. On a 13-document test set: 171/174 names coded,
+  nothing else touched (270/270 kept).
+- Dates are coded (`[DATE_A]`), including dates of birth, and so are record, policy,
+  account and passport numbers that follow no fixed format.
+
+### Changed
+- Personal data is found by [`openai/privacy-filter`](https://huggingface.co/openai/privacy-filter)
+  (Apache-2.0, q4 ONNX, ~945 MB, ~2 GB RAM with both models), a model made for personal
+  data instead of a news-trained NER. It replaces the English model `dslim/bert-base-NER`;
+  the CKIP Chinese model now finds Chinese names only. Download it again from
+  模型 → 模型管理.
+- Only personal data is coded: companies, hospitals, places, diseases, drugs and
+  departments stay readable. Public figures in English text in a public context
+  (`Apple hired Steve Jobs`) are not coded; a private person with the same name is.
+- On a test set written for this change (13 documents), compared with 0.5.6: IDs 8/20 →
+  18/20, dates of birth 0/9 → 8/9, false positives 15 → 1, names 172 → 171 of 174.
+
+### Removed
+- The word lists and special cases added to work around the old models: generic
+  department words, disease eponyms, code widening, lone-surname extension, the extra
+  clause-by-clause pass and organization trimming.
+
 ## [0.5.6] - 2026-09-19
 
 ### Fixed
