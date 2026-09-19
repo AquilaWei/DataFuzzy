@@ -79,7 +79,7 @@ jobs:
           cat >> notes.md <<'EOF'
 
           ---
-          **macOS (Apple Silicon)：** 下載 `.dmg` → 把 DataFuzzy 拖進「應用程式」。App 沒有 Apple 簽章，第一次開啟請見 README「安裝」。
+          **macOS (Apple Silicon)：** 下載 `.dmg` → 把 DataFuzzy 拖進「應用程式」。App 沒有 Apple 簽章，第一次開啟請見 README「快速開始 → 安裝檔」。
           **Linux (x86_64)：** 下載 `.AppImage` → `chmod +x` → 執行。
           模型不含在安裝檔內，第一次啟動時在 App 內下載。
           EOF
