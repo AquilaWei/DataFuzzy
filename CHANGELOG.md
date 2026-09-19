@@ -14,7 +14,7 @@ Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bu
 
 ### Changed
 - Personal data is found by [`openai/privacy-filter`](https://huggingface.co/openai/privacy-filter)
-  (Apache-2.0, q4 ONNX, ~945 MB, ~2 GB RAM with both models), a model made for personal
+  (Apache-2.0, q4 ONNX, ~945 MB; ~0.5 GB RAM with both models, up to ~1.7 GB on long text), a model made for personal
   data instead of a news-trained NER. It replaces the English model `dslim/bert-base-NER`;
   the CKIP Chinese model now finds Chinese names only. Download it again from
   模型 → 模型管理.

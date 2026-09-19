@@ -66,6 +66,9 @@ class PrivacyFilterDetector:
             tok.no_truncation()
             opts = ort.SessionOptions()
             opts.intra_op_num_threads = min(4, os.cpu_count() or 1)
+            # Prepacking keeps a second, reordered copy of the 4-bit weights: ~1.1 GB more
+            # on macOS and ~4 GB more on x86 Linux.
+            opts.add_session_config_entry("session.disable_prepacking", "1")
             self._session = ort.InferenceSession(
                 str(self.model_dir / "model.onnx"), opts, providers=["CPUExecutionProvider"]
             )
