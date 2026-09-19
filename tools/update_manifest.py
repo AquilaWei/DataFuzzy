@@ -19,28 +19,36 @@ MANIFEST = ROOT / "src/datafuzzy/models_manifest.json"
 
 MODELS = [
     {
-        "id": "en-bert-ner",
-        "lang": "en",
-        "name": "English NER (BERT base, int8)",
-        "source": "dslim/bert-base-NER",
-        "license": "MIT",
-        "labels": {"PER": "PERSON", "ORG": "ORG", "LOC": "LOC"},
-        "repo": "Xenova/bert-base-NER",
-        "revision": "8e892123e8b7c2c0c2bd1dcb598b7d244c4e53aa",
-        # local name -> path in repo
+        "id": "privacy-filter",
+        "kind": "privacy-filter",
+        "lang": "any",
+        "name": "個資偵測 (OpenAI Privacy Filter, q4)",
+        "source": "openai/privacy-filter",
+        "license": "Apache-2.0",
+        "labels": {
+            "private_person": "PERSON", "private_address": "LOC", "private_date": "DATE",
+            "private_email": "EMAIL", "private_phone": "PHONE", "private_url": "URL",
+            "account_number": "ID", "secret": "SECRET",
+        },
+        "repo": "openai/privacy-filter",
+        "revision": "7ffa9a043d54d1be65afb281eddf0ffbe629385b",
+        # The graph refers to its weights as "model_q4.onnx_data": keep that name.
         "files": {
-            "model.onnx": "onnx/model_quantized.onnx",
+            "model.onnx": "onnx/model_q4.onnx",
+            "model_q4.onnx_data": "onnx/model_q4.onnx_data",
             "tokenizer.json": "tokenizer.json",
             "config.json": "config.json",
         },
     },
     {
         "id": "zh-bert-ner",
+        "kind": "ner",
         "lang": "zh",
-        "name": "中文 NER (CKIP BERT base, int8)",
+        "name": "中文人名 (CKIP BERT base, int8)",
         "source": "ckiplab/bert-base-chinese-ner",
         "license": "GPL-3.0",
-        "labels": {"PERSON": "PERSON", "ORG": "ORG", "GPE": "LOC", "LOC": "LOC", "FAC": "LOC"},
+        # Chinese people only: the privacy filter finds everything else.
+        "labels": {"PERSON": "PERSON"},
         "repo": "Xenova/bert-base-chinese-ner",
         "revision": "be592940bc954f32492c831bdd1d086a04036597",
         "files": {
@@ -80,7 +88,7 @@ def main() -> None:
             path = fetch(url, CACHE / m["id"] / name)
             files.append({"name": name, "url": url, "size": path.stat().st_size, "sha256": sha256(path)})
             print(f"{m['id']}/{name}: {path.stat().st_size / 1e6:.1f} MB")
-        entry = {k: m[k] for k in ("id", "lang", "name", "source", "license", "labels")}
+        entry = {k: m[k] for k in ("id", "kind", "lang", "name", "source", "license", "labels")}
         entry["files"] = files
         out.append(entry)
     MANIFEST.write_text(json.dumps({"models": out}, indent=2, ensure_ascii=False) + "\n")

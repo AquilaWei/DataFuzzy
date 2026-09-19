@@ -37,10 +37,12 @@ def self_test() -> int:
         assert "alice@acme.com" not in result.text, result.text
         assert pipeline.restore(result.text, session).text == text
         if os.environ.get("DATAFUZZY_REQUIRE_MODEL"):
-            assert sorted(pipeline.models) == sorted(s.lang for s in specs), pipeline.models
+            assert pipeline.pii is not None
+            assert sorted(pipeline.models) == sorted(s.lang for s in specs if s.kind == "ner"), pipeline.models
             for name in ("John Smith", "王小明"):
                 assert name not in result.text, result.text
-        print(f"DataFuzzy {__version__} self-test OK; models: {sorted(pipeline.models)}; "
+        loaded = [d.name for d in (pipeline.pii, *pipeline.models.values()) if d]
+        print(f"DataFuzzy {__version__} self-test OK; models: {loaded}; "
               f"{result.text}")
     finally:
         store.cleanup()

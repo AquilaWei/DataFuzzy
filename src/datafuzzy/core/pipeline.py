@@ -9,12 +9,15 @@ from typing import Literal
 
 from .detect import Detector, RegexDetector, Span, resolve_overlaps
 from .detect.ner import NerDetector
-from .lang import Lang, detect_language, has_cjk, languages_in
-from .mapping import COMMON_SURNAMES, PERSON, RestoreResult, Session, find_all, name_aliases
+from .detect.privacy_filter import PrivacyFilterDetector
+from .lang import Lang, detect_language, languages_in
+from .mapping import PERSON, RestoreResult, Session, find_all, name_aliases
 from .models import ModelSpec, is_installed
 from .speakers import speaker_spans
 
 LangChoice = Literal["auto", "en", "zh"]
+# "names": code only people, leave emails, places, IDs... readable.
+Scope = Literal["all", "names"]
 
 
 @dataclass
@@ -27,161 +30,90 @@ class ObfuscateResult:
     model_used: bool        # False when no model is installed for `lang`
 
 
-CLAUSE_RE = re.compile(r"[^。！？；，、,;!?\n]+")
 LINE_RE = re.compile(r"[^\n]+")
-
-
-def detect_pieces(model: Detector, pieces: list[re.Match[str]]) -> list[Span]:
-    spans: list[Span] = []
-    for m in pieces:
-        for s in model.detect(m.group()):
-            spans.append(Span(s.start + m.start(), s.end + m.start(), s.label, s.text, s.score))
-    return spans
 
 
 def line_entities(model: Detector, text: str) -> list[Span]:
     """Entities found line by line. Unrelated lines of a form (病歷號、身分證、地址...) run
     together confuse the models: an address found on its own line is lost or broken into
     single characters when the lines above it are in the same input."""
-    lines = [m for m in LINE_RE.finditer(text) if m.group().strip()]
-    spans = detect_pieces(model, lines)
-    # A lone character is a fragment of a missed name, not an organization or place.
-    return [s for s in spans if len(s.text.strip()) > 1 or s.label == PERSON]
+    spans: list[Span] = []
+    for m in LINE_RE.finditer(text):
+        if m.group().strip():
+            for s in model.detect(m.group()):
+                spans.append(Span(s.start + m.start(), s.end + m.start(), s.label, s.text, s.score))
+    return spans
 
 
-def clause_names(model: Detector, text: str) -> list[Span]:
-    """Names found by running the model on each clause alone, without its punctuation.
-    The Chinese model misses some names in context ("這是何文明的報帳單，請...") that it
-    finds in a shorter piece, so this second look only adds people."""
-    clauses = [m for m in CLAUSE_RE.finditer(text) if m.group().strip()]
-    if len(clauses) < 2 and (not clauses or clauses[0].group() == text):
-        return []
-    return [s for s in detect_pieces(model, clauses) if s.label == PERSON]
+LOC = "LOC"
+# CJK ideographs and punctuation, fullwidth forms.
+CJK_RUN = re.compile(r"[\u3000-\u303f\u3400-\u9fff\uf900-\ufaff\uff00-\uffef]+")
 
 
-ORG = "ORG"
-
-
-def trim_to_known_orgs(spans: list[Span], known_orgs: set[str]) -> list[Span]:
-    """An organization followed by a unit ("羅東博愛醫院 家醫科") is cut back to the
-    organization when that is also found on its own, so one hospital gets one code.
-    Only organizations: cutting an address back would expose the house number."""
-    orgs = known_orgs | {s.text for s in spans if s.label == ORG}
+def latin_parts(text: str, spans: list[Span]) -> list[Span]:
+    """The privacy filter finds personal data in Chinese text but not where it starts and
+    ends ("李建宏 警", "ARK-5821 對吧？"). A span with Chinese characters is cut at them and
+    keeps its pieces with a digit (numbers, dates, codes) or, for a person, with Latin
+    letters ("Dr. Kevin Lee"). Chinese names come from the Chinese model, Taiwan
+    addresses from the address rule."""
     out: list[Span] = []
     for s in spans:
-        if s.label == ORG:
-            heads = [o for o in orgs if len(o) < len(s.text) and s.text.startswith(o)
-                     and s.text[len(o)].isspace()]
-            if heads:
-                head = max(heads, key=len)
-                s = Span(s.start, s.start + len(head), ORG, head, s.score)
-        out.append(s)
-    return out
-
-
-# Departments, section headings and common acronyms the English model takes for
-# organizations or people ("Platform team", "Legal", "TIMELINE", "CISO"). A span made only
-# of these words names no one. Company suffixes (Inc, Corp, Bank...) are left out on purpose.
-GENERIC_WORDS = frozenset("""
-    platform billing legal security operations people benefits finance financial accounting
-    engineering marketing sales support customer success product design research development
-    compliance procurement purchasing payroll hr it qa devops infrastructure data analytics
-    communications pr facilities admin administration management executive leadership team
-    department dept office division desk help service services recruiting talent acquisition
-    human resources risk audit internal privacy trust safety growth partnerships business
-    strategy quality logistics supply chain shipping backend frontend mobile web cloud network
-    networking database claims underwriting treasury tax investor relations
-    summary timeline background overview introduction conclusion actions action items affected
-    systems impact next steps notes details appendix references agenda minutes attendees
-    incident report status severity root cause resolution findings recommendations scope
-    purpose description
-    ip dob ssn mrn ceo cto cfo coo ciso cio cmo vp svp evp pm ui ux api vpn sla kpi okr faq eta
-    utc gmt id
-""".split())
-# A person's name used for a disease is not a person ("Parkinson's disease", "帕金森氏症").
-EPONYM_RE = re.compile(r"(?:'s|’s)\s+(?:disease|syndrome|sign|law|palsy)|氏(?:症|病)", re.I)
-# The model tags the letters of a code ("SEC" in "SEC-2026-0419"); the whole code is an ID.
-ID_TAIL_RE = re.compile(r"(?:-[A-Za-z0-9]*\d[A-Za-z0-9]*)+")
-ID_RE = re.compile(r"[A-Za-z]{1,6}(?:-[A-Za-z0-9]+)*-[A-Za-z0-9]*\d[A-Za-z0-9-]*")
-
-
-def clean_model_spans(text: str, spans: list[Span]) -> list[Span]:
-    """Drop what the models tag but names no one; widen a tagged code prefix to the code."""
-    out: list[Span] = []
-    for s in spans:
-        words = [w for w in re.split(r"[\s&/,.-]+", s.text.lower()) if w]
-        if all(w in GENERIC_WORDS for w in words) or EPONYM_RE.match(text, s.end):
+        if not CJK_RUN.search(s.text):
+            out.append(s)
             continue
-        if s.text.isascii() and (tail := ID_TAIL_RE.match(text, s.end)):
-            s = Span(s.start, tail.end(), s.label, text[s.start:tail.end()], s.score)
-        if ID_RE.fullmatch(s.text):
-            s = Span(s.start, s.end, "ID", s.text, s.score)
-        out.append(s)
-    return out
-
-
-# After a lone surname, these start a title or a function word, not a given name.
-NOT_GIVEN_NAME = set("經副先小老醫董總主教律博同太護的了是在和跟與及說把被給向對也都就還又而並但或會要請已再")
-
-
-def extend_surnames(text: str, spans: list[Span]) -> list[Span]:
-    """The Chinese model sometimes tags only the surname ("給[顧]秀"): take the given name
-    too, one or two Chinese characters, unless a title or function word follows (王經理)."""
-    out: list[Span] = []
-    for s in spans:
-        if s.label == PERSON and len(s.text) == 1 and s.text in COMMON_SURNAMES:
-            end = s.end
-            while end < min(s.end + 2, len(text)) and "\u3400" <= text[end] <= "\u9fff" \
-                    and text[end] not in NOT_GIVEN_NAME:
-                end += 1
-            s = Span(s.start, end, PERSON, text[s.start:end], s.score)
-        out.append(s)
+        if s.label == LOC:
+            continue
+        keep = re.compile(r"[A-Za-z]{2}" if s.label == PERSON else r"\d")
+        start = 0
+        for piece in CJK_RUN.split(s.text):
+            at = s.text.index(piece, start)
+            start = at + len(piece)
+            core = piece.strip(" \t:;,.")
+            if keep.search(core):
+                begin = s.start + at + piece.index(core)
+                out.append(Span(begin, begin + len(core), s.label, core, s.score))
     return out
 
 
 class Pipeline:
     def __init__(self) -> None:
         self.rules = RegexDetector()
-        # Language-specific model detectors, registered once their model is installed.
+        # Personal data in any language (openai/privacy-filter), once installed.
+        self.pii: Detector | None = None
+        # People in one language the privacy filter reads poorly (Chinese), once installed.
         self.models: dict[Lang, Detector] = {}
 
     def load_models(self, specs: list[ModelSpec], root: Path) -> None:
         """(Re)register detectors for installed models. Models load lazily on first use."""
-        current = {lang: d for lang, d in self.models.items() if isinstance(d, NerDetector)}
-        self.models = {}
+        current = {d.model_dir: d for d in (self.pii, *self.models.values())
+                   if isinstance(d, (NerDetector, PrivacyFilterDetector))}
+        self.pii, self.models = None, {}
         for spec in specs:
             if not is_installed(spec, root):
                 continue
-            existing = current.get(spec.lang)
-            if existing and existing.model_dir == root / spec.id:
-                self.models[spec.lang] = existing
+            detector = current.get(root / spec.id)
+            if spec.kind == "privacy-filter":
+                self.pii = detector or PrivacyFilterDetector(root / spec.id, spec.labels, name=spec.id)
             else:
-                self.models[spec.lang] = NerDetector(root / spec.id, spec.labels, name=spec.id)
+                self.models[spec.lang] = detector or NerDetector(root / spec.id, spec.labels, name=spec.id)
 
     def detect(self, text: str, lang: LangChoice = "auto",
                known: dict[str, str] | None = None,
-               ignore: set[str] | frozenset[str] = frozenset()) -> tuple[Lang, list[Span], bool]:
+               ignore: set[str] | frozenset[str] = frozenset(),
+               scope: Scope = "all") -> tuple[Lang, list[Span], bool]:
         """`known`: values that already have a code (value -> label); `ignore`: values the
         user marked as not sensitive."""
         resolved: Lang = detect_language(text) if lang == "auto" else lang
         # Auto mode runs every language's model on mixed text ("請 John Smith 跟王小明...").
-        langs = [resolved] + [x for x in languages_in(text) if x != resolved] if lang == "auto" \
-            else [resolved]
+        langs = languages_in(text) if lang == "auto" else [resolved]
         spans = self.rules.detect(text)
+        if self.pii:
+            spans += latin_parts(text, self.pii.detect(text))
         for x in langs:
-            model = self.models.get(x)
-            if not model:
-                continue
-            found = line_entities(model, text)
-            if x == "zh":
-                found = extend_surnames(text, found + clause_names(model, text))
-            if x != "zh":  # non-Chinese models only see Chinese characters as noise
-                found = [s for s in found if not has_cjk(s.text)]
-            found = clean_model_spans(text, found)
-            spans += found
-        model_used = resolved in self.models
+            if model := self.models.get(x):
+                spans += line_entities(model, text)
+        model_used = self.pii is not None and all(x in self.models for x in langs if x != "en")
         spans = [s for s in spans if s.text not in ignore]
-        spans = trim_to_known_orgs(spans, {v for v, label in (known or {}).items() if label == ORG})
         # Names are what models miss most: once a value is found anywhere in this text,
         # or already has a code in the session, replace every occurrence of it.
         # A single character is too common to replace everywhere ("明" would hit "明天").
@@ -196,11 +128,15 @@ class Pipeline:
         persons = {v: v for v, label in values.items() if label == PERSON}
         values.update({part: PERSON for part in name_aliases(persons)})
         spans += [s for s in find_all(text, values) if s.text not in ignore]
+        if scope == "names":
+            # Before overlaps are resolved, so a name inside a longer value is still coded.
+            spans = [s for s in spans if s.label == PERSON]
         return resolved, resolve_overlaps(spans), model_used
 
-    def obfuscate(self, text: str, session: Session, lang: LangChoice = "auto") -> ObfuscateResult:
+    def obfuscate(self, text: str, session: Session, lang: LangChoice = "auto",
+                  scope: Scope = "all") -> ObfuscateResult:
         known = {orig: code[1:].rsplit("_", 1)[0] for orig, code in session.to_code.items()}
-        resolved, spans, model_used = self.detect(text, lang, known, set(session.ignored))
+        resolved, spans, model_used = self.detect(text, lang, known, set(session.ignored), scope)
         out, code_spans = session.obfuscate(text, spans)
         originals = [s.text for s in sorted(spans, key=lambda s: s.start)]
         return ObfuscateResult(out, resolved, spans, code_spans, originals, model_used)

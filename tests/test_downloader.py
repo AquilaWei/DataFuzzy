@@ -85,7 +85,7 @@ def test_delete(file_server, tmp_path):
 
 def test_bundled_manifest():
     specs = load_manifest()
-    assert {s.lang for s in specs} >= {"en"}
+    assert {(s.kind, s.lang) for s in specs} == {("privacy-filter", "any"), ("ner", "zh")}
     for s in specs:
         assert s.labels and s.license
         names = {f.name for f in s.files}

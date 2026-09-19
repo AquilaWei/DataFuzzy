@@ -13,7 +13,7 @@ build_app() {
 
 # Models are downloaded by the user, never shipped.
 check_no_models() {
-    if find "$@" \( -name '*.onnx' -o -name 'tokenizer.json' \) | grep .; then
+    if find "$@" \( -name '*.onnx' -o -name '*.onnx_data' -o -name 'tokenizer.json' \) | grep .; then
         echo "error: model files found in the bundle" >&2
         exit 1
     fi

@@ -34,6 +34,7 @@ from .worker import run_task
 
 NEW_SESSION = "__new__"
 LANGS = [("自動偵測", "auto"), ("English", "en"), ("中文", "zh")]
+SCOPES = [("全部敏感資料", "all"), ("只處理人名", "names")]
 
 
 class MainWindow(QMainWindow):
@@ -70,6 +71,10 @@ class MainWindow(QMainWindow):
         self.lang_box = QComboBox()
         for text, value in LANGS:
             self.lang_box.addItem(text, value)
+        self.scope_box = QComboBox()
+        for text, value in SCOPES:
+            self.scope_box.addItem(text, value)
+        self.scope_box.setToolTip("只處理人名：只替換人名，Email、電話、地址、公司等都保留原字")
         self.session_box = QComboBox()
         self.session_box.setMinimumWidth(200)
         self.session_box.currentIndexChanged.connect(
@@ -86,6 +91,9 @@ class MainWindow(QMainWindow):
         top.addSpacing(16)
         top.addWidget(QLabel("語言"))
         top.addWidget(self.lang_box)
+        top.addSpacing(16)
+        top.addWidget(QLabel("範圍"))
+        top.addWidget(self.scope_box)
         top.addSpacing(16)
         top.addWidget(QLabel("代號檔"))
         top.addWidget(self.session_box)
@@ -152,11 +160,12 @@ class MainWindow(QMainWindow):
         self._refresh_model_status()
 
     def _refresh_model_status(self) -> None:
-        if not self.pipeline.models:
+        names = (["個資偵測"] if self.pipeline.pii else []) + \
+            [LANG_NAMES.get(lang, lang) + "人名" for lang in sorted(self.pipeline.models)]
+        if not names:
             self.model_status.setText("僅規則模式（尚未安裝模型）")
         else:
-            names = " / ".join(LANG_NAMES.get(l, l) for l in sorted(self.pipeline.models))
-            self.model_status.setText(f"已安裝模型：{names}")
+            self.model_status.setText(f"已安裝模型：{' / '.join(names)}")
 
     def _refresh_sessions(self, select: str | None = None) -> None:
         current = select or self.session_box.currentData()
@@ -173,7 +182,8 @@ class MainWindow(QMainWindow):
 
     def _set_busy(self, task) -> None:
         self._task = task
-        for w in (self.send_btn, self.obfuscate_btn, self.restore_btn, self.session_box, self.lang_box):
+        for w in (self.send_btn, self.obfuscate_btn, self.restore_btn, self.session_box, self.lang_box,
+                  self.scope_box):
             w.setEnabled(task is None)
         self.send_btn.setText("處理中…" if task else "送出")
 
@@ -194,16 +204,18 @@ class MainWindow(QMainWindow):
         else:
             session = self.store.sessions[session_id]
         lang = self.lang_box.currentData()
+        scope = self.scope_box.currentData()
         self.chat.add_user(text, "模糊化")
 
         def done(result: ObfuscateResult) -> None:
             self._set_busy(None)
             self.store.save(session)
             note = f"{session.label} · 替換 {len(result.spans)} 處 · 語言 {result.lang}"
+            if scope == "names":
+                note += " · 只處理人名"
             self.chat.add_reply(result.text, result.code_spans, note, result.originals, session.id)
             if not result.model_used:
-                lang_name = LANG_NAMES.get(result.lang, result.lang)
-                self.chat.add_notice(f"未安裝{lang_name}模型，本次只用規則偵測，人名等名稱不會被替換。",
+                self.chat.add_notice("有模型未安裝，本次人名、生日、帳號等可能不會被替換。",
                                      ("models:", "下載模型"))
             self._refresh_sessions(select=session.id)
 
@@ -212,7 +224,7 @@ class MainWindow(QMainWindow):
             self.chat.add_notice(f"處理失敗：{error}")
             self._refresh_sessions(select=session.id)
 
-        self._set_busy(run_task(lambda: self.pipeline.obfuscate(text, session, lang), done, failed))
+        self._set_busy(run_task(lambda: self.pipeline.obfuscate(text, session, lang, scope), done, failed))
 
     def _restore(self, text: str) -> None:
         session_id = self.session_box.currentData()

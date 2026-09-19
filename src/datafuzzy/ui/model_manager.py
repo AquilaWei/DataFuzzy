@@ -25,7 +25,7 @@ from ..core.models import (
     is_installed,
 )
 
-LANG_NAMES = {"en": "英文", "zh": "中文"}
+LANG_NAMES = {"en": "英文", "zh": "中文", "any": "所有語言"}
 
 
 class DownloadThread(QThread):
@@ -130,7 +130,7 @@ class ModelManager(QDialog):
         self.root = root
         layout = QVBoxLayout(self)
         intro = QLabel(
-            "模型用來辨識<b>人名、組織、地點</b>等名稱，下載後完全在本機執行。<br>"
+            "模型用來辨識<b>人名、地址、生日、帳號</b>等個人資料，下載後完全在本機執行。<br>"
             "未安裝模型時仍可使用，但只會以規則偵測 Email、電話、IP 等格式化資料。<br>"
             "<span style='color:gray;'>下載模型是本軟體唯一會連網的時機。</span>"
         )
