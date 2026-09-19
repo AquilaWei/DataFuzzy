@@ -18,8 +18,6 @@ Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bu
   data instead of a news-trained NER. It replaces the English model `dslim/bert-base-NER`;
   the CKIP Chinese model now finds Chinese names only. Download it again from
   模型 → 模型管理.
-- x86_64 (the Linux AppImage) downloads the int8 build of the model (~1.6 GB) instead
-  of q4: without a fast 4-bit path, x86 CPUs unpack the q4 weights and used ~3 GB RAM.
 - Only personal data is coded: companies, hospitals, places, diseases, drugs and
   departments stay readable. Public figures in English text in a public context
   (`Apple hired Steve Jobs`) are not coded; a private person with the same name is.

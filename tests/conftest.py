@@ -72,8 +72,7 @@ def real_model_dir(model_id: str) -> Path | None:
 
     spec = next(s for s in load_manifest() if s.id == model_id)
     cached = REPO_ROOT / "models/cache" / spec.id
-    if all((cached / f.name).exists() and (cached / f.name).stat().st_size == f.size
-           for f in spec.files):
+    if all((cached / f.name).exists() for f in spec.files):
         return cached
     if is_installed(spec, models_dir()):
         return models_dir() / spec.id

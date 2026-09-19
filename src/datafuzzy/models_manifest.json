@@ -4,7 +4,7 @@
       "id": "privacy-filter",
       "kind": "privacy-filter",
       "lang": "any",
-      "name": "個資偵測 (OpenAI Privacy Filter)",
+      "name": "個資偵測 (OpenAI Privacy Filter, q4)",
       "source": "openai/privacy-filter",
       "license": "Apache-2.0",
       "labels": {
@@ -42,35 +42,7 @@
           "size": 3039,
           "sha256": "b2b26a4a4a000639ad30b0c264adbefe365bdb567fbd7bb27303b8c438375bd1"
         }
-      ],
-      "arch_files": {
-        "x86_64": [
-          {
-            "name": "model.onnx",
-            "url": "https://huggingface.co/openai/privacy-filter/resolve/7ffa9a043d54d1be65afb281eddf0ffbe629385b/onnx/model_quantized.onnx",
-            "size": 162239,
-            "sha256": "a325fb5341567a73c94e91ec5e49060d38d9b16111f518ad34773039a0c9c098"
-          },
-          {
-            "name": "model_quantized.onnx_data",
-            "url": "https://huggingface.co/openai/privacy-filter/resolve/7ffa9a043d54d1be65afb281eddf0ffbe629385b/onnx/model_quantized.onnx_data",
-            "size": 1618042064,
-            "sha256": "50f4c8c7f3c27fbc1fe16d4f74f6f7c3b74ba8f18a262e8b6911854c64c33a6d"
-          },
-          {
-            "name": "tokenizer.json",
-            "url": "https://huggingface.co/openai/privacy-filter/resolve/7ffa9a043d54d1be65afb281eddf0ffbe629385b/tokenizer.json",
-            "size": 27868174,
-            "sha256": "0614fe83cadab421296e664e1f48f4261fa8fef6e03e63bb75c20f38e37d07d3"
-          },
-          {
-            "name": "config.json",
-            "url": "https://huggingface.co/openai/privacy-filter/resolve/7ffa9a043d54d1be65afb281eddf0ffbe629385b/config.json",
-            "size": 3039,
-            "sha256": "b2b26a4a4a000639ad30b0c264adbefe365bdb567fbd7bb27303b8c438375bd1"
-          }
-        ]
-      }
+      ]
     },
     {
       "id": "zh-bert-ner",

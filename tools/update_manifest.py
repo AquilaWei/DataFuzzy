@@ -22,7 +22,7 @@ MODELS = [
         "id": "privacy-filter",
         "kind": "privacy-filter",
         "lang": "any",
-        "name": "個資偵測 (OpenAI Privacy Filter)",
+        "name": "個資偵測 (OpenAI Privacy Filter, q4)",
         "source": "openai/privacy-filter",
         "license": "Apache-2.0",
         "labels": {
@@ -38,16 +38,6 @@ MODELS = [
             "model_q4.onnx_data": "onnx/model_q4.onnx_data",
             "tokenizer.json": "tokenizer.json",
             "config.json": "config.json",
-        },
-        # x86 CPUs without a fast 4-bit path unpack the q4 weights (~3 GB RAM on a GitHub
-        # Linux runner); the int8 model is larger to download but runs in place.
-        "arch_files": {
-            "x86_64": {
-                "model.onnx": "onnx/model_quantized.onnx",
-                "model_quantized.onnx_data": "onnx/model_quantized.onnx_data",
-                "tokenizer.json": "tokenizer.json",
-                "config.json": "config.json",
-            },
         },
     },
     {
@@ -89,24 +79,17 @@ def sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def file_entries(m: dict, files: dict[str, str], cache: Path) -> list[dict]:
-    out = []
-    for name, remote in files.items():
-        url = f"https://huggingface.co/{m['repo']}/resolve/{m['revision']}/{remote}"
-        path = fetch(url, cache / name)
-        out.append({"name": name, "url": url, "size": path.stat().st_size, "sha256": sha256(path)})
-        print(f"{cache.name}/{name}: {path.stat().st_size / 1e6:.1f} MB")
-    return out
-
-
 def main() -> None:
     out = []
     for m in MODELS:
+        files = []
+        for name, remote in m["files"].items():
+            url = f"https://huggingface.co/{m['repo']}/resolve/{m['revision']}/{remote}"
+            path = fetch(url, CACHE / m["id"] / name)
+            files.append({"name": name, "url": url, "size": path.stat().st_size, "sha256": sha256(path)})
+            print(f"{m['id']}/{name}: {path.stat().st_size / 1e6:.1f} MB")
         entry = {k: m[k] for k in ("id", "kind", "lang", "name", "source", "license", "labels")}
-        entry["files"] = file_entries(m, m["files"], CACHE / m["id"])
-        if "arch_files" in m:
-            entry["arch_files"] = {arch: file_entries(m, files, CACHE / f"{m['id']}-{arch}")
-                                   for arch, files in m["arch_files"].items()}
+        entry["files"] = files
         out.append(entry)
     MANIFEST.write_text(json.dumps({"models": out}, indent=2, ensure_ascii=False) + "\n")
     print(f"wrote {MANIFEST.relative_to(ROOT)}")
