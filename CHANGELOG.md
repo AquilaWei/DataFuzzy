@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.5.8] - 2026-09-19
+
+### Fixed
+- Long documents use far less memory: the personal-data model now gets pieces of at most
+  1024 tokens (cut at line breaks) instead of 4096. The model computes attention over a
+  whole piece, so memory grew with its length squared. On a 17,000-character text the
+  peak went from 4.6 GB to 1.3 GB and detection got ~40% faster, with identical results.
+  Text of any length is still processed in full.
+- Memory tests on Linux measured the test runner instead of the model: a child process
+  inherits its parent's peak memory (`ru_maxrss`) there. They now read the child's own
+  peak (`VmHWM`), and a long-document memory test was added.
+
 ## [0.5.7] - 2026-09-19
 
 Test build of the new personal-data model, for hands-on checks on macOS and Linux
