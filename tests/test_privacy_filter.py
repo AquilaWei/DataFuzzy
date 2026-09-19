@@ -5,7 +5,7 @@ import sys
 
 import pytest
 
-from conftest import real_model_dir
+from conftest import peak_rss_mb, real_model_dir
 from datafuzzy.core.detect import privacy_filter
 from datafuzzy.core.detect.privacy_filter import PrivacyFilterDetector
 from datafuzzy.core.mapping import Session
@@ -83,17 +83,21 @@ def test_round_trip_with_model(pf):
 
 
 def test_memory_budget():
-    """Measured in a fresh process: earlier tests load other models into this one."""
-    import subprocess
-
-    script = f"""
-import resource, sys
+    rss_mb = peak_rss_mb(f"""
 from pathlib import Path
 from datafuzzy.core.detect.privacy_filter import PrivacyFilterDetector
 PrivacyFilterDetector(Path({str(MODEL)!r}), {LABELS!r}).detect("Alice Chen met Bob at Google.")
-rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-print(rss / (1 << 20) if sys.platform == "darwin" else rss / 1024)  # bytes on macOS
-"""
-    out = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=True)
-    rss_mb = float(out.stdout.strip().splitlines()[-1])
+""")
     assert rss_mb < 900, rss_mb
+
+
+def test_memory_budget_long_text():
+    """A long document is cut into pieces small enough that attention stays cheap (the
+    peak includes the ~0.9 GB of weights mapped from the model file)."""
+    rss_mb = peak_rss_mb(f"""
+from pathlib import Path
+from datafuzzy.core.detect.privacy_filter import PrivacyFilterDetector
+line = "Ticket: Maria Gonzalez (maria.g@example.com, +1 415 555 0142) says the 2026-03-14 invoice is wrong."
+PrivacyFilterDetector(Path({str(MODEL)!r}), {LABELS!r}).detect("\\n".join([line] * 150))
+""")
+    assert rss_mb < 2000, rss_mb
