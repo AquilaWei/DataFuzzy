@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.4.0] - 2026-09-19
+
+### Added
+- Un-mark false positives: click a code in a reply to put the original back in every reply
+  of that code file. It is never coded again in that file, and text already copied out
+  with the old code still restores.
+- Code file panel: rename (double-click), delete (right-click) and a code ↔ original preview.
+- Restore mode picks the code file that can restore the most codes in the pasted text.
+
 ## [0.3.0] - 2026-09-19
 
 ### Added
