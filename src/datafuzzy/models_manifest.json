@@ -1,49 +1,58 @@
 {
   "models": [
     {
-      "id": "en-bert-ner",
-      "lang": "en",
-      "name": "English NER (BERT base, int8)",
-      "source": "dslim/bert-base-NER",
-      "license": "MIT",
+      "id": "privacy-filter",
+      "kind": "privacy-filter",
+      "lang": "any",
+      "name": "個資偵測 (OpenAI Privacy Filter, q4)",
+      "source": "openai/privacy-filter",
+      "license": "Apache-2.0",
       "labels": {
-        "PER": "PERSON",
-        "ORG": "ORG",
-        "LOC": "LOC"
+        "private_person": "PERSON",
+        "private_address": "LOC",
+        "private_date": "DATE",
+        "private_email": "EMAIL",
+        "private_phone": "PHONE",
+        "private_url": "URL",
+        "account_number": "ID",
+        "secret": "SECRET"
       },
       "files": [
         {
           "name": "model.onnx",
-          "url": "https://huggingface.co/Xenova/bert-base-NER/resolve/8e892123e8b7c2c0c2bd1dcb598b7d244c4e53aa/onnx/model_quantized.onnx",
-          "size": 108952255,
-          "sha256": "caaee70a5518ec7f9e46e5308fcc9263a8c227703a9ce46cf61c69a552349648"
+          "url": "https://huggingface.co/openai/privacy-filter/resolve/7ffa9a043d54d1be65afb281eddf0ffbe629385b/onnx/model_q4.onnx",
+          "size": 160219,
+          "sha256": "8f7dee8b46d096f052b359375dfba5d983cc4d18c44a783bf548615c472f8dea"
+        },
+        {
+          "name": "model_q4.onnx_data",
+          "url": "https://huggingface.co/openai/privacy-filter/resolve/7ffa9a043d54d1be65afb281eddf0ffbe629385b/onnx/model_q4.onnx_data",
+          "size": 917120144,
+          "sha256": "f30998e28c71c5374cc7e8b7de8f0f83e981592c0c2d652d2ad4928454dbb496"
         },
         {
           "name": "tokenizer.json",
-          "url": "https://huggingface.co/Xenova/bert-base-NER/resolve/8e892123e8b7c2c0c2bd1dcb598b7d244c4e53aa/tokenizer.json",
-          "size": 668923,
-          "sha256": "343989712a36cd8b253efeaf8baf6a08b9d2583f78e395e83832e8ee9f8d8ee1"
+          "url": "https://huggingface.co/openai/privacy-filter/resolve/7ffa9a043d54d1be65afb281eddf0ffbe629385b/tokenizer.json",
+          "size": 27868174,
+          "sha256": "0614fe83cadab421296e664e1f48f4261fa8fef6e03e63bb75c20f38e37d07d3"
         },
         {
           "name": "config.json",
-          "url": "https://huggingface.co/Xenova/bert-base-NER/resolve/8e892123e8b7c2c0c2bd1dcb598b7d244c4e53aa/config.json",
-          "size": 999,
-          "sha256": "a73a2eccc921bbdea95a94b49a157d3694b5c2abbae7a6f3000e14404a9c31a8"
+          "url": "https://huggingface.co/openai/privacy-filter/resolve/7ffa9a043d54d1be65afb281eddf0ffbe629385b/config.json",
+          "size": 3039,
+          "sha256": "b2b26a4a4a000639ad30b0c264adbefe365bdb567fbd7bb27303b8c438375bd1"
         }
       ]
     },
     {
       "id": "zh-bert-ner",
+      "kind": "ner",
       "lang": "zh",
-      "name": "中文 NER (CKIP BERT base, int8)",
+      "name": "中文人名 (CKIP BERT base, int8)",
       "source": "ckiplab/bert-base-chinese-ner",
       "license": "GPL-3.0",
       "labels": {
-        "PERSON": "PERSON",
-        "ORG": "ORG",
-        "GPE": "LOC",
-        "LOC": "LOC",
-        "FAC": "LOC"
+        "PERSON": "PERSON"
       },
       "files": [
         {

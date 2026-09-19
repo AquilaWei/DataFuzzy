@@ -66,6 +66,18 @@ class FakeNer:
         return spans
 
 
+class FindNer:
+    """Finds each (value, label) where it first appears in the text it is given."""
+
+    name = "find"
+
+    def __init__(self, entities):
+        self.entities = entities
+
+    def detect(self, text):
+        return [Span(i, i + len(v), label, v) for v, label in self.entities
+                if (i := text.find(v)) >= 0]
+
 def test_every_occurrence_is_replaced():
     p = Pipeline()
     p.models["en"] = FakeNer(["Alice"])
@@ -86,8 +98,12 @@ def test_names_known_in_session_are_replaced_without_model_hit():
 def test_model_used_flag():
     p = Pipeline()
     assert p.obfuscate("hello", Session(label="t"), "en").model_used is False
-    p.models["en"] = FakeNer([])
+    p.pii = FakeNer([])
     assert p.obfuscate("hello", Session(label="t"), "en").model_used is True
+    # Chinese text also needs the Chinese name model.
+    assert p.obfuscate("你好", Session(label="t")).model_used is False
+    p.models["zh"] = FakeNer([])
+    assert p.obfuscate("你好", Session(label="t")).model_used is True
 
 
 def test_name_parts():
@@ -172,11 +188,15 @@ def test_explicit_language_runs_only_that_model():
         == "請 John Smith 跟[PERSON_A]開會"
 
 
-def test_non_chinese_model_spans_with_chinese_are_dropped():
+def test_privacy_filter_spans_are_cut_at_chinese_characters():
+    """Its boundaries in Chinese are unreliable: keep the pieces with a digit, or Latin
+    letters for a person; Chinese names and addresses come from elsewhere."""
     p = Pipeline()
-    p.models["en"] = FakeNer(["王"])  # an English model half-recognising a Chinese name
-    assert p.obfuscate("Meeting with 王小明 today", Session(label="t")).text \
-        == "Meeting with 王小明 today"
+    p.pii = FindNer([("李建宏 警", "PERSON"), ("ARK-5821 對吧？", "ID"), ("家醫科 Dr. Kevin Lee", "PERSON"),
+                     ("2026/09/18　分機 3307", "DATE"), ("弟弟 郭志明 住在台中市西屯區", "LOC")])
+    text = "李建宏 警員：車牌 ARK-5821 對吧？轉診：家醫科 Dr. Kevin Lee，2026/09/18　分機 3307\n弟弟 郭志明 住在台中市西屯區"
+    assert p.obfuscate(text, Session(label="t"), "zh").text == (
+        "李建宏 警員：車牌 [ID_A] 對吧？轉診：家醫科 [PERSON_A]，[DATE_A]　分機 [DATE_B]\n弟弟 郭志明 住在台中市西屯區")
 
 
 def test_unmarked_name_is_not_coded_again():
@@ -197,26 +217,6 @@ def test_names_use_a_lower_threshold():
     assert [s.text for s in spans] == ["Emma"]
 
 
-class ShortTextNer:
-    """Finds a name only in text no longer than `limit`, like a model thrown off by context."""
-
-    name = "short"
-
-    def __init__(self, name, limit):
-        self.target, self.limit = name, limit
-
-    def detect(self, text):
-        i = text.find(self.target)
-        if i < 0 or len(text) > self.limit:
-            return []
-        return [Span(i, i + len(self.target), "PERSON", self.target)]
-
-
-def test_chinese_clauses_get_a_second_look():
-    p = Pipeline()
-    p.models["zh"] = ShortTextNer("何文明", 10)
-    result = p.obfuscate("這是何文明的報帳單，請主管簽核後交給會計。", Session(label="t"), "zh")
-    assert result.text == "這是[PERSON_A]的報帳單，請主管簽核後交給會計。"
 
 
 def test_other_chat_speakers_follow_a_known_one():
@@ -277,74 +277,35 @@ def test_single_character_fragment_is_not_replaced_everywhere():
     assert p.obfuscate(text, Session(label="t"), "zh").text == "[PERSON_A]明天開會，請[PERSON_B]哥簽核"
 
 
-def test_lone_surname_takes_the_given_name():
+
+
+
+
+
+
+
+
+def test_names_scope_codes_only_people():
     p = Pipeline()
-    text = "報帳單交給顧秀。王經理同意"
-    p.models["zh"] = SpanNer([Span(5, 6, "PERSON", "顧"), Span(8, 9, "PERSON", "王")])
-    assert p.obfuscate(text, Session(label="t"), "zh").text == "報帳單交給[PERSON_A]。[PERSON_B]經理同意"
-
-
-class FindNer:
-    """Finds each (value, label) where it first appears in the text it is given."""
-
-    name = "find"
-
-    def __init__(self, entities):
-        self.entities = entities
-
-    def detect(self, text):
-        return [Span(i, i + len(v), label, v) for v, label in self.entities
-                if (i := text.find(v)) >= 0]
-
-
-def test_org_with_unit_shares_the_org_code():
-    p = Pipeline()
-    p.models["zh"] = FindNer([("羅東博愛醫院 家醫科", "ORG"), ("羅東博愛醫院", "ORG")])
-    text = "轉診來源：羅東博愛醫院 家醫科\n病人在羅東博愛醫院初診"
+    p.models["zh"] = FindNer([("王小明", "PERSON"), ("台積電", "ORG"), ("新竹", "LOC")])
+    text = "王小明在台積電新竹廠上班，信箱 ming@x.com，王小明說好"
     session = Session(label="t")
-    result = p.obfuscate(text, session, "zh")
-    assert result.text == "轉診來源：[ORG_A] 家醫科\n病人在[ORG_A]初診"
+    result = p.obfuscate(text, session, "zh", scope="names")
+    assert result.text == "[PERSON_A]在台積電新竹廠上班，信箱 ming@x.com，[PERSON_A]說好"
     assert p.restore(result.text, session).text == text
 
 
-def test_org_with_unit_uses_the_code_from_an_earlier_message():
+def test_names_scope_keeps_a_name_inside_an_organization():
     p = Pipeline()
+    p.models["zh"] = FindNer([("王小明診所", "ORG"), ("王小明", "PERSON")])
+    result = p.obfuscate("掛號：王小明診所", Session(label="t"), "zh", scope="names")
+    assert result.text == "掛號：[PERSON_A]診所"
+
+
+def test_names_scope_leaves_codes_of_other_kinds_alone():
+    p = Pipeline()
+    p.models["en"] = FindNer([("Emma Stone", "PERSON")])
     session = Session(label="t")
-    p.models["zh"] = FindNer([("羅東博愛醫院", "ORG")])
-    p.obfuscate("病人在羅東博愛醫院初診", session, "zh")
-    p.models["zh"] = FindNer([("羅東博愛醫院 家醫科", "ORG")])
-    assert p.obfuscate("轉診來源：羅東博愛醫院 家醫科", session, "zh").text == "轉診來源：[ORG_A] 家醫科"
-
-
-def test_address_is_not_cut_back_to_a_known_place():
-    p = Pipeline()
-    p.models["zh"] = FindNer([("新北市板橋區 文化路 188 號", "LOC"), ("新北市板橋區", "LOC")])
-    text = "地址：新北市板橋區 文化路 188 號\n住在新北市板橋區"
-    assert "188" not in p.obfuscate(text, Session(label="t"), "zh").text
-
-
-def test_departments_headings_and_acronyms_are_not_entities():
-    p = Pipeline()
-    p.models["en"] = FindNer([("Platform", "ORG"), ("Legal", "PERSON"), ("TIMELINE", "ORG"),
-                              ("CISO", "ORG"), ("Hannah Price", "PERSON"), ("Contoso Health", "ORG")])
-    text = "TIMELINE\nThe Platform team told the CISO, Legal (Hannah Price) and Contoso Health."
-    assert p.obfuscate(text, Session(label="t"), "en").text == (
-        "TIMELINE\nThe Platform team told the CISO, Legal ([PERSON_A]) and [ORG_A].")
-
-
-def test_disease_named_after_a_person_is_not_a_person():
-    p = Pipeline()
-    p.models["en"] = FindNer([("Parkinson", "PERSON"), ("Alan Hsu", "PERSON")])
-    text = "treated for Parkinson's disease by Alan Hsu"
-    assert p.obfuscate(text, Session(label="t"), "en").text == "treated for Parkinson's disease by [PERSON_A]"
-    p.models["zh"] = FindNer([("帕金森", "PERSON")])
-    assert p.obfuscate("診斷為帕金森氏症", Session(label="t"), "zh").text == "診斷為帕金森氏症"
-
-
-def test_tagged_code_prefix_codes_the_whole_code():
-    p = Pipeline()
-    p.models["en"] = FindNer([("SEC", "ORG")])
-    session = Session(label="t")
-    result = p.obfuscate("Ticket: SEC-2026-0419 is open", session, "en")
-    assert result.text == "Ticket: [ID_A] is open"
-    assert p.restore(result.text, session).text == "Ticket: SEC-2026-0419 is open"
+    p.obfuscate("Emma Stone, emma@x.com", session, "en")
+    result = p.obfuscate("Emma Stone, emma@x.com", session, "en", scope="names")
+    assert result.text == "[PERSON_A], emma@x.com"

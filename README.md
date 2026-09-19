@@ -19,24 +19,23 @@
 - 🗂️ **代號檔管理** — 命名、預覽對應表、刪除；誤判的代號點一下就能取消標記
 - ✍️ **手動補標記** — 模型漏掉的名字，選取後按右鍵就能標記，所有回覆與之後的輸入都會替換
 - 🧹 **關閉即刪除** — 代號檔加密暫存，軟體關閉（或被中止）時全部刪除
-- 🧠 **名稱辨識** — 本機 NER 模型辨識人名、組織、地點；同一名稱在全文與後續輸入都換成同一代號
-- 🎯 **人名優先** — 人名採較寬的門檻，中文逐句再檢查一次；聊天紀錄（`張明：好的`、LINE 匯出）的說話者也會一併代號化。測試集人名召回率約 98%（中文）/ 100%（英文）
-- 🌏 **中英文** — 中文、英文各一個模型；中英混合的文字會同時用兩個模型
+- 🧠 **個資辨識** — 本機模型（[OpenAI Privacy Filter](https://huggingface.co/openai/privacy-filter)）辨識人名、地址、日期、帳號與各種編號；同一個值在全文與後續輸入都換成同一代號
+- 🏢 **只遮個人資料** — 公司、醫院、地名、疾病、藥名、部門都保留原字，文字仍然讀得懂
+- 👤 **只處理人名模式** — 範圍選「只處理人名」時，只替換人名，其他都保留
+- 🌏 **中英文** — 中文人名另用 CKIP 中文模型；中英混合的文字兩個模型一起用；聊天紀錄（`張明：好的`、LINE 匯出）的說話者也會一併代號化
 
 目前可偵測：
 
 | 類別 | 代號 | 範例 |
 |---|---|---|
 | 人名 | `PERSON` | `王小明`、`歐陽娜娜`、`John Smith`、`Wei-Chuang Huang`（需安裝模型） |
-| 組織 | `ORG` | `台積電`、`Acme Corporation`（需安裝模型） |
-| 地點 | `LOC` | `台北`、`San Francisco`（需安裝模型） |
-| 台灣地址 | `LOC` | `桃園市中壢區中央西路二段 76 號 3 樓`（需有門牌號碼） |
-| 美國地址 | `LOC` | `742 Maple Grove Avenue, Apt 3B, Austin, TX 78704`（需有門牌號碼） |
+| 日期（含生日） | `DATE` | `1968/03/14`、`7 May 1987`、`October 12, 2026`（需安裝模型） |
+| 地址 | `LOC` | `桃園市中壢區中央西路二段 76 號 3 樓`、`742 Maple Grove Avenue, Apt 3B, Austin, TX 78704`、`18 Birchwood Lane, Leeds LS6 2AB` |
 | Email | `EMAIL` | `bob@corp.io` |
 | 電話 | `PHONE` | `0912-345-678`、`+886 912 345 678`、`(02) 2345-6789` |
 | 身分證字號 | `TWID` | `A123456789`（驗證檢查碼） |
 | 美國社會安全碼 | `SSN` | `219-09-9999`（排除無效號段） |
-| 編號 | `ID` | `SEC-2026-0419`、車牌 `BRT-2291`（模型標到開頭字母時，整段編號一起替換） |
+| 帳號 / 編號 | `ID` | 病歷號 `MR-20260912-0457`、保單號、銀行帳號、護照號碼（需安裝模型） |
 | 信用卡 | `CARD` | `4111 1111 1111 1111`（Luhn 驗證） |
 | IP | `IP` | `10.0.0.8`、`2001:db8::1` |
 | 網址 | `URL` | `https://intra.corp.local/wiki` |
@@ -71,7 +70,7 @@ uv sync
 uv run datafuzzy
 ```
 
-**第一次啟動**會跳出「模型管理」，按 **下載** 取得中文（約 103 MB）與英文（約 110 MB）模型，只需一次。之後可從選單 **模型 → 模型管理…** 新增或刪除。不下載也能用，只是人名等名稱不會被替換。
+**第一次啟動**會跳出「模型管理」，按 **下載** 取得個資偵測模型（約 945 MB）與中文人名模型（約 103 MB），只需一次。之後可從選單 **模型 → 模型管理…** 新增或刪除。不下載也能用，只是人名、日期、帳號等不會被替換。兩個模型載入後約佔 **2 GB 記憶體**。
 
 ![模型管理](docs/assets/model-manager.png)
 
@@ -84,7 +83,7 @@ uv run datafuzzy
 1. **模糊化**：選「模糊化」→ 代號檔選「＋ 新代號檔」→ 貼上文字 → **⌘/Ctrl + Enter**
    ```
    王小明明天跟台積電的陳大華開會，會後小明再寄信給 John Smith
-   → [PERSON_A]明天跟[ORG_A]的[PERSON_B]開會，會後[PERSON_A]再寄信給 [PERSON_C]
+   → [PERSON_A]明天跟台積電的[PERSON_B]開會，會後[PERSON_A]再寄信給 [PERSON_C]
    ```
 2. **還原**：選「還原」→ 貼上含代號的文字（會自動選出能還原最多代號的代號檔，也可手動改選）
    ```
@@ -100,7 +99,9 @@ uv run datafuzzy
 
 ![screenshot](docs/assets/screenshot.png)
 
-**語言**選「自動偵測」時，文字含中文就用中文模型、含英文就用英文模型，混合時兩個都用；手動選 English / 中文 則只用該語言的模型。
+**範圍**選「全部敏感資料」會替換上表所有類別；選「只處理人名」只替換人名，Email、電話、地址、日期等都保留原字。
+
+**語言**選「自動偵測」時，文字含中文就加用中文人名模型；選 English 則不用中文人名模型。個資偵測模型一律使用。
 
 ## 🛡️ 隱私與安全
 
@@ -111,11 +112,13 @@ uv run datafuzzy
 
 ## ⚠️ 已知限制
 
-- 英文模型區分大小寫：全小寫的名字（`john smith`）可能漏掉
+- **公眾人物不遮**：英文文字中，新聞語境裡的名人（`Apple hired Steve Jobs`）視為公開資訊而保留；同名的一般人（`our intern Tim Cook`）會依上下文判斷替換，但非常有名的名字偶爾仍會被當成名人（中文模型則一律替換）
+- 單獨出現、同時也是地名的英文名字（`assigned to Chris by Jordan`）偶爾會漏掉
+- 公司、醫院、地名不替換；若需要遮，選取後按右鍵手動標記
 - 單獨出現的名或姓會沿用全名的代號（`John Smith`、`John` → `[PERSON_A]`；`王小明`、`小明` → `[PERSON_A]`），還原時一律還原成全名；一個名字一旦在代號檔中連到某人，之後出現同名的另一人也不會改變
 - 中文只連結「名」，單獨的姓（`王先生`）不連結；中文模型以繁體中文訓練，簡體中文效果可能較差
-- 產品名稱偶爾會被當成人名或組織而替換（寧可多遮，不要漏遮），可點代號取消標記
-- 人名仍可能漏掉（約 1–2%，多為少見的兩字名）、長句中的地名偶爾會漏掉：送出前請快速看一下，漏掉的選取後按右鍵補標記
+- 所有日期都會替換（含聊天時間戳記、到職日），不只生日
+- 人名仍可能漏掉（約 1–2%）：送出前請快速看一下，漏掉的選取後按右鍵補標記
 
 ## 🏗️ 架構
 
@@ -123,7 +126,7 @@ uv run datafuzzy
 flowchart LR
     A[輸入文字] --> B{語言偵測}
     B --> C[規則偵測器<br/>regex]
-    B --> D[NER 模型 中文 / 英文<br/>ONNX Runtime]
+    B --> D[個資偵測 Privacy Filter<br/>+ 中文人名 NER<br/>ONNX Runtime]
     C --> E[合併重疊區段]
     D --> E
     E --> K[同名全文替換<br/>+ 已知名稱]
@@ -140,7 +143,7 @@ flowchart LR
 ```
 src/datafuzzy/
 ├── core/            # 與 UI 無關的邏輯
-│   ├── detect/      # 偵測器：regex、NER（ONNX）
+│   ├── detect/      # 偵測器：regex、Privacy Filter、NER（ONNX）
 │   ├── models/      # 模型清單、下載、驗證
 │   ├── mapping.py   # 代號產生與還原
 │   ├── store.py     # 加密暫存與清除
@@ -157,7 +160,8 @@ packaging/           # PyInstaller 設定、.dmg / AppImage 打包、第三方�
 - [x] 0.3 — 中文 NER（`ckiplab/bert-base-chinese-ner`）、中英混合文字
 - [x] 0.4 — 代號檔管理（命名、預覽、自動推薦）、誤判取消標記
 - [x] 0.5 — 手動補標記漏掉的名字、人名召回率提升
-- [ ] 0.6 — Mac `.dmg` / Linux AppImage（不含模型，安裝後下載），推 tag 自動發佈；0.5.1 為測試版，M2 實機驗收後發佈 0.6
+- [x] 0.5.1 — Mac `.dmg` / Linux AppImage（不含模型，安裝後下載），推 tag 自動發佈
+- [x] 0.6 — 改用個資專用模型（`openai/privacy-filter`）、只遮個人資料、「只處理人名」模式
 
 ## 🤝 參與貢獻
 
@@ -181,9 +185,9 @@ packaging/build_dmg.sh           # 打包 Mac .dmg（需在 macOS 上執行）�
 
 本專案採用 [GPL-3.0](LICENSE)。
 
-| 模型 | 授權 | 下載來源（int8 ONNX） |
+| 模型 | 授權 | 下載來源（ONNX） |
 |---|---|---|
-| [`dslim/bert-base-NER`](https://huggingface.co/dslim/bert-base-NER) | MIT | [`Xenova/bert-base-NER`](https://huggingface.co/Xenova/bert-base-NER) |
-| [`ckiplab/bert-base-chinese-ner`](https://huggingface.co/ckiplab/bert-base-chinese-ner) | GPL-3.0，© CKIP Lab | [`Xenova/bert-base-chinese-ner`](https://huggingface.co/Xenova/bert-base-chinese-ner) |
+| [`openai/privacy-filter`](https://huggingface.co/openai/privacy-filter) | Apache-2.0 | 同左（官方 q4 ONNX） |
+| [`ckiplab/bert-base-chinese-ner`](https://huggingface.co/ckiplab/bert-base-chinese-ner) | GPL-3.0，© CKIP Lab | [`Xenova/bert-base-chinese-ner`](https://huggingface.co/Xenova/bert-base-chinese-ner)（int8） |
 
 模型不隨程式散布，由使用者在 App 內自行下載。安裝檔內附的第三方套件授權（Qt 以 LGPL-3.0 動態連結）可在 App 的 **說明 → 關於 DataFuzzy** 查看。

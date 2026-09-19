@@ -30,6 +30,7 @@ class ModelSpec:
     license: str
     labels: dict[str, str]  # model entity type -> our label, e.g. "PER" -> "PERSON"
     files: tuple[FileSpec, ...]
+    kind: str = "ner"  # "ner": BERT token classifier; "privacy-filter": openai/privacy-filter
 
     @property
     def size(self) -> int:
@@ -42,7 +43,7 @@ def load_manifest(path: Path | None = None) -> list[ModelSpec]:
         ModelSpec(
             id=m["id"], lang=m["lang"], name=m["name"], source=m["source"],
             license=m["license"], labels=dict(m["labels"]),
-            files=tuple(FileSpec(**f) for f in m["files"]),
+            files=tuple(FileSpec(**f) for f in m["files"]), kind=m.get("kind", "ner"),
         )
         for m in json.loads(raw)["models"]
     ]

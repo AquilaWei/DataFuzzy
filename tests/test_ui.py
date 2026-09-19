@@ -65,7 +65,7 @@ def test_copy_link_copies_reply(qtbot, tmp_path):
 def test_notice_when_no_model(qtbot, tmp_path):
     win, _ = make_window(qtbot, tmp_path)
     send(win, "Alice wrote to a@b.co")
-    assert "未安裝英文模型" in win.chat.toPlainText()
+    assert "有模型未安裝" in win.chat.toPlainText()
     assert "僅規則模式" in win.model_status.text()
 
 
@@ -239,3 +239,11 @@ def test_about_dialog(qtbot, tmp_path, monkeypatch):
     dialog = about.AboutDialog(win)
     qtbot.addWidget(dialog)
     assert "BSD-3-Clause" in dialog.licenses.toPlainText()
+
+
+def test_names_scope_keeps_everything_but_names(qtbot, tmp_path):
+    win, _ = make_window(qtbot, tmp_path)
+    win.scope_box.setCurrentIndex(win.scope_box.findData("names"))
+    send(win, "寄給 amy@x.com，主機 10.0.0.8")
+    assert win.chat.reply_text(0) == "寄給 amy@x.com，主機 10.0.0.8"
+    assert "只處理人名" in win.chat.toPlainText()

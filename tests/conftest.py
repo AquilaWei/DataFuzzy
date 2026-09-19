@@ -65,16 +65,34 @@ def file_server():
     server.httpd.shutdown()
 
 
-def real_model_dir(lang: str = "en") -> Path | None:
-    """The model for `lang`, if available locally (cached by tools/update_manifest.py or
-    installed)."""
+def real_model_dir(model_id: str) -> Path | None:
+    """The model `model_id` from the manifest, if available locally (cached by
+    tools/update_manifest.py or installed)."""
     from datafuzzy.core.models import is_installed, load_manifest, models_dir
 
-    spec = next(s for s in load_manifest() if s.lang == lang)
-    override = os.environ.get("DATAFUZZY_TEST_MODEL_DIR") if lang == "en" else None
-    for c in (override, REPO_ROOT / "models/cache" / spec.id):
-        if c and (Path(c) / "model.onnx").exists():
-            return Path(c)
+    spec = next(s for s in load_manifest() if s.id == model_id)
+    cached = REPO_ROOT / "models/cache" / spec.id
+    if all((cached / f.name).exists() for f in spec.files):
+        return cached
     if is_installed(spec, models_dir()):
         return models_dir() / spec.id
     return None
+
+
+def real_pipeline():
+    """A pipeline with every manifest model, or None when one isn't available locally."""
+    from datafuzzy.core.detect.ner import NerDetector
+    from datafuzzy.core.detect.privacy_filter import PrivacyFilterDetector
+    from datafuzzy.core.models import load_manifest
+    from datafuzzy.core.pipeline import Pipeline
+
+    p = Pipeline()
+    for spec in load_manifest():
+        path = real_model_dir(spec.id)
+        if path is None:
+            return None
+        if spec.kind == "privacy-filter":
+            p.pii = PrivacyFilterDetector(path, spec.labels, name=spec.id)
+        else:
+            p.models[spec.lang] = NerDetector(path, spec.labels, name=spec.id)
+    return p
