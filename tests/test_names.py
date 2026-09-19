@@ -240,3 +240,29 @@ def test_english_role_labels_are_not_speakers():
     chat = "[09:12] Olivia: ready?\n[09:13] Ethan: yes\nNote: call at 10"
     assert p.obfuscate(chat, Session(label="t"), "en").text == (
         "[09:12] [PERSON_A]: ready?\n[09:13] [PERSON_B]: yes\nNote: call at 10")
+
+
+class SpanNer:
+    """Returns fixed spans, like a model output with fragments."""
+
+    name = "spans"
+
+    def __init__(self, spans):
+        self.spans = spans
+
+    def detect(self, text):
+        return [s for s in self.spans if text[s.start:s.end] == s.text]
+
+
+def test_single_character_fragment_is_not_replaced_everywhere():
+    p = Pipeline()
+    text = "王小明明天開會，請明哥簽核"
+    p.models["zh"] = SpanNer([Span(0, 3, "PERSON", "王小明"), Span(9, 10, "PERSON", "明")])
+    assert p.obfuscate(text, Session(label="t"), "zh").text == "[PERSON_A]明天開會，請[PERSON_B]哥簽核"
+
+
+def test_lone_surname_takes_the_given_name():
+    p = Pipeline()
+    text = "報帳單交給顧秀。王經理同意"
+    p.models["zh"] = SpanNer([Span(5, 6, "PERSON", "顧"), Span(8, 9, "PERSON", "王")])
+    assert p.obfuscate(text, Session(label="t"), "zh").text == "報帳單交給[PERSON_A]。[PERSON_B]經理同意"

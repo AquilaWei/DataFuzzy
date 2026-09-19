@@ -38,6 +38,28 @@ def name_parts(name: str) -> list[str]:
         return []
     return [w for w in words if NAME_PART_RE.fullmatch(w) and w not in TITLES]
 
+COMMON_SURNAMES = set(
+    "陳林黃張李王吳劉蔡楊許鄭謝洪郭邱曾廖賴徐周葉蘇莊呂江何蕭羅高潘簡朱鍾彭游詹胡施沈余"
+    "趙盧梁顏柯孫魏翁戴范宋方鄧杜傅侯曹薛丁卓阮馬董温溫唐藍石蔣古紀姚連馮歐程湯田康姜白"
+    "汪鄒尤巫鐘黎涂龔嚴韓袁金童陸夏柳邵錢伍倪于譚駱熊任甘秦顧毛章史官萬俞雷粘饒闕凃崔孔"
+    "包易武辛賈段岳常樊葛齊殷祝左牛聶申"
+    "陈刘黄张吴赵孙杨郑谢许邓冯萧罗叶苏卢蒋钟韩严龚鲁钱汤陆顾邹闫贾"
+)
+
+
+def find_all(text: str, values: dict[str, str]) -> list[Span]:
+    """Every occurrence of each value (value -> label). Values that start/end with an
+    ASCII letter or digit must not touch another one, so "Al" won't match in "Alice"."""
+    spans: list[Span] = []
+    for value, label in values.items():
+        if not value.strip():
+            continue
+        left = r"(?<![A-Za-z0-9])" if value[0].isascii() and value[0].isalnum() else ""
+        right = r"(?![A-Za-z0-9])" if value[-1].isascii() and value[-1].isalnum() else ""
+        for m in re.finditer(left + re.escape(value) + right, text):
+            spans.append(Span(m.start(), m.end(), label, value))
+    return spans
+
 
 def name_aliases(names: dict[str, str]) -> dict[str, str]:
     """Map each unambiguous name part to its full name's key (name -> any key, e.g. a code).
@@ -110,6 +132,21 @@ class Session:
             del self.to_code[orig]
             self.ignored[orig] = code
         return originals
+
+    def mark(self, original: str, label: str) -> dict[str, str]:
+        """Code a value the detectors missed. Returns every value to replace -> its code:
+        the value, plus the parts of a person's name that now stand for them ("小明").
+        A value un-marked before gets its old code back, so copies sent out still match."""
+        if original in self.ignored:
+            self.to_code[original] = self.ignored.pop(original)
+        code = self.code_for(original, label)
+        values = {original: code}
+        if label == PERSON:
+            for part, part_code in self.person_aliases().items():
+                if part_code == code and part not in self.ignored:
+                    self.to_code.setdefault(part, code)
+                    values[part] = code
+        return values
 
     def person_aliases(self) -> dict[str, str]:
         """Unambiguous parts of full person names in this session -> their code."""
@@ -232,3 +269,37 @@ def recommend(text: str, sessions: list[Session]) -> Session | None:
     if best is None or best.match_count(text) == 0:
         return None
     return best
+
+
+def apply_codes(text: str, code_spans: list[Span], originals: list[str],
+                values: dict[str, str]) -> tuple[str, list[Span], list[str]]:
+    """Replace each value (value -> code) wherever it appears outside the codes already in
+    an obfuscated text. The inverse of `revert_code`; returns the new text, spans, originals."""
+    labels = {v: code[1:].rsplit("_", 1)[0] for v, code in values.items()}
+    taken = [(s.start, s.end) for s in code_spans]
+    found = sorted((m for m in find_all(text, labels)
+                    if not any(m.start < e and s < m.end for s, e in taken)),
+                   key=lambda m: (m.start, -len(m)))
+    new: list[Span] = []
+    for m in found:  # longest first at each position, never overlapping
+        if not new or m.start >= new[-1].end:
+            new.append(m)
+    items = sorted([(s, o, False) for s, o in zip(code_spans, originals)]
+                   + [(m, m.text, True) for m in new], key=lambda t: t[0].start)
+    out: list[str] = []
+    spans: list[Span] = []
+    kept: list[str] = []
+    pos = 0
+    length = 0
+    for span, orig, is_new in items:
+        prefix = text[pos:span.start]
+        out.append(prefix)
+        length += len(prefix)
+        code = values[orig] if is_new else span.text
+        spans.append(Span(length, length + len(code), span.label, code))
+        kept.append(orig)
+        out.append(code)
+        length += len(code)
+        pos = span.end
+    out.append(text[pos:])
+    return "".join(out), spans, kept

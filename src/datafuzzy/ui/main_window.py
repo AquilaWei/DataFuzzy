@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__
-from ..core.mapping import recommend, revert_code
+from ..core.mapping import CODE_RE, apply_codes, recommend, revert_code
 from ..core.models import ModelSpec
 from ..core.pipeline import ObfuscateResult, Pipeline
 from ..core.store import SessionStore
@@ -91,6 +91,7 @@ class MainWindow(QMainWindow):
         self.chat = ChatView()
         self.chat.open_models.connect(self.open_model_manager)
         self.chat.code_clicked.connect(self._code_menu)
+        self.chat.mark_requested.connect(self.mark)
         self.panel = SessionPanel()
         self.panel.selected.connect(self._panel_selected)
         self.panel.rename_requested.connect(self.rename_session)
@@ -311,4 +312,28 @@ class MainWindow(QMainWindow):
         names = "、".join(f"「{o}」" for o in originals)
         self.chat.add_notice(f"已取消標記 {names}，{session.label} 之後不會再替換它。"
                              "先前複製出去的 " + code + " 仍可還原。")
+        self._refresh_sessions()
+
+    def mark(self, reply_idx: int, text: str, label: str) -> None:
+        """Code a value the detectors missed: in every reply of this code file now, and in
+        everything obfuscated with it later."""
+        session_id = self.chat.replies[reply_idx].session_id
+        session = self.store.sessions.get(session_id or "")
+        if session is None or self.busy:
+            return
+        if CODE_RE.search(text):
+            self.chat.add_notice("選取範圍不能包含代號，請只選取漏掉的文字。")
+            return
+        values = session.mark(text, label)
+        self.store.save(session)
+        replaced = 0
+        for i, reply in enumerate(self.chat.replies):
+            if reply.session_id != session_id:
+                continue
+            new = apply_codes(reply.text, reply.spans, reply.originals, values)
+            replaced += len(new[1]) - len(reply.spans)
+            self.chat.update_reply(i, *new)
+        self.chat.rerender()
+        self.chat.add_notice(f"已將「{text}」標記為 {values[text]}，替換 {replaced} 處；"
+                             f"{session.label} 之後也會自動替換。")
         self._refresh_sessions()
