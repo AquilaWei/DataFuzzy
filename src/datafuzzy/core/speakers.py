@@ -14,7 +14,18 @@ from .mapping import COMMON_SURNAMES, COMPOUND_SURNAMES, PERSON
 
 # Line-start labels that name a role or a field, not a person.
 NOT_SPEAKERS = {"Note", "Notes", "Subject", "From", "To", "Cc", "Re", "Date", "Time",
-                "Customer", "Manager", "Admin", "System", "User", "Me", "Q", "A"}
+                "Customer", "Manager", "Admin", "System", "User", "Me", "Q", "A",
+                # Fields of tickets, forms and records ("Ticket: SEC-0419").
+                "Ticket", "Case", "Issue", "Status", "Severity", "Priority", "Summary",
+                "Description", "Reporter", "Reported", "Assignee", "Owner", "Team", "Department",
+                "Title", "Role", "Name", "Address", "Phone", "Mobile", "Cell", "Email", "Fax",
+                "Location", "Company", "Organization", "Account", "Order", "Invoice", "Amount",
+                "Total", "Price", "Reference", "Ref", "Type", "Category", "Reason", "Result",
+                "Results", "Comment", "Comments", "Action", "Actions", "Update", "Answer",
+                "Question", "Agent", "Support", "Attendees", "Agenda", "Deadline", "Due",
+                "Patient", "Doctor", "Nurse", "Diagnosis", "Treatment", "Medication", "Age",
+                "Sex", "Gender", "Birthday", "Hi", "Hello", "Dear", "Thanks", "Regards",
+                "Warning", "Error", "Info", "Tip", "Important", "Example", "Step"}
 # Chinese form fields and roles start with a surname often enough (申請人、紀錄人、
 # 業務員、高血壓) but end in characters a given name almost never does.
 NOT_NAME_ENDINGS = set("人者員號址期間話名別由註旨稱碼額費壓症")

@@ -250,6 +250,14 @@ def test_english_role_labels_are_not_speakers():
         "[09:12] [PERSON_A]: ready?\n[09:13] [PERSON_B]: yes\nNote: call at 10")
 
 
+def test_english_form_fields_are_not_speakers():
+    p = Pipeline()
+    p.models["en"] = FakeNer(["Jennifer Adams"])
+    text = "Ticket: SEC-0419\nStatus: Contained\nJennifer Adams: what happened?\nTyler: we are checking"
+    assert p.obfuscate(text, Session(label="t"), "en").text == (
+        "Ticket: SEC-0419\nStatus: Contained\n[PERSON_A]: what happened?\n[PERSON_B]: we are checking")
+
+
 class SpanNer:
     """Returns fixed spans, like a model output with fragments."""
 
