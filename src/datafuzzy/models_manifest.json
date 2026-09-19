@@ -1,0 +1,36 @@
+{
+  "models": [
+    {
+      "id": "en-bert-ner",
+      "lang": "en",
+      "name": "English NER (BERT base, int8)",
+      "source": "dslim/bert-base-NER",
+      "license": "MIT",
+      "labels": {
+        "PER": "PERSON",
+        "ORG": "ORG",
+        "LOC": "LOC"
+      },
+      "files": [
+        {
+          "name": "model.onnx",
+          "url": "https://huggingface.co/Xenova/bert-base-NER/resolve/8e892123e8b7c2c0c2bd1dcb598b7d244c4e53aa/onnx/model_quantized.onnx",
+          "size": 108952255,
+          "sha256": "caaee70a5518ec7f9e46e5308fcc9263a8c227703a9ce46cf61c69a552349648"
+        },
+        {
+          "name": "tokenizer.json",
+          "url": "https://huggingface.co/Xenova/bert-base-NER/resolve/8e892123e8b7c2c0c2bd1dcb598b7d244c4e53aa/tokenizer.json",
+          "size": 668923,
+          "sha256": "343989712a36cd8b253efeaf8baf6a08b9d2583f78e395e83832e8ee9f8d8ee1"
+        },
+        {
+          "name": "config.json",
+          "url": "https://huggingface.co/Xenova/bert-base-NER/resolve/8e892123e8b7c2c0c2bd1dcb598b7d244c4e53aa/config.json",
+          "size": 999,
+          "sha256": "a73a2eccc921bbdea95a94b49a157d3694b5c2abbae7a6f3000e14404a9c31a8"
+        }
+      ]
+    }
+  ]
+}
