@@ -7,12 +7,14 @@ def make_window(qtbot, tmp_path):
     store = SessionStore(tmp_path)
     win = MainWindow(Pipeline(), store)
     qtbot.addWidget(win)
+    win.qtbot = qtbot
     return win, store
 
 
 def send(win, text):
     win.input.setPlainText(text)
     win.submit()
+    win.qtbot.waitUntil(lambda: not win.busy, timeout=10000)
 
 
 def test_obfuscate_then_restore(qtbot, tmp_path):
@@ -58,3 +60,37 @@ def test_copy_link_copies_reply(qtbot, tmp_path):
     send(win, "a@b.co")
     win.chat.anchorClicked.emit(QUrl("copy:0"))
     assert QGuiApplication.clipboard().text() == "[EMAIL_A]"
+
+
+def test_notice_when_no_model(qtbot, tmp_path):
+    win, _ = make_window(qtbot, tmp_path)
+    send(win, "Alice wrote to a@b.co")
+    assert "未安裝英文模型" in win.chat.toPlainText()
+    assert "僅規則模式" in win.model_status.text()
+
+
+def test_model_manager_download_and_delete(qtbot, tmp_path, file_server):
+    from datafuzzy.ui.model_manager import ModelManager
+
+    spec = file_server.spec(lang="en")
+    root = tmp_path / "models"
+    store = SessionStore(tmp_path)
+    win = MainWindow(Pipeline(), store, [spec], root)
+    qtbot.addWidget(win)
+
+    dialog = ModelManager([spec], root, win)
+    qtbot.addWidget(dialog)
+    dialog.models_changed.connect(win.reload_models)
+    row = dialog.rows[0]
+    assert row.button.text() == "下載"
+
+    with qtbot.waitSignal(dialog.models_changed, timeout=10000):
+        row.button.click()
+    qtbot.waitUntil(lambda: row.thread is None)
+    assert row.button.text() == "刪除"
+    assert "en" in win.pipeline.models
+    assert "英文" in win.model_status.text()
+
+    row.button.click()
+    assert row.button.text() == "下載"
+    assert win.pipeline.models == {}
