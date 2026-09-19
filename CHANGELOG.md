@@ -3,7 +3,10 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
-## [0.6.0] - 2026-09-19
+## [0.5.7] - 2026-09-19
+
+Test build of the new personal-data model, for hands-on checks on macOS and Linux
+before 0.6.0.
 
 ### Added
 - Scope "只處理人名": only people are coded; emails, phones, addresses, dates, IDs,

@@ -161,7 +161,7 @@ packaging/           # PyInstaller 設定、.dmg / AppImage 打包、第三方�
 - [x] 0.4 — 代號檔管理（命名、預覽、自動推薦）、誤判取消標記
 - [x] 0.5 — 手動補標記漏掉的名字、人名召回率提升
 - [x] 0.5.1 — Mac `.dmg` / Linux AppImage（不含模型，安裝後下載），推 tag 自動發佈
-- [x] 0.6 — 改用個資專用模型（`openai/privacy-filter`）、只遮個人資料、「只處理人名」模式
+- [ ] 0.6 — 改用個資專用模型（`openai/privacy-filter`）、只遮個人資料、「只處理人名」模式；0.5.7 為測試版，Mac / Linux 實機驗收後發佈 0.6
 
 ## 🤝 參與貢獻
 
