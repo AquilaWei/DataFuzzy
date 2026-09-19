@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtGui import QAction, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QButtonGroup,
     QComboBox,
@@ -18,22 +20,33 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__
-from ..core.pipeline import Pipeline
+from ..core.models import ModelSpec
+from ..core.pipeline import ObfuscateResult, Pipeline
 from ..core.store import SessionStore
 from .chat_view import ChatView
+from .model_manager import LANG_NAMES, ModelManager
 from .session_panel import SessionPanel
+from .worker import run_task
 
 NEW_SESSION = "__new__"
 LANGS = [("自動偵測", "auto"), ("English", "en"), ("中文", "zh")]
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, pipeline: Pipeline, store: SessionStore) -> None:
+    def __init__(self, pipeline: Pipeline, store: SessionStore,
+                 specs: list[ModelSpec] | None = None, models_root: Path | None = None) -> None:
         super().__init__()
         self.pipeline = pipeline
         self.store = store
+        self.specs = specs or []
+        self.models_root = models_root
+        self._task = None
         self.setWindowTitle(f"DataFuzzy {__version__}")
         self.resize(960, 640)
+
+        models_action = QAction("模型管理…", self)
+        models_action.triggered.connect(self.open_model_manager)
+        self.menuBar().addMenu("模型").addAction(models_action)
 
         # Top bar
         self.obfuscate_btn = QPushButton("模糊化")
@@ -67,6 +80,7 @@ class MainWindow(QMainWindow):
 
         # Chat + side panel
         self.chat = ChatView()
+        self.chat.open_models.connect(self.open_model_manager)
         self.panel = SessionPanel()
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self.chat)
@@ -100,11 +114,28 @@ class MainWindow(QMainWindow):
     def restoring(self) -> bool:
         return self.restore_btn.isChecked()
 
+    @property
+    def busy(self) -> bool:
+        return self._task is not None
+
+    def open_model_manager(self) -> None:
+        if self.models_root is None:
+            return
+        dialog = ModelManager(self.specs, self.models_root, self)
+        dialog.models_changed.connect(self.reload_models)
+        dialog.exec()
+
+    def reload_models(self) -> None:
+        if self.models_root is not None:
+            self.pipeline.load_models(self.specs, self.models_root)
+        self._refresh_model_status()
+
     def _refresh_model_status(self) -> None:
         if not self.pipeline.models:
             self.model_status.setText("僅規則模式（尚未安裝模型）")
         else:
-            self.model_status.setText("模型：" + " / ".join(sorted(self.pipeline.models)))
+            names = " / ".join(LANG_NAMES.get(l, l) for l in sorted(self.pipeline.models))
+            self.model_status.setText(f"已安裝模型：{names}")
 
     def _refresh_sessions(self, select: str | None = None) -> None:
         current = select or self.session_box.currentData()
@@ -119,9 +150,15 @@ class MainWindow(QMainWindow):
         self.session_box.setEnabled(self.session_box.count() > 0)
         self.panel.refresh(self.store.list())
 
+    def _set_busy(self, task) -> None:
+        self._task = task
+        for w in (self.send_btn, self.obfuscate_btn, self.restore_btn, self.session_box, self.lang_box):
+            w.setEnabled(task is None)
+        self.send_btn.setText("處理中…" if task else "送出")
+
     def submit(self) -> None:
         text = self.input.toPlainText().strip()
-        if not text:
+        if not text or self.busy:
             return
         if self.restoring:
             self._restore(text)
@@ -135,12 +172,26 @@ class MainWindow(QMainWindow):
             session = self.store.new_session()
         else:
             session = self.store.sessions[session_id]
-        result = self.pipeline.obfuscate(text, session, self.lang_box.currentData())
-        self.store.save(session)
+        lang = self.lang_box.currentData()
         self.chat.add_user(text, "模糊化")
-        note = f"{session.label} · 替換 {len(result.spans)} 處 · 語言 {result.lang}"
-        self.chat.add_reply(result.text, result.code_spans, note)
-        self._refresh_sessions(select=session.id)
+
+        def done(result: ObfuscateResult) -> None:
+            self._set_busy(None)
+            self.store.save(session)
+            note = f"{session.label} · 替換 {len(result.spans)} 處 · 語言 {result.lang}"
+            self.chat.add_reply(result.text, result.code_spans, note)
+            if not result.model_used:
+                lang_name = LANG_NAMES.get(result.lang, result.lang)
+                self.chat.add_notice(f"未安裝{lang_name}模型，本次只用規則偵測，人名等名稱不會被替換。",
+                                     ("models:", "下載模型"))
+            self._refresh_sessions(select=session.id)
+
+        def failed(error: str) -> None:
+            self._set_busy(None)
+            self.chat.add_notice(f"處理失敗：{error}")
+            self._refresh_sessions(select=session.id)
+
+        self._set_busy(run_task(lambda: self.pipeline.obfuscate(text, session, lang), done, failed))
 
     def _restore(self, text: str) -> None:
         session_id = self.session_box.currentData()

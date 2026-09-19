@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from html import escape
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QUrl, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QTextBrowser
 
@@ -29,6 +29,8 @@ def highlight(text: str, spans: list[Span]) -> str:
 
 
 class ChatView(QTextBrowser):
+    open_models = Signal()
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setOpenLinks(False)
@@ -51,8 +53,10 @@ class ChatView(QTextBrowser):
             f'<p style="margin-left:12px;">{body}</p>'
         )
 
-    def add_notice(self, text: str) -> None:
-        self.append(f'<p style="color:gray;">{_html(text)}</p>')
+    def add_notice(self, text: str, link: tuple[str, str] | None = None) -> None:
+        """Gray system message; `link` is (href, text) appended after it."""
+        extra = f' <a href="{link[0]}">{escape(link[1])}</a>' if link else ""
+        self.append(f'<p style="color:gray;">{_html(text)}{extra}</p>')
 
     def reply_text(self, idx: int) -> str:
         return self._replies[idx]
@@ -60,3 +64,5 @@ class ChatView(QTextBrowser):
     def _on_anchor(self, url: QUrl) -> None:
         if url.scheme() == "copy":
             QGuiApplication.clipboard().setText(self._replies[int(url.path())])
+        elif url.scheme() == "models":
+            self.open_models.emit()
