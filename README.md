@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml/badge.svg)](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/AquilaWei/DataFuzzy/graph/badge.svg)](https://codecov.io/gh/AquilaWei/DataFuzzy)
-![Version](https://img.shields.io/badge/version-0.5.0-blue)
+![Version](https://img.shields.io/badge/version-0.5.1-blue)
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
@@ -40,6 +40,24 @@
 
 ## 🚀 快速開始
 
+### 安裝檔（一般使用者）
+
+到 [**Releases**](https://github.com/AquilaWei/DataFuzzy/releases/latest) 下載：
+
+| 平台 | 檔案 | 安裝 |
+|---|---|---|
+| **macOS 14+**（Apple Silicon） | `DataFuzzy-x.y.z-arm64.dmg` | 打開 `.dmg` → 把 **DataFuzzy** 拖進「應用程式」 |
+| **Linux**（x86_64） | `DataFuzzy-x.y.z-x86_64.AppImage` | `chmod +x DataFuzzy-*.AppImage && ./DataFuzzy-*.AppImage` |
+
+- **Mac 第一次開啟**：App 沒有 Apple 付費簽章，macOS 會擋下並顯示「無法驗證」。到 **系統設定 → 隱私權與安全性**，在下方按 **強制打開**（只需一次）。或在終端機執行：
+  ```bash
+  xattr -dr com.apple.quarantine /Applications/DataFuzzy.app
+  ```
+- **Linux**：若系統沒有 FUSE，改用 `./DataFuzzy-*.AppImage --appimage-extract-and-run`
+- 安裝檔**不含模型**；下載的 `SHA256SUMS.txt` 可用來驗證檔案
+
+### 從原始碼執行（開發者）
+
 **需求：** Python 3.12+、[uv](https://docs.astral.sh/uv/)
 
 ```bash
@@ -56,8 +74,6 @@ uv run datafuzzy
 | 環境變數 | 用途 | 預設 |
 |---|---|---|
 | `DATAFUZZY_MODELS_DIR` | 模型存放位置 | macOS `~/Library/Application Support/DataFuzzy/models`<br>Linux `~/.local/share/DataFuzzy/models` |
-
-> Mac 安裝檔（`.dmg`）將於 0.5.0 提供。
 
 ## 📖 使用方式
 
@@ -127,6 +143,7 @@ src/datafuzzy/
 │   └── pipeline.py  # 串接偵測與代號
 ├── ui/              # PySide6 介面
 └── models_manifest.json  # 可下載的模型（網址、大小、SHA-256）
+packaging/           # PyInstaller 設定、.dmg / AppImage 打包、第三方授權清單
 ```
 
 ## 🗺️ Roadmap
@@ -136,7 +153,7 @@ src/datafuzzy/
 - [x] 0.3 — 中文 NER（`ckiplab/bert-base-chinese-ner`）、中英混合文字
 - [x] 0.4 — 代號檔管理（命名、預覽、自動推薦）、誤判取消標記
 - [x] 0.5 — 手動補標記漏掉的名字、人名召回率提升
-- [ ] 0.6 — Mac `.dmg` / Linux AppImage（不含模型，安裝後下載）
+- [ ] 0.6 — Mac `.dmg` / Linux AppImage（不含模型，安裝後下載），推 tag 自動發佈；0.5.1 為測試版，M2 實機驗收後發佈 0.6
 
 ## 🤝 參與貢獻
 
@@ -145,7 +162,11 @@ uv sync                  # 安裝含開發工具的環境
 uv run pytest            # 執行測試
 tools/test_arm64.sh      # 在 arm64 + 8GB 限制的容器中測試（模擬 Apple Silicon）
 uv run tools/update_manifest.py  # 更新模型版本後重新產生 models_manifest.json
+packaging/build_appimage.sh      # 打包 Linux AppImage → dist/
+packaging/build_dmg.sh           # 打包 Mac .dmg（需在 macOS 上執行）→ dist/
 ```
+
+**發佈：** 推送 tag `vX.Y.Z` 後，GitHub Actions 會在 macOS（Apple Silicon）與 Ubuntu 22.04 上打包，用真實模型跑 `--self-test` 驗證安裝檔，再建立 GitHub Release。
 
 模型相關測試需要本機有對應的模型（在 App 內下載，或先跑 `tools/update_manifest.py`），否則會自動略過；CI 一定會下載並執行。
 
@@ -161,4 +182,4 @@ uv run tools/update_manifest.py  # 更新模型版本後重新產生 models_mani
 | [`dslim/bert-base-NER`](https://huggingface.co/dslim/bert-base-NER) | MIT | [`Xenova/bert-base-NER`](https://huggingface.co/Xenova/bert-base-NER) |
 | [`ckiplab/bert-base-chinese-ner`](https://huggingface.co/ckiplab/bert-base-chinese-ner) | GPL-3.0，© CKIP Lab | [`Xenova/bert-base-chinese-ner`](https://huggingface.co/Xenova/bert-base-chinese-ner) |
 
-模型不隨程式散布，由使用者在 App 內自行下載。
+模型不隨程式散布，由使用者在 App 內自行下載。安裝檔內附的第三方套件授權（Qt 以 LGPL-3.0 動態連結）可在 App 的 **說明 → 關於 DataFuzzy** 查看。

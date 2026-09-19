@@ -3,6 +3,21 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.5.1] - 2026-09-19
+
+Test build of the installers, for hands-on checks on an Apple Silicon Mac before 0.6.0.
+
+### Added
+- Installers, built and published by GitHub Actions when a `vX.Y.Z` tag is pushed:
+  - macOS 14+ (Apple Silicon): `DataFuzzy-x.y.z-arm64.dmg` (ad-hoc signed, not notarized).
+  - Linux (x86_64): `DataFuzzy-x.y.z-x86_64.AppImage`, built on Ubuntu 22.04.
+  - No models inside; the build fails if a model file ends up in the bundle. Each
+    installer is smoke-tested with the real models before the release is created.
+- Help → About DataFuzzy: version, license and the licenses of every bundled package.
+  The packaging step fails on a license that can't be combined with GPL-3.0.
+- App icon.
+- `datafuzzy --version` and `datafuzzy --self-test` (headless check of a build).
+
 ## [0.5.0] - 2026-09-19
 
 ### Added
