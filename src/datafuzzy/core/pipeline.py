@@ -10,7 +10,7 @@ from typing import Literal
 from .detect import Detector, RegexDetector, Span, resolve_overlaps
 from .detect.ner import NerDetector
 from .lang import Lang, detect_language
-from .mapping import RestoreResult, Session
+from .mapping import PERSON, RestoreResult, Session, name_aliases
 from .models import ModelSpec, is_installed
 
 LangChoice = Literal["auto", "en", "zh"]
@@ -70,6 +70,9 @@ class Pipeline:
         # or already has a code in the session, replace every occurrence of it.
         values = dict(known or {})
         values.update({s.text: s.label for s in spans})
+        # A first or last name on its own ("John" after "John Smith") is the same person.
+        persons = {v: v for v, label in values.items() if label == PERSON}
+        values.update({part: PERSON for part in name_aliases(persons)})
         spans += find_all(text, values)
         return resolved, resolve_overlaps(spans), model is not None
 

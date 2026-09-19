@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml/badge.svg)](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/AquilaWei/DataFuzzy/graph/badge.svg)](https://codecov.io/gh/AquilaWei/DataFuzzy)
-![Version](https://img.shields.io/badge/version-0.2.0-blue)
+![Version](https://img.shields.io/badge/version-0.2.1-blue)
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
@@ -80,7 +80,8 @@ uv run datafuzzy
 ## ⚠️ 已知限制
 
 - 英文模型區分大小寫：全小寫的名字（`john smith`）可能漏掉
-- 同一人的全名與簡稱會拿到不同代號（`John Smith` → `[PERSON_A]`、`John` → `[PERSON_C]`）
+- 單獨出現的名或姓會沿用全名的代號（`John Smith`、`John` → `[PERSON_A]`），還原時一律還原成全名；一個名字一旦在代號檔中連到某人，之後出現同名的另一人也不會改變
+- 中文名字（`王小明` ↔ `小明`）尚未連結
 - 產品名稱偶爾會被當成人名或組織而替換（寧可多遮，不要漏遮）
 
 ## 🏗️ 架構
