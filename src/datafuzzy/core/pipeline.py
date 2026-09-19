@@ -9,7 +9,7 @@ from typing import Literal
 
 from .detect import Detector, RegexDetector, Span, resolve_overlaps
 from .detect.ner import NerDetector
-from .lang import Lang, detect_language
+from .lang import Lang, detect_language, has_cjk, languages_in
 from .mapping import PERSON, RestoreResult, Session, name_aliases
 from .models import ModelSpec, is_installed
 
@@ -61,11 +61,19 @@ class Pipeline:
     def detect(self, text: str, lang: LangChoice = "auto",
                known: dict[str, str] | None = None) -> tuple[Lang, list[Span], bool]:
         resolved: Lang = detect_language(text) if lang == "auto" else lang
-        detectors: list[Detector] = [self.rules]
-        model = self.models.get(resolved)
-        if model:
-            detectors.append(model)
-        spans = [s for d in detectors for s in d.detect(text)]
+        # Auto mode runs every language's model on mixed text ("請 John Smith 跟王小明...").
+        langs = [resolved] + [x for x in languages_in(text) if x != resolved] if lang == "auto" \
+            else [resolved]
+        spans = self.rules.detect(text)
+        for x in langs:
+            model = self.models.get(x)
+            if not model:
+                continue
+            found = model.detect(text)
+            if x != "zh":  # non-Chinese models only see Chinese characters as noise
+                found = [s for s in found if not has_cjk(s.text)]
+            spans += found
+        model_used = resolved in self.models
         # Names are what models miss most: once a value is found anywhere in this text,
         # or already has a code in the session, replace every occurrence of it.
         values = dict(known or {})
@@ -74,7 +82,7 @@ class Pipeline:
         persons = {v: v for v, label in values.items() if label == PERSON}
         values.update({part: PERSON for part in name_aliases(persons)})
         spans += find_all(text, values)
-        return resolved, resolve_overlaps(spans), model is not None
+        return resolved, resolve_overlaps(spans), model_used
 
     def obfuscate(self, text: str, session: Session, lang: LangChoice = "auto") -> ObfuscateResult:
         known = {orig: code[1:].rsplit("_", 1)[0] for orig, code in session.to_code.items()}
