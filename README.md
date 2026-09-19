@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml/badge.svg)](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/AquilaWei/DataFuzzy/graph/badge.svg)](https://codecov.io/gh/AquilaWei/DataFuzzy)
-![Version](https://img.shields.io/badge/version-0.5.6-blue)
+![Version](https://img.shields.io/badge/version-0.5.8-blue)
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
@@ -70,7 +70,7 @@ uv sync
 uv run datafuzzy
 ```
 
-**第一次啟動**會跳出「模型管理」，按 **下載** 取得個資偵測模型（約 945 MB）與中文人名模型（約 103 MB），只需一次。之後可從選單 **模型 → 模型管理…** 新增或刪除。不下載也能用，只是人名、日期、帳號等不會被替換。兩個模型載入後約佔 **0.5 GB 記憶體**，處理長文件時最多約 1.7 GB。
+**第一次啟動**會跳出「模型管理」，按 **下載** 取得個資偵測模型（約 945 MB）與中文人名模型（約 103 MB），只需一次。之後可從選單 **模型 → 模型管理…** 新增或刪除。不下載也能用，只是人名、日期、帳號等不會被替換。兩個模型載入後約佔 **0.5 GB 記憶體**；長文件會分段處理，再長也維持在約 1.4 GB 以內（其中約 0.9 GB 是從模型檔映射的權重，系統可回收）。
 
 ![模型管理](docs/assets/model-manager.png)
 
