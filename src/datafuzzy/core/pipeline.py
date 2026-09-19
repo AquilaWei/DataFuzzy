@@ -22,6 +22,7 @@ class ObfuscateResult:
     lang: Lang
     spans: list[Span]       # sensitive spans found in the input
     code_spans: list[Span]  # where the codes sit in the output
+    originals: list[str]    # what each code span replaced
     model_used: bool        # False when no model is installed for `lang`
 
 
@@ -59,7 +60,10 @@ class Pipeline:
                 self.models[spec.lang] = NerDetector(root / spec.id, spec.labels, name=spec.id)
 
     def detect(self, text: str, lang: LangChoice = "auto",
-               known: dict[str, str] | None = None) -> tuple[Lang, list[Span], bool]:
+               known: dict[str, str] | None = None,
+               ignore: set[str] | frozenset[str] = frozenset()) -> tuple[Lang, list[Span], bool]:
+        """`known`: values that already have a code (value -> label); `ignore`: values the
+        user marked as not sensitive."""
         resolved: Lang = detect_language(text) if lang == "auto" else lang
         # Auto mode runs every language's model on mixed text ("請 John Smith 跟王小明...").
         langs = [resolved] + [x for x in languages_in(text) if x != resolved] if lang == "auto" \
@@ -74,6 +78,7 @@ class Pipeline:
                 found = [s for s in found if not has_cjk(s.text)]
             spans += found
         model_used = resolved in self.models
+        spans = [s for s in spans if s.text not in ignore]
         # Names are what models miss most: once a value is found anywhere in this text,
         # or already has a code in the session, replace every occurrence of it.
         values = dict(known or {})
@@ -81,14 +86,15 @@ class Pipeline:
         # A first or last name on its own ("John" after "John Smith") is the same person.
         persons = {v: v for v, label in values.items() if label == PERSON}
         values.update({part: PERSON for part in name_aliases(persons)})
-        spans += find_all(text, values)
+        spans += [s for s in find_all(text, values) if s.text not in ignore]
         return resolved, resolve_overlaps(spans), model_used
 
     def obfuscate(self, text: str, session: Session, lang: LangChoice = "auto") -> ObfuscateResult:
         known = {orig: code[1:].rsplit("_", 1)[0] for orig, code in session.to_code.items()}
-        resolved, spans, model_used = self.detect(text, lang, known)
+        resolved, spans, model_used = self.detect(text, lang, known, set(session.ignored))
         out, code_spans = session.obfuscate(text, spans)
-        return ObfuscateResult(out, resolved, spans, code_spans, model_used)
+        originals = [s.text for s in sorted(spans, key=lambda s: s.start)]
+        return ObfuscateResult(out, resolved, spans, code_spans, originals, model_used)
 
     @staticmethod
     def restore(text: str, session: Session) -> RestoreResult:

@@ -73,6 +73,13 @@ class SessionStore:
         path.chmod(0o600)
         self.sessions[session.id] = session
 
+    def rename(self, session_id: str, label: str) -> None:
+        label = label.strip()
+        if label:
+            session = self.sessions[session_id]
+            session.label = label
+            self.save(session)
+
     def load(self, session_id: str) -> Session:
         blob = self._path(session_id).read_bytes()
         plain = self._aead.decrypt(blob[:12], blob[12:], session_id.encode())

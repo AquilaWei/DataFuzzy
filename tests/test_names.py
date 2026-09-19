@@ -177,3 +177,14 @@ def test_non_chinese_model_spans_with_chinese_are_dropped():
     p.models["en"] = FakeNer(["王"])  # an English model half-recognising a Chinese name
     assert p.obfuscate("Meeting with 王小明 today", Session(label="t")).text \
         == "Meeting with 王小明 today"
+
+
+def test_unmarked_name_is_not_coded_again():
+    p = Pipeline()
+    p.models["en"] = FakeNer(["Apple"])
+    session = Session(label="t")
+    assert p.obfuscate("Apple, again Apple", session).text == "[PERSON_A], again [PERSON_A]"
+    session.unmark("[PERSON_A]")  # the model's mistake: a fruit, not a person
+    assert p.obfuscate("An Apple a day", session).text == "An Apple a day"
+    p.models["en"] = FakeNer(["John Smith"])
+    assert p.obfuscate("John Smith likes Apple", session).text == "[PERSON_B] likes Apple"

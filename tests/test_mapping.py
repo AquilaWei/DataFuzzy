@@ -1,4 +1,4 @@
-from datafuzzy.core.mapping import Session, letters, recommend
+from datafuzzy.core.mapping import Session, letters, recommend, revert_code
 from datafuzzy.core.pipeline import Pipeline
 
 
@@ -49,3 +49,57 @@ def test_recommend():
     p.obfuscate("x@y.com 1.2.3.4", b)
     assert recommend("[EMAIL_A] [IP_A]", [a, b]) is b
     assert recommend("nothing here", [a, b]) is None
+
+
+def test_rows_group_linked_names_in_code_order():
+    session = Session(label="t")
+    for orig, label in [("b@x.co", "EMAIL"), ("John Smith", "PERSON"), ("a@x.co", "EMAIL"),
+                        ("John", "PERSON")]:
+        session.code_for(orig, label)
+    for i in range(26):
+        session.code_for(f"{i}@y.co", "EMAIL")
+    rows = session.rows()
+    assert rows[:3] == [("[EMAIL_A]", ["b@x.co"]), ("[EMAIL_B]", ["a@x.co"]),
+                        ("[EMAIL_C]", ["0@y.co"])]
+    assert rows[27] == ("[EMAIL_AB]", ["25@y.co"])  # Z before AA
+    assert rows[-1] == ("[PERSON_A]", ["John Smith", "John"])
+
+
+def test_unmark_stops_coding_but_old_text_still_restores():
+    session = Session(label="t")
+    p = Pipeline()
+    first = p.obfuscate("a@b.co 與 c@d.co", session)
+    assert first.text == "[EMAIL_A] 與 [EMAIL_B]"
+    assert first.originals == ["a@b.co", "c@d.co"]
+
+    assert session.unmark("[EMAIL_A]") == ["a@b.co"]
+    assert "a@b.co" not in session.to_code
+    assert p.obfuscate("a@b.co 再一次 e@f.co", session).text == "a@b.co 再一次 [EMAIL_C]"
+    # Codes are never reused, and text sent out before un-marking still restores.
+    assert session.restore(first.text).text == "a@b.co 與 c@d.co"
+    assert session.match_count(first.text) == 2
+
+
+def test_unmark_removes_every_linked_name():
+    session = Session(label="t")
+    session.code_for("John Smith", "PERSON")
+    session.code_for("John", "PERSON")
+    assert session.unmark("[PERSON_A]") == ["John Smith", "John"]
+    assert session.to_code == {}
+    assert session.unmark("[PERSON_Z]") == []
+
+
+def test_ignored_survives_serialization():
+    session = Session(label="t")
+    session.code_for("a@b.co", "EMAIL")
+    session.unmark("[EMAIL_A]")
+    assert Session.from_dict(session.to_dict()).ignored == {"a@b.co": "[EMAIL_A]"}
+
+
+def test_revert_code_puts_originals_back():
+    session = Session(label="t")
+    r = Pipeline().obfuscate("a@b.co, 10.0.0.1 and a@b.co", session)
+    text, spans, originals = revert_code(r.text, r.code_spans, r.originals, "[EMAIL_A]")
+    assert text == "a@b.co, [IP_A] and a@b.co"
+    assert [text[s.start:s.end] for s in spans] == ["[IP_A]"]
+    assert originals == ["10.0.0.1"]
