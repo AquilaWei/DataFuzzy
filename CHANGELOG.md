@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.5.5] - 2026-09-19
+
+### Fixed
+- US street addresses are found by a rule, so the house number, unit and ZIP code never
+  leak: `742 Maple Grove Avenue, Apt 3B, Austin, TX 78704` → `[LOC_A]` (before:
+  `742 [LOC_A], [LOC_B], [LOC_C], [LOC_D] 78704`). Needs a house number and a street
+  suffix (Avenue, St, Rd...). Works without a model.
+- US Social Security numbers (`219-09-9999`) are coded as `SSN`; numbers that can't be
+  SSNs (area 000, 666 or 9xx, group 00, serial 0000) are left alone.
+- English form fields at the start of a line (`Ticket:`, `Status:`, `Severity:`...) are
+  no longer taken for chat speakers.
+
 ## [0.5.4] - 2026-09-19
 
 ### Fixed
