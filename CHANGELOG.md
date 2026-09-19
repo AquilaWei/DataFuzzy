@@ -3,6 +3,21 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.5.0] - 2026-09-19
+
+### Added
+- Manual marking: select text the detectors missed in a reply, right-click →
+  "標記為敏感資料" → person / organization / location / other. Every reply of that code
+  file is updated at once, and later input is coded automatically. Marking a person also
+  covers their given name on its own; marking a value un-marked before brings back its
+  old code.
+
+### Fixed
+- A one-character name fragment from the model (`明`) is no longer replaced everywhere
+  in the text (it turned `明天` into `[PERSON_B]天`).
+- When the Chinese model tags only a surname (`給[顧]秀`), the given name is included.
+- New messages always scroll into view, also after un-marking or marking.
+
 ## [0.4.1] - 2026-09-19
 
 ### Changed
