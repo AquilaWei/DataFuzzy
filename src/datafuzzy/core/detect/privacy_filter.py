@@ -20,8 +20,11 @@ from .base import Span
 # name leaks it, over-masking only costs readability.
 BACKGROUND_BIAS = -2.0
 # Longer inputs are cut at line breaks into pieces of about this many tokens; the model
-# attends locally (128-token window), so nothing is lost at a line break.
-MAX_TOKENS = 4096
+# attends locally (128-token window), so nothing is lost at a line break. The ONNX graph
+# still computes full attention over a piece, so memory grows with its length squared:
+# on a 17k-character text, 4096-token pieces peaked at 4.6 GB, 1024-token pieces at
+# 1.3 GB (with identical results, and faster).
+MAX_TOKENS = 1024
 
 
 class PrivacyFilterDetector:
