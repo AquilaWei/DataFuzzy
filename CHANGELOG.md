@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.5.4] - 2026-09-19
+
+### Fixed
+- Taiwan street addresses are found by a rule, not only by the model, so the house
+  number never leaks: `地址：桃園市中壢區中央西路二段 76 號 3 樓` → `地址：[LOC_A]`
+  (before, only `桃園市` was coded). The rule needs a road and a house number (`號`),
+  so `環北路與新生路口` or `第 3 號病床` are left alone. Works without a model.
+- Form fields and roles at the start of a line (`申請人：`, `紀錄人：`) are no longer
+  taken for chat speakers, so the word `申請人` stays readable throughout the text.
+
 ## [0.5.3] - 2026-09-19
 
 ### Fixed
