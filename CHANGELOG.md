@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
-## [Unreleased]
+## [0.2.0] - 2026-09-19
 
 ### Added
 - English NER (`dslim/bert-base-NER`, int8 ONNX via ONNX Runtime) for **person, organization
