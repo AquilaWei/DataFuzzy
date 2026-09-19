@@ -227,6 +227,14 @@ def test_other_chat_speakers_follow_a_known_one():
         "[PERSON_A]：明天開會\n[PERSON_B]：好的收到\n備註：記得帶筆電\n10:23\t[PERSON_C]\tOK")
 
 
+def test_form_fields_are_not_speakers():
+    p = Pipeline()
+    p.models["zh"] = FakeNer(["鄭宇翔"])
+    text = "申請人：鄭宇翔\n鄭宇翔：我願意負責\n何俊德：我不同意\n紀錄人：江品萱\n申請人另詢問"
+    assert p.obfuscate(text, Session(label="t"), "zh").text == (
+        "申請人：[PERSON_A]\n[PERSON_A]：我願意負責\n[PERSON_B]：我不同意\n紀錄人：江品萱\n申請人另詢問")
+
+
 def test_speakers_alone_are_not_names():
     p = Pipeline()
     p.models["zh"] = FakeNer([])

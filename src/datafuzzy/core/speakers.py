@@ -15,6 +15,9 @@ from .mapping import COMMON_SURNAMES, COMPOUND_SURNAMES, PERSON
 # Line-start labels that name a role or a field, not a person.
 NOT_SPEAKERS = {"Note", "Notes", "Subject", "From", "To", "Cc", "Re", "Date", "Time",
                 "Customer", "Manager", "Admin", "System", "User", "Me", "Q", "A"}
+# Chinese form fields and roles start with a surname often enough (申請人、紀錄人、
+# 業務員、高血壓) but end in characters a given name almost never does.
+NOT_NAME_ENDINGS = set("人者員號址期間話名別由註旨稱碼額費壓症")
 
 _PREFIX = r"^[ \t]*(?:\[?\d{1,2}:\d{2}(?::\d{2})?\]?[ \t]+)?"  # optional "10:23" / "[10:23]"
 _LABEL = r"([\u3400-\u9fff]{2,4}|[A-Z][a-z]+(?: [A-Z][a-z]+){0,2})"
@@ -24,6 +27,8 @@ SPEAKER_RE = re.compile(_PREFIX + _LABEL + r"(?:[ \t]*[:：]|\t)", re.MULTILINE)
 def _looks_like_name(label: str) -> bool:
     if label[0].isascii():
         return label not in NOT_SPEAKERS
+    if label[-1] in NOT_NAME_ENDINGS:
+        return False
     return label[0] in COMMON_SURNAMES or label[:2] in COMPOUND_SURNAMES
 
 
