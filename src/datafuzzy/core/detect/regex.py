@@ -55,6 +55,23 @@ def _ipv6_ok(candidate: str) -> bool:
     return True
 
 
+_CJK = r"[一-鿿]"
+_NUM = r"(?:[0-9０-９]+|[一二三四五六七八九十百零〇]+)"
+# Place and road names don't contain these ("住在中山路", "寄到台北市"), so the match
+# doesn't swallow the words in front of the address.
+_ROAD_CHAR = r"(?:(?![在於到住從往的和與及跟是為至向由近了])" + _CJK + ")"
+# Taiwan street address: [縣市][區鄉鎮市] road [段][巷][弄] number 號 [樓][室].
+# The house number is required, so "環北路與新生路口" is not an address, and the road
+# name has two or more characters, so "線路 3 號" isn't either.
+TW_ADDRESS = re.compile(
+    rf"(?:{_ROAD_CHAR}{{2}}[縣市])?(?:{_ROAD_CHAR}{{1,3}}?[區鄉鎮市])?"
+    rf"{_ROAD_CHAR}{{2,8}}?(?:路|街|大道)"
+    rf"(?:\s*{_NUM}\s*段)?(?:\s*{_NUM}\s*巷)?(?:\s*{_NUM}\s*弄)?"
+    rf"\s*{_NUM}(?:\s*之\s*{_NUM})?\s*號"
+    rf"(?:\s*{_NUM}\s*樓(?:\s*之\s*{_NUM})?)?(?:\s*[0-9０-９]+\s*室)?"
+)
+
+
 @dataclass(frozen=True)
 class Rule:
     label: str
@@ -91,6 +108,7 @@ RULES: list[Rule] = [
         r"|\(\d{3}\)\s?\d{3}-\d{4}|\d{3}-\d{3}-\d{4}"    # North America
         r")(?!\d)"
     )),
+    Rule("LOC", TW_ADDRESS),
 ]
 
 

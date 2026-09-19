@@ -26,6 +26,11 @@ def labels(text):
         ("密碼：abc12345，請保密", ("SECRET", "abc12345")),
         ("key sk-proj-abcdefghijklmnopqrstuvwx used", ("SECRET", "sk-proj-abcdefghijklmnopqrstuvwx")),
         ("AKIAIOSFODNN7EXAMPLE leaked", ("SECRET", "AKIAIOSFODNN7EXAMPLE")),
+        ("地址：桃園市中壢區中央西路二段 76 號 3 樓", ("LOC", "桃園市中壢區中央西路二段 76 號 3 樓")),
+        ("寄到台北市信義區松仁路100號5樓之2", ("LOC", "台北市信義區松仁路100號5樓之2")),
+        ("戶籍：台中市北屯區崇德路二段 312 巷 15 號", ("LOC", "台中市北屯區崇德路二段 312 巷 15 號")),
+        ("公司位於中山北路三段25號", ("LOC", "中山北路三段25號")),
+        ("住在民生東路5段69巷2弄7號3樓", ("LOC", "民生東路5段69巷2弄7號3樓")),
     ],
 )
 def test_detects(text, expected):
@@ -45,3 +50,9 @@ def test_detects(text, expected):
 def test_rejects(text):
     found = labels(text)
     assert not {l for l, _ in found} & {"TWID", "CARD", "IP"}, found
+
+
+@pytest.mark.parametrize("text", ["沿中壢區環北路往平鎮方向行駛", "線路 3 號故障", "第 3 號病床",
+                                  "我們在忠孝東路口見"])
+def test_not_addresses(text):
+    assert not {l for l, _ in labels(text)} & {"LOC"}
