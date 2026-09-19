@@ -15,6 +15,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       QT_QPA_PLATFORM: offscreen
+      DATAFUZZY_MODELS_DIR: ${{ github.workspace }}/models/installed
+      DATAFUZZY_REQUIRE_MODEL: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -22,6 +24,14 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
       - run: uv sync --frozen
+      - uses: actions/cache@v4
+        with:
+          path: models/installed
+          key: models-${{ hashFiles('src/datafuzzy/models_manifest.json') }}
+      - name: Download NER models (same code path as the app)
+        run: >
+          uv run python -c "from datafuzzy.core.models import *;
+          [download_model(s, models_dir()) for s in load_manifest() if not is_installed(s, models_dir())]"
       - run: uv run pytest --cov=datafuzzy --cov-report=xml
       - uses: codecov/codecov-action@v5
         if: matrix.os == 'ubuntu-latest'
