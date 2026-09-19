@@ -188,3 +188,55 @@ def test_unmarked_name_is_not_coded_again():
     assert p.obfuscate("An Apple a day", session).text == "An Apple a day"
     p.models["en"] = FakeNer(["John Smith"])
     assert p.obfuscate("John Smith likes Apple", session).text == "[PERSON_B] likes Apple"
+
+
+def test_names_use_a_lower_threshold():
+    labels = {"PER": "PERSON", "ORG": "ORG"}
+    spans = decode_entities("Emma Acme", [0, 1], [(0, 4), (5, 9)], ["B-PER", "B-ORG"],
+                            [0.3, 0.3], labels)
+    assert [s.text for s in spans] == ["Emma"]
+
+
+class ShortTextNer:
+    """Finds a name only in text no longer than `limit`, like a model thrown off by context."""
+
+    name = "short"
+
+    def __init__(self, name, limit):
+        self.target, self.limit = name, limit
+
+    def detect(self, text):
+        i = text.find(self.target)
+        if i < 0 or len(text) > self.limit:
+            return []
+        return [Span(i, i + len(self.target), "PERSON", self.target)]
+
+
+def test_chinese_clauses_get_a_second_look():
+    p = Pipeline()
+    p.models["zh"] = ShortTextNer("何文明", 10)
+    result = p.obfuscate("這是何文明的報帳單，請主管簽核後交給會計。", Session(label="t"), "zh")
+    assert result.text == "這是[PERSON_A]的報帳單，請主管簽核後交給會計。"
+
+
+def test_other_chat_speakers_follow_a_known_one():
+    p = Pipeline()
+    p.models["zh"] = FakeNer(["王小明"])
+    chat = "王小明：明天開會\n張明：好的收到\n備註：記得帶筆電\n10:23\t紀文品\tOK"
+    assert p.obfuscate(chat, Session(label="t"), "zh").text == (
+        "[PERSON_A]：明天開會\n[PERSON_B]：好的收到\n備註：記得帶筆電\n10:23\t[PERSON_C]\tOK")
+
+
+def test_speakers_alone_are_not_names():
+    p = Pipeline()
+    p.models["zh"] = FakeNer([])
+    chat = "張明：好的收到\n主管：OK"
+    assert p.obfuscate(chat, Session(label="t"), "zh").text == chat
+
+
+def test_english_role_labels_are_not_speakers():
+    p = Pipeline()
+    p.models["en"] = FakeNer(["Olivia"])
+    chat = "[09:12] Olivia: ready?\n[09:13] Ethan: yes\nNote: call at 10"
+    assert p.obfuscate(chat, Session(label="t"), "en").text == (
+        "[09:12] [PERSON_A]: ready?\n[09:13] [PERSON_B]: yes\nNote: call at 10")
