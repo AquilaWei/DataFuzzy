@@ -266,3 +266,42 @@ def test_lone_surname_takes_the_given_name():
     text = "報帳單交給顧秀。王經理同意"
     p.models["zh"] = SpanNer([Span(5, 6, "PERSON", "顧"), Span(8, 9, "PERSON", "王")])
     assert p.obfuscate(text, Session(label="t"), "zh").text == "報帳單交給[PERSON_A]。[PERSON_B]經理同意"
+
+
+class FindNer:
+    """Finds each (value, label) where it first appears in the text it is given."""
+
+    name = "find"
+
+    def __init__(self, entities):
+        self.entities = entities
+
+    def detect(self, text):
+        return [Span(i, i + len(v), label, v) for v, label in self.entities
+                if (i := text.find(v)) >= 0]
+
+
+def test_org_with_unit_shares_the_org_code():
+    p = Pipeline()
+    p.models["zh"] = FindNer([("羅東博愛醫院 家醫科", "ORG"), ("羅東博愛醫院", "ORG")])
+    text = "轉診來源：羅東博愛醫院 家醫科\n病人在羅東博愛醫院初診"
+    session = Session(label="t")
+    result = p.obfuscate(text, session, "zh")
+    assert result.text == "轉診來源：[ORG_A] 家醫科\n病人在[ORG_A]初診"
+    assert p.restore(result.text, session).text == text
+
+
+def test_org_with_unit_uses_the_code_from_an_earlier_message():
+    p = Pipeline()
+    session = Session(label="t")
+    p.models["zh"] = FindNer([("羅東博愛醫院", "ORG")])
+    p.obfuscate("病人在羅東博愛醫院初診", session, "zh")
+    p.models["zh"] = FindNer([("羅東博愛醫院 家醫科", "ORG")])
+    assert p.obfuscate("轉診來源：羅東博愛醫院 家醫科", session, "zh").text == "轉診來源：[ORG_A] 家醫科"
+
+
+def test_address_is_not_cut_back_to_a_known_place():
+    p = Pipeline()
+    p.models["zh"] = FindNer([("新北市板橋區 文化路 188 號", "LOC"), ("新北市板橋區", "LOC")])
+    text = "地址：新北市板橋區 文化路 188 號\n住在新北市板橋區"
+    assert "188" not in p.obfuscate(text, Session(label="t"), "zh").text
