@@ -65,15 +65,16 @@ def file_server():
     server.httpd.shutdown()
 
 
-def real_model_dir() -> Path | None:
-    """The English model, if available locally (cached by tools/update_manifest.py or installed)."""
+def real_model_dir(lang: str = "en") -> Path | None:
+    """The model for `lang`, if available locally (cached by tools/update_manifest.py or
+    installed)."""
     from datafuzzy.core.models import is_installed, load_manifest, models_dir
 
-    candidates = [os.environ.get("DATAFUZZY_TEST_MODEL_DIR"), REPO_ROOT / "models/cache/en-bert-ner"]
-    for c in candidates:
+    spec = next(s for s in load_manifest() if s.lang == lang)
+    override = os.environ.get("DATAFUZZY_TEST_MODEL_DIR") if lang == "en" else None
+    for c in (override, REPO_ROOT / "models/cache" / spec.id):
         if c and (Path(c) / "model.onnx").exists():
             return Path(c)
-    spec = next(s for s in load_manifest() if s.lang == "en")
     if is_installed(spec, models_dir()):
         return models_dir() / spec.id
     return None

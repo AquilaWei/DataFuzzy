@@ -13,11 +13,11 @@ from .base import Span
 
 MAX_TOKENS = 512
 STRIDE = 64
-# Characters that join parts of one name: Wei-Chuang, O'Brien, 阿里·巴巴.
-# Recall over precision: a token is an entity when its best entity type (B-X + I-X)
+# Recall over precision: a token is an entity when its best entity type (B-X + I-X ...)
 # reaches this probability, even if "O" is slightly higher. Missing a name leaks it;
 # over-masking only costs readability.
 ENTITY_THRESHOLD = 0.4
+# Characters that join parts of one name: Wei-Chuang, O'Brien, 阿里·巴巴.
 JOINERS = {"", "-", "\u2010", "'", "\u2019", "\u00b7", "\u30fb"}
 
 
@@ -35,11 +35,11 @@ def decode_entities(
     labels: dict[str, str],
     min_score: float = ENTITY_THRESHOLD,
 ) -> list[Span]:
-    """Turn per-token BIO tags into character spans.
+    """Turn per-token BIO / BIOES tags into character spans.
 
     Each word takes the tag of its first sub-token; consecutive words of the same entity
-    type are merged (a stray I- after O also starts an entity). Only types present in
-    `labels` are kept, renamed to our label names.
+    type are merged (a stray I- after O also starts an entity). S- counts as B- and E- as
+    I-. Only types present in `labels` are kept, renamed to our label names.
     """
     words: list[list] = []  # [start, end, tag, score]
     seen: dict[int, int] = {}
@@ -64,6 +64,7 @@ def decode_entities(
 
     for start, end, tag, score in words:
         prefix, _, kind = tag.partition("-")
+        prefix = {"S": "B", "E": "I"}.get(prefix, prefix)
         if prefix == "I" and current and current[0] == kind:
             current[2] = end
             current[3].append(score)
@@ -102,7 +103,7 @@ class NerDetector:
         self._tokenizer = None
         self._id2tag: dict[int, str] = {}
         self._type_ids: dict[str, list[int]] = {}  # entity type ("PER", "" for O) -> tag ids
-        self._bio_ids: dict[str, tuple[int | None, int | None]] = {}
+        self._begin_ids: dict[str, list[int]] = {}  # B-/S- tag ids per entity type
         self._cls = self._sep = 0
 
     @property
@@ -121,8 +122,10 @@ class NerDetector:
             self._type_ids = {}
             for i, tag in self._id2tag.items():
                 self._type_ids.setdefault(tag.partition("-")[2], []).append(i)
-            ids = {tag: i for i, tag in self._id2tag.items()}
-            self._bio_ids = {k: (ids.get(f"B-{k}"), ids.get(f"I-{k}")) for k in self._type_ids if k}
+            self._begin_ids = {}
+            for i, tag in self._id2tag.items():
+                if tag[:2] in ("B-", "S-"):
+                    self._begin_ids.setdefault(tag[2:], []).append(i)
             tok = Tokenizer.from_file(str(self.model_dir / "tokenizer.json"))
             tok.no_padding()
             tok.no_truncation()  # we window the full encoding ourselves
@@ -136,7 +139,7 @@ class NerDetector:
             self._sep = tok.token_to_id("[SEP]")
 
     def _tag(self, probs: np.ndarray) -> tuple[list[str], list[float]]:
-        """Per token: (BIO tag, probability of its entity type)."""
+        """Per token: (B-/I- tag, probability of its entity type)."""
         tags: list[str] = []
         scores: list[float] = []
         for row in probs:
@@ -145,8 +148,8 @@ class NerDetector:
                 if kind and (p := float(row[ids].sum())) > best_p:
                     best_type, best_p = kind, p
             if best_p >= self.min_score:
-                b, i = self._bio_ids[best_type]
-                tags.append(("B-" if i is None or row[b] >= row[i] else "I-") + best_type)
+                begin = float(row[self._begin_ids.get(best_type, [])].sum())
+                tags.append(("B-" if begin >= best_p - begin else "I-") + best_type)
                 scores.append(best_p)
             else:
                 tags.append("O")
