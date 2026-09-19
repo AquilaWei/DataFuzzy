@@ -16,9 +16,23 @@ TITLES = {"Mr", "Mrs", "Ms", "Miss", "Dr", "Prof", "Sir", "Madam"}
 NAME_PART_RE = re.compile(r"[A-Z][A-Za-z'’\-·・]+")
 
 
+CJK_NAME_RE = re.compile(r"[\u3400-\u9fff]{3,4}")
+COMPOUND_SURNAMES = {
+    "歐陽", "司馬", "諸葛", "上官", "東方", "皇甫", "尉遲", "公孫", "慕容", "長孫",
+    "宇文", "司徒", "夏侯", "軒轅", "令狐", "端木", "西門", "南宮", "獨孤", "澹臺",
+    "张简", "欧阳", "诸葛", "东方", "公孙", "长孙", "轩辕", "独孤", "張簡", "范姜",
+}
+
+
 def name_parts(name: str) -> list[str]:
-    """Parts of a multi-word name that can stand for the whole person on their own:
-    "John Smith" -> ["John", "Smith"]. Single words and CJK names have none."""
+    """Parts of a name that can stand for the whole person on their own:
+    "John Smith" -> ["John", "Smith"], "王小明" -> ["小明"], "歐陽娜娜" -> ["娜娜"].
+    A Chinese surname alone is too short to link safely; two-character names have none."""
+    if CJK_NAME_RE.fullmatch(name):
+        surname = 2 if len(name) == 4 else 1
+        if len(name) == 4 and name[:2] not in COMPOUND_SURNAMES:
+            return []
+        return [name[surname:]]
     words = name.split()
     if len(words) < 2:
         return []

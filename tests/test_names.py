@@ -95,7 +95,10 @@ def test_name_parts():
     assert name_parts("Dr John Smith") == ["John", "Smith"]
     assert name_parts("Mary-Jane O'Neil") == ["Mary-Jane", "O'Neil"]
     assert name_parts("Maria") == []
-    assert name_parts("王小明") == []
+    assert name_parts("王小明") == ["小明"]
+    assert name_parts("歐陽娜娜") == ["娜娜"]
+    assert name_parts("張三") == []
+    assert name_parts("鴻海精密") == []  # four characters without a compound surname
 
 
 def test_short_name_reuses_full_name_code():
@@ -142,3 +145,35 @@ def test_linking_only_applies_to_people():
     session = Session(label="t")
     assert session.code_for("Acme Corp", "ORG") == "[ORG_A]"
     assert session.code_for("Acme", "ORG") == "[ORG_B]"
+
+
+def test_chinese_given_name_reuses_full_name_code():
+    p = Pipeline()
+    p.models["zh"] = FakeNer(["王小明"])
+    session = Session(label="t")
+    result = p.obfuscate("王小明明天開會，會後小明再寄信。", session, "zh")
+    assert result.text == "[PERSON_A]明天開會，會後[PERSON_A]再寄信。"
+    assert p.restore("[PERSON_A]到了", session).text == "王小明到了"
+
+
+def test_auto_mode_runs_both_models_on_mixed_text():
+    p = Pipeline()
+    p.models["zh"] = FakeNer(["王小明"])
+    p.models["en"] = FakeNer(["John Smith"])
+    result = p.obfuscate("請 John Smith 跟王小明開會", Session(label="t"))
+    assert result.text == "請 [PERSON_A] 跟[PERSON_B]開會"
+
+
+def test_explicit_language_runs_only_that_model():
+    p = Pipeline()
+    p.models["zh"] = FakeNer(["王小明"])
+    p.models["en"] = FakeNer(["John Smith"])
+    assert p.obfuscate("請 John Smith 跟王小明開會", Session(label="t"), "zh").text \
+        == "請 John Smith 跟[PERSON_A]開會"
+
+
+def test_non_chinese_model_spans_with_chinese_are_dropped():
+    p = Pipeline()
+    p.models["en"] = FakeNer(["王"])  # an English model half-recognising a Chinese name
+    assert p.obfuscate("Meeting with 王小明 today", Session(label="t")).text \
+        == "Meeting with 王小明 today"
