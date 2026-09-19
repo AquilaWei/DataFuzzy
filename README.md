@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml/badge.svg)](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/AquilaWei/DataFuzzy/graph/badge.svg)](https://codecov.io/gh/AquilaWei/DataFuzzy)
-![Version](https://img.shields.io/badge/version-0.5.5-blue)
+![Version](https://img.shields.io/badge/version-0.5.6-blue)
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
