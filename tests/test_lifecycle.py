@@ -68,3 +68,18 @@ def test_kill9_leftovers_swept_on_next_start(tmp_path):
     proc2, _ = run_app(tmp_path, "quit")  # ...but the next launch sweeps it
     assert proc2.wait(timeout=10) == 0
     assert not session_dir.exists()
+
+
+def test_version_and_self_test_flags(tmp_path):
+    """The packaged builds are smoke-tested with these flags in the release workflow."""
+    from datafuzzy import __version__
+
+    env = {**os.environ, "DATAFUZZY_MODELS_DIR": str(tmp_path), "DATAFUZZY_REQUIRE_MODEL": ""}
+
+    def run(flag):
+        return subprocess.run([sys.executable, "-m", "datafuzzy", flag], env=env,
+                              capture_output=True, text=True, check=True).stdout
+
+    assert run("--version").strip() == f"DataFuzzy {__version__}"
+    out = run("--self-test")
+    assert "self-test OK" in out and "[EMAIL_A]" in out

@@ -26,6 +26,7 @@ from ..core.mapping import CODE_RE, apply_codes, recommend, revert_code
 from ..core.models import ModelSpec
 from ..core.pipeline import ObfuscateResult, Pipeline
 from ..core.store import SessionStore
+from .about import AboutDialog
 from .chat_view import ChatView
 from .model_manager import LANG_NAMES, ModelManager
 from .session_panel import SessionPanel
@@ -51,6 +52,10 @@ class MainWindow(QMainWindow):
         models_action = QAction("模型管理…", self)
         models_action.triggered.connect(self.open_model_manager)
         self.menuBar().addMenu("模型").addAction(models_action)
+        about_action = QAction("關於 DataFuzzy", self)
+        about_action.setMenuRole(QAction.MenuRole.AboutRole)  # macOS: app menu
+        about_action.triggered.connect(lambda: AboutDialog(self).exec())
+        self.menuBar().addMenu("說明").addAction(about_action)
 
         # Top bar
         self.obfuscate_btn = QPushButton("模糊化")

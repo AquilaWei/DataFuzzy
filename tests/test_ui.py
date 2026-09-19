@@ -219,3 +219,23 @@ def test_mark_rejects_selection_with_a_code(qtbot, tmp_path):
     win.mark(0, "是 [EMAIL_A]", "OTHER")
     assert win.chat.reply_text(0) == "顧秀的信箱是 [EMAIL_A]"
     assert "選取範圍不能包含代號" in win.chat.toPlainText()
+
+
+def test_about_dialog(qtbot, tmp_path, monkeypatch):
+    from datafuzzy import __version__
+    from datafuzzy.ui import about
+
+    win, _ = make_window(qtbot, tmp_path)
+    action = next(a for m in win.menuBar().actions() if m.text() == "說明"
+                  for a in m.menu().actions())
+    assert action.text() == "關於 DataFuzzy"
+
+    dialog = about.AboutDialog(win)
+    qtbot.addWidget(dialog)
+    assert __version__ in dialog.info.text()
+    assert dialog.licenses.toPlainText() == about.NO_LICENSES  # running from source
+
+    monkeypatch.setattr(about, "third_party_licenses", lambda: "numpy 2.0\nBSD-3-Clause")
+    dialog = about.AboutDialog(win)
+    qtbot.addWidget(dialog)
+    assert "BSD-3-Clause" in dialog.licenses.toPlainText()
