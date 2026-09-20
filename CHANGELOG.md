@@ -3,6 +3,34 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.6.0] - 2026-09-19
+
+Verified by hand on an Apple Silicon Mac. Since 0.5.1, personal data is found by a model
+made for it, only personal data is coded, and everything below was released as the test
+builds 0.5.2–0.5.8.
+
+### Added
+- Scope "只處理人名": only people are coded; everything else stays readable.
+- Dates (including dates of birth), record, policy, account and passport numbers.
+- Addresses are found by rule in Taiwan and the US, so house numbers never leak, and US
+  Social Security numbers are coded.
+- Installers for macOS (Apple Silicon `.dmg`) and Linux (x86_64 `AppImage`), built,
+  smoke-tested with the real models and published by GitHub Actions on a `vX.Y.Z` tag.
+- Help → About DataFuzzy with the licenses of every bundled package, an app icon, and
+  `datafuzzy --version` / `--self-test`.
+
+### Changed
+- Personal data is found by [`openai/privacy-filter`](https://huggingface.co/openai/privacy-filter)
+  instead of the English NER model; the CKIP Chinese model now finds names only.
+  Companies, hospitals, places, diseases and departments stay readable.
+- Long text is cut into 1024-token pieces, which keeps memory flat (~1.4 GB) however
+  long the document is.
+
+### Fixed
+- Form-like text, chat logs and headings: line-by-line detection, form labels are not
+  speakers, departments and disease names are not coded, an organization and its
+  department share one code.
+
 ## [0.5.8] - 2026-09-19
 
 ### Fixed
