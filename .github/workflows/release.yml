@@ -23,13 +23,13 @@ jobs:
             script: packaging/build_appimage.sh
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
       - name: Install Qt runtime libraries (and appimagetool's desktop file check)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3 libxcb-cursor0 desktop-file-utils
       - run: uv sync --frozen
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: models/installed
           key: models-${{ hashFiles('src/datafuzzy/models_manifest.json') }}
@@ -49,7 +49,7 @@ jobs:
           else
             APPIMAGE_EXTRACT_AND_RUN=1 dist/*.AppImage --self-test
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: installer-${{ matrix.os }}
           path: |
@@ -64,8 +64,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
