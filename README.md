@@ -183,7 +183,7 @@ packaging/build_dmg.sh           # 打包 Mac .dmg（需在 macOS 上執行）�
 
 ## 📄 授權
 
-本專案採用 [GPL-3.0](LICENSE)。
+Copyright (C) 2026 AquilaWei，採用 [GPL-3.0-or-later](LICENSE)。
 
 | 模型 | 授權 | 下載來源（ONNX） |
 |---|---|---|

@@ -233,6 +233,7 @@ def test_about_dialog(qtbot, tmp_path, monkeypatch):
     dialog = about.AboutDialog(win)
     qtbot.addWidget(dialog)
     assert __version__ in dialog.info.text()
+    assert "Copyright (C) 2026 AquilaWei" in dialog.info.text()
     assert dialog.licenses.toPlainText() == about.NO_LICENSES  # running from source
 
     monkeypatch.setattr(about, "third_party_licenses", lambda: "numpy 2.0\nBSD-3-Clause")
