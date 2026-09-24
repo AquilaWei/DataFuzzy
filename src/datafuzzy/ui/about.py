@@ -26,7 +26,7 @@ class AboutDialog(QDialog):
         self.info = QLabel(
             f"<h3>DataFuzzy {__version__}</h3>"
             "<p>在本機把文字中的機敏資訊換成代號，之後再換回來。</p>"
-            f"<p>GPL-3.0-or-later · <a href='{REPO}'>{REPO}</a></p>"
+            f"<p>Copyright (C) 2026 AquilaWei · GPL-3.0-or-later · <a href='{REPO}'>{REPO}</a></p>"
             "<p>NER 模型不隨程式散布，由使用者在「模型管理」下載，各自適用其授權。</p>"
             "<p><b>第三方授權</b></p>")
         self.info.setOpenExternalLinks(True)
