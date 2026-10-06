@@ -67,7 +67,9 @@ def main() -> int:
     parts = [
         "DataFuzzy is licensed under GPL-3.0-or-later. It bundles the following packages,\n"
         "each under its own license. NER models are not bundled; they are downloaded by the\n"
-        "user and carry their own licenses (see the model manager).\n",
+        "user and carry their own licenses (see the model manager).\n\n"
+        "given_names.txt lists common US given names from the Social Security\n"
+        "Administration's baby names data (public domain, https://www.ssa.gov/oact/babynames/).\n",
     ]
     for p in pkgs:
         license_ = p["License"]

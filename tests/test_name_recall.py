@@ -17,7 +17,7 @@ pytestmark = pytest.mark.skipif(PIPELINE is None, reason="models not available")
 
 # English: a lone first name that is also a place ("assigned to Chris by Jordan", "loop in
 # Olivia") is sometimes missed without more context (2 of 47 here).
-MIN_RECALL = {"zh": 0.97, "en": 0.95}
+MIN_RECALL = {"zh": 0.97, "en": 0.95, "mixed": 0.97}
 
 ZH = [
     ("王小明明天要跟陳美玲去開會。", ["王小明", "陳美玲"]),
@@ -85,6 +85,57 @@ EN = [
     ("My neighbour Richard Feynman lent me his ladder.", ["Richard Feynman"]),
 ]
 
+# Chinese with English names, often written without spaces between the two.
+MIXED = [
+    ("請 John Smith 跟王小明明天開會。", ["John Smith", "王小明"]),
+    ("我昨天跟Kevin吃飯，他說Amy下週要離職。", ["Kevin", "Amy"]),
+    ("Hi Sarah，報告我已經寄給Tom了。", ["Sarah", "Tom"]),
+    ("這個case我跟Jason確認過了，PM是Emily Chen。", ["Jason", "Emily Chen"]),
+    ("Michael說明天的meeting改到三點。", ["Michael"]),
+    ("麻煩幫我約David Wang和陳美玲下週二。", ["David Wang", "陳美玲"]),
+    ("剛剛Jessica打電話來，說Peter的報價有問題。", ["Jessica", "Peter"]),
+    ("我們team的lead是Alex，designer是Vivian。", ["Alex", "Vivian"]),
+    ("Andy Lau跟周杰倫一起上節目。", ["Andy Lau", "周杰倫"]),
+    ("請cc給Grace跟Brian，謝謝。", ["Grace", "Brian"]),
+    ("客戶Mr. Johnson反映說deploy之後登不進去。", ["Johnson"]),
+    ("老闆Tony說這週要把PR merge掉。", ["Tony"]),
+    ("Wei-Chuang Huang 是我們的 contact window。", ["Wei-Chuang Huang"]),
+    ("我把檔案share給了Chloe和Ryan。", ["Chloe", "Ryan"]),
+    ("Eric：明天幾點？\nIvy：早上十點\nEric：OK", ["Eric", "Ivy"]),
+    ("跟 Lisa 說一下，Mark 的假已經批了。", ["Lisa", "Mark"]),
+    ("今天的stand-up由Kelly主持，Sam跟Joe請假。", ["Kelly", "Sam", "Joe"]),
+    ("我上禮拜跟 Tsai Jung-Chen 見面。", ["Tsai Jung-Chen"]),
+    ("小陳說Jenny已經把invoice寄出去了。", ["Jenny"]),
+    ("Jason說好", ["Jason"]),
+    ("這是Annie的電腦", ["Annie"]),
+    ("Zoe今天請病假", ["Zoe"]),
+    ("麻煩Steven幫忙review一下", ["Steven"]),
+    ("Cindy跟Frank都同意了", ["Cindy", "Frank"]),
+    ("感謝Howard、Irene跟Kenny的協助", ["Howard", "Irene", "Kenny"]),
+    ("我已經跟HR的Wendy講了", ["Wendy"]),
+    ("George Chang是新來的工程師", ["George Chang"]),
+    ("下週一Nancy會來辦公室", ["Nancy"]),
+    ("Ruby跟Crystal是同一組的。", ["Ruby", "Crystal"]),
+    ("請問Candy在嗎？我是業務部的Sunny。", ["Candy", "Sunny"]),
+    ("林小姐的英文名字是Vanessa。", ["Vanessa"]),
+    ("你跟Leo說一聲，Daniel那邊我來處理。", ["Leo", "Daniel"]),
+    ("Brandon和Tiffany下個月結婚。", ["Brandon", "Tiffany"]),
+    ("這份proposal是Ken Liu寫的。", ["Ken Liu"]),
+    ("[10:01] Jacky：到了嗎\n[10:02] 王大明：快到了", ["Jacky", "王大明"]),
+    ("我們邀請了Prof. Chen-Wei Lin來演講。", ["Chen-Wei Lin"]),
+    ("Grace昨天說她要請假，Kevin Huang會代班。", ["Grace", "Kevin Huang"]),
+    ("Mandy的email我再寄給你。", ["Mandy"]),
+]
+
+MIXED_NO_NAMES = [
+    "我用Python寫了一個script，跑在AWS上。",
+    "iPhone跟MacBook都壞了。",
+    "這個PR merge之後要重新deploy。",
+    "今天的stand-up改到下午。",
+    "我們用Slack跟Notion溝通，資料放Google Drive。",
+    "請在May之前把Q3 report交出來。",
+]
+
 # Public figures in a public context are not personal data: the privacy filter leaves them
 # readable in English (the Chinese model codes them anyway).
 PUBLIC_FIGURES = [
@@ -130,9 +181,9 @@ def missed(pipe, cases):
     return out
 
 
-@pytest.mark.parametrize("lang", ["zh", "en"])
+@pytest.mark.parametrize("lang", ["zh", "en", "mixed"])
 def test_name_recall(pipe, lang):
-    cases = {"zh": ZH, "en": EN}[lang]
+    cases = {"zh": ZH, "en": EN, "mixed": MIXED}[lang]
     total = sum(len(names) for _, names in cases)
     misses = missed(pipe, cases)
     assert 1 - len(misses) / total >= MIN_RECALL[lang], misses
@@ -155,6 +206,6 @@ def test_chat_speakers(pipe):
 
 
 def test_no_names_no_person_codes(pipe):
-    for text in NO_NAMES:
+    for text in NO_NAMES + MIXED_NO_NAMES:
         spans = pipe.obfuscate(text, Session(label="t")).spans
         assert not [s.text for s in spans if s.label == "PERSON"], text

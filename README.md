@@ -22,13 +22,13 @@
 - 🧠 **個資辨識** — 本機模型（[OpenAI Privacy Filter](https://huggingface.co/openai/privacy-filter)）辨識人名、地址、日期、帳號與各種編號；同一個值在全文與後續輸入都換成同一代號
 - 🏢 **只遮個人資料** — 公司、醫院、地名、疾病、藥名、部門都保留原字，文字仍然讀得懂
 - 👤 **只處理人名模式** — 範圍選「只處理人名」時，只替換人名，其他都保留
-- 🌏 **中英文** — 中文人名另用 CKIP 中文模型；中英混合的文字兩個模型一起用；聊天紀錄（`張明：好的`、LINE 匯出）的說話者也會一併代號化
+- 🌏 **中英文** — 中文人名另用 CKIP 中文模型；中英混合的文字兩個模型一起用，中文夾英文名（`跟Jason說`、`這是Annie的電腦`）沒空格也抓得到；聊天紀錄（`張明：好的`、LINE 匯出）的說話者也會一併代號化
 
 目前可偵測：
 
 | 類別 | 代號 | 範例 |
 |---|---|---|
-| 人名 | `PERSON` | `王小明`、`歐陽娜娜`、`John Smith`、`Wei-Chuang Huang`（需安裝模型） |
+| 人名 | `PERSON` | `王小明`、`歐陽娜娜`、`John Smith`、`Wei-Chuang Huang`（需安裝模型）；中文裡的常見英文名 `Kevin`、`Emily Chen`（不需模型） |
 | 日期（含生日） | `DATE` | `1968/03/14`、`7 May 1987`、`October 12, 2026`（需安裝模型） |
 | 地址 | `LOC` | `桃園市中壢區中央西路二段 76 號 3 樓`、`742 Maple Grove Avenue, Apt 3B, Austin, TX 78704`、`18 Birchwood Lane, Leeds LS6 2AB` |
 | Email | `EMAIL` | `bob@corp.io` |
@@ -114,6 +114,7 @@ uv run datafuzzy
 
 - **公眾人物不遮**：英文文字中，新聞語境裡的名人（`Apple hired Steve Jobs`）視為公開資訊而保留；同名的一般人（`our intern Tim Cook`）會依上下文判斷替換，但非常有名的名字偶爾仍會被當成名人（中文模型則一律替換）
 - 單獨出現、同時也是地名的英文名字（`assigned to Chris by Jordan`）偶爾會漏掉
+- 中文裡的英文名另外用常見英文名名單比對：名單中的字（`Grace`、`Mark`、`Ruby`）夾在中文裡一律當人名；名單外的英文名（`Xochitl`）只靠模型。純英文的句子不使用名單
 - 公司、醫院、地名不替換；若需要遮，選取後按右鍵手動標記
 - 單獨出現的名或姓會沿用全名的代號（`John Smith`、`John` → `[PERSON_A]`；`王小明`、`小明` → `[PERSON_A]`），還原時一律還原成全名；一個名字一旦在代號檔中連到某人，之後出現同名的另一人也不會改變
 - 中文只連結「名」，單獨的姓（`王先生`）不連結；中文模型以繁體中文訓練，簡體中文效果可能較差
@@ -125,7 +126,7 @@ uv run datafuzzy
 ```mermaid
 flowchart LR
     A[輸入文字] --> B{語言偵測}
-    B --> C[規則偵測器<br/>regex]
+    B --> C[規則偵測器<br/>regex + 英文名名單]
     B --> D[個資偵測 Privacy Filter<br/>+ 中文人名 NER<br/>ONNX Runtime]
     C --> E[合併重疊區段]
     D --> E
@@ -143,13 +144,14 @@ flowchart LR
 ```
 src/datafuzzy/
 ├── core/            # 與 UI 無關的邏輯
-│   ├── detect/      # 偵測器：regex、Privacy Filter、NER（ONNX）
+│   ├── detect/      # 偵測器：regex、英文名名單、Privacy Filter、NER（ONNX）
 │   ├── models/      # 模型清單、下載、驗證
 │   ├── mapping.py   # 代號產生與還原
 │   ├── store.py     # 加密暫存與清除
 │   └── pipeline.py  # 串接偵測與代號
 ├── ui/              # PySide6 介面
-└── models_manifest.json  # 可下載的模型（網址、大小、SHA-256）
+├── models_manifest.json  # 可下載的模型（網址、大小、SHA-256）
+└── given_names.txt       # 常見英文名（tools/update_names.py 產生）
 packaging/           # PyInstaller 設定、.dmg / AppImage 打包、第三方授權清單
 ```
 
@@ -170,6 +172,7 @@ uv sync                  # 安裝含開發工具的環境
 uv run pytest            # 執行測試
 tools/test_arm64.sh      # 在 arm64 + 8GB 限制的容器中測試（模擬 Apple Silicon）
 uv run tools/update_manifest.py  # 更新模型版本後重新產生 models_manifest.json
+uv run tools/update_names.py     # 重新產生英文名名單 given_names.txt
 packaging/build_appimage.sh      # 打包 Linux AppImage → dist/
 packaging/build_dmg.sh           # 打包 Mac .dmg（需在 macOS 上執行）→ dist/
 ```
@@ -190,4 +193,4 @@ Copyright (C) 2026 AquilaWei，採用 [GPL-3.0-or-later](LICENSE)。
 | [`openai/privacy-filter`](https://huggingface.co/openai/privacy-filter) | Apache-2.0 | 同左（官方 q4 ONNX） |
 | [`ckiplab/bert-base-chinese-ner`](https://huggingface.co/ckiplab/bert-base-chinese-ner) | GPL-3.0，© CKIP Lab | [`Xenova/bert-base-chinese-ner`](https://huggingface.co/Xenova/bert-base-chinese-ner)（int8） |
 
-模型不隨程式散布，由使用者在 App 內自行下載。安裝檔內附的第三方套件授權（Qt 以 LGPL-3.0 動態連結）可在 App 的 **說明 → 關於 DataFuzzy** 查看。
+模型不隨程式散布，由使用者在 App 內自行下載。英文名名單取自美國社會安全局（SSA）的[新生兒名字資料](https://www.ssa.gov/oact/babynames/)（公有領域）。安裝檔內附的第三方套件授權（Qt 以 LGPL-3.0 動態連結）可在 App 的 **說明 → 關於 DataFuzzy** 查看。

@@ -29,6 +29,30 @@ def has_cjk(text: str) -> bool:
     return any(_is_cjk(c) for c in text)
 
 
+# A Latin letter touching a CJK character or fullwidth form, in either order.
+_SCRIPT_JOIN = re.compile(r"(?<=[　-〿㐀-鿿豈-﫿＀-￯])(?=[A-Za-z])"
+                          r"|(?<=[A-Za-z])(?=[　-〿㐀-鿿豈-﫿＀-￯])")
+
+
+def space_scripts(text: str) -> tuple[str, list[int]]:
+    """`text` with a space wherever Chinese and Latin letters touch ("跟Jason說" ->
+    "跟 Jason 說"), and for each position of the result its position in `text` (one more
+    entry for the end). The privacy filter misses most English names written without
+    the spaces."""
+    out: list[str] = []
+    index: list[int] = []
+    last = 0
+    for m in _SCRIPT_JOIN.finditer(text):
+        out.append(text[last:m.start()])
+        index += range(last, m.start())
+        out.append(" ")
+        index.append(m.start())  # the inserted space stands for the next character
+        last = m.start()
+    out.append(text[last:])
+    index += range(last, len(text) + 1)
+    return "".join(out), index
+
+
 def languages_in(text: str) -> list[Lang]:
     """Every language with text worth running a model on: Chinese for any CJK character,
     English for any run of two or more ASCII letters (a name like "Li" counts)."""

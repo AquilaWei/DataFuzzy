@@ -8,9 +8,10 @@ from pathlib import Path
 from typing import Literal
 
 from .detect import Detector, RegexDetector, Span, resolve_overlaps
+from .detect.names import GivenNameDetector
 from .detect.ner import NerDetector
 from .detect.privacy_filter import PrivacyFilterDetector
-from .lang import Lang, detect_language, languages_in
+from .lang import Lang, detect_language, languages_in, space_scripts
 from .mapping import PERSON, RestoreResult, Session, find_all, name_aliases
 from .models import ModelSpec, is_installed
 from .speakers import speaker_spans
@@ -75,9 +76,24 @@ def latin_parts(text: str, spans: list[Span]) -> list[Span]:
     return out
 
 
+def pii_spans(model: Detector, text: str) -> list[Span]:
+    """Privacy filter spans, found in `text` spaced at Chinese/Latin boundaries
+    ("跟Jason說" is read as "跟 Jason 說") and mapped back to `text`."""
+    spaced, index = space_scripts(text)
+    if spaced == text:
+        return model.detect(text)
+    out: list[Span] = []
+    for s in model.detect(spaced):
+        start, end = index[s.start], index[s.end]
+        out.append(Span(start, end, s.label, text[start:end], s.score))
+    return out
+
+
 class Pipeline:
     def __init__(self) -> None:
         self.rules = RegexDetector()
+        # English given names in Chinese text, which the privacy filter often misses.
+        self.names = GivenNameDetector()
         # Personal data in any language (openai/privacy-filter), once installed.
         self.pii: Detector | None = None
         # People in one language the privacy filter reads poorly (Chinese), once installed.
@@ -107,11 +123,16 @@ class Pipeline:
         # Auto mode runs every language's model on mixed text ("請 John Smith 跟王小明...").
         langs = languages_in(text) if lang == "auto" else [resolved]
         spans = self.rules.detect(text)
+        if "en" in langs:
+            spans += self.names.detect(text)
         if self.pii:
-            spans += latin_parts(text, self.pii.detect(text))
+            spans += latin_parts(text, pii_spans(self.pii, text))
         for x in langs:
             if model := self.models.get(x):
-                spans += line_entities(model, text)
+                found = line_entities(model, text)
+                if x == "zh":  # it reads Latin words poorly ("stand-up" as a person)
+                    found = [s for s in found if CJK_RUN.search(s.text)]
+                spans += found
         model_used = self.pii is not None and all(x in self.models for x in langs if x != "en")
         spans = [s for s in spans if s.text not in ignore]
         # Names are what models miss most: once a value is found anywhere in this text,

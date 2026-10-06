@@ -309,3 +309,47 @@ def test_names_scope_leaves_codes_of_other_kinds_alone():
     p.obfuscate("Emma Stone, emma@x.com", session, "en")
     result = p.obfuscate("Emma Stone, emma@x.com", session, "en", scope="names")
     assert result.text == "[PERSON_A], emma@x.com"
+
+
+def test_english_given_names_in_chinese_text_are_coded_without_a_model():
+    result = Pipeline().obfuscate("Jason說好，這是Annie的電腦", Session(label="t"))
+    assert result.text == "[PERSON_A]說好，這是[PERSON_B]的電腦"
+
+
+def test_given_name_list_skips_english_only_lines():
+    text = "Grace period ends Friday, ask Mark.\n請確認"
+    assert Pipeline().obfuscate(text, Session(label="t")).text == text
+
+
+def test_given_name_list_skips_capitalized_words_that_are_not_names():
+    text = "我用Python寫script，跑在AWS跟Slack上"
+    assert Pipeline().obfuscate(text, Session(label="t")).text == text
+
+
+def test_given_name_takes_the_surname_after_it():
+    assert Pipeline().obfuscate("PM是Emily Chen。", Session(label="t")).text == "PM是[PERSON_A]。"
+
+
+def test_given_name_leaves_a_greeting_before_it():
+    assert Pipeline().obfuscate("Hi Sarah，好久不見", Session(label="t")).text == "Hi [PERSON_A]，好久不見"
+
+
+def test_given_name_list_skips_names_that_are_usually_words():
+    text = "June跟May的報告"
+    assert Pipeline().obfuscate(text, Session(label="t")).text == text
+
+
+def test_given_name_list_is_not_used_when_chinese_is_chosen():
+    assert Pipeline().obfuscate("Jason說好", Session(label="t"), "zh").text == "Jason說好"
+
+
+def test_privacy_filter_reads_chinese_and_latin_with_spaces_between():
+    p = Pipeline()
+    p.pii = FindNer([("Zyx Qor 說", "PERSON")])  # found only in the spaced text
+    assert p.obfuscate("請Zyx Qor說好", Session(label="t")).text == "請[PERSON_A]說好"
+
+
+def test_chinese_model_latin_words_are_dropped():
+    p = Pipeline()
+    p.models["zh"] = FindNer([("王小明", "PERSON"), ("stand-up", "PERSON")])
+    assert p.obfuscate("王小明主持stand-up", Session(label="t")).text == "[PERSON_A]主持stand-up"

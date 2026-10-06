@@ -17,6 +17,7 @@ a = Analysis(
     datas=[
         (str(PKG / "models_manifest.json"), "datafuzzy"),
         (str(PKG / "icon.png"), "datafuzzy"),
+        (str(PKG / "given_names.txt"), "datafuzzy"),
         (str(ROOT / "LICENSE"), "datafuzzy"),
         (str(ROOT / "build" / "THIRD_PARTY_LICENSES.txt"), "datafuzzy"),
         *copy_metadata("datafuzzy"),  # __version__ comes from package metadata
