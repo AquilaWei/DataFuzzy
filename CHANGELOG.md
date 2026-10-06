@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.6.1] - 2026-10-05
+
+Test build of English names in Chinese text, for hands-on checks before 0.7.0.
+
+### Added
+- English names written inside Chinese text are found, with or without spaces around
+  them (`跟Jason說`, `這是Annie的電腦`, `PM是Emily Chen`). Common English given names
+  (from US Social Security baby-name data, public domain) are coded in Chinese text even
+  without a model; English-only text is unaffected.
+
+### Fixed
+- English words in Chinese text (`stand-up`) are no longer taken for Chinese names.
+
 ## [0.6.0] - 2026-09-19
 
 Verified by hand on an Apple Silicon Mac. Since 0.5.1, personal data is found by a model
