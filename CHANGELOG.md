@@ -3,6 +3,25 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.6.2] - 2026-10-06
+
+Second test build of English names in Chinese text, for hands-on checks before 0.7.0.
+
+### Added
+- New model in the model manager: **中英夾雜人名** (XLM-RoBERTa large, about 578 MB). It
+  reads the context, so English names in Chinese text are found even when they are
+  lowercase, romanized or not common English names (`跟jason說`, `Wei-Ting說好`,
+  `Hsiao-Wen有來嗎`), while `June跟May的報告` stays readable. Optional: install it if
+  you work with Chinese text that has English names in it.
+- English names common in Taiwan (`Kiki`, `Momo`, `Coco`, `Sammi`, `Queenie`…) are in
+  the name list used without a model.
+- A name after a title is found in Chinese text (`Dr. Wang說` → `Dr. [PERSON_A]說`).
+
+### Fixed
+- With the language set to 中文, English names in the text were not coded without a model
+  (`Jason說好`).
+- A name with a possessive (`Jason's 電腦`) was missed.
+
 ## [0.6.1] - 2026-10-05
 
 Test build of English names in Chinese text, for hands-on checks before 0.7.0.
