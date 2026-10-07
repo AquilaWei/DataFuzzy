@@ -123,8 +123,7 @@ class Pipeline:
         # Auto mode runs every language's model on mixed text ("請 John Smith 跟王小明...").
         langs = languages_in(text) if lang == "auto" else [resolved]
         spans = self.rules.detect(text)
-        if "en" in langs:
-            spans += self.names.detect(text)
+        spans += self.names.detect(text)  # only reads lines with Chinese in them
         if self.pii:
             spans += latin_parts(text, pii_spans(self.pii, text))
         for x in langs:

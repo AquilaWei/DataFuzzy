@@ -183,9 +183,9 @@ def test_auto_mode_runs_both_models_on_mixed_text():
 def test_explicit_language_runs_only_that_model():
     p = Pipeline()
     p.models["zh"] = FakeNer(["王小明"])
-    p.models["en"] = FakeNer(["John Smith"])
-    assert p.obfuscate("請 John Smith 跟王小明開會", Session(label="t"), "zh").text \
-        == "請 John Smith 跟[PERSON_A]開會"
+    p.models["en"] = FakeNer(["Zyx Qor"])
+    assert p.obfuscate("請 Zyx Qor 跟王小明開會", Session(label="t"), "zh").text \
+        == "請 Zyx Qor 跟[PERSON_A]開會"
 
 
 def test_privacy_filter_spans_are_cut_at_chinese_characters():
@@ -339,8 +339,26 @@ def test_given_name_list_skips_names_that_are_usually_words():
     assert Pipeline().obfuscate(text, Session(label="t")).text == text
 
 
-def test_given_name_list_is_not_used_when_chinese_is_chosen():
-    assert Pipeline().obfuscate("Jason說好", Session(label="t"), "zh").text == "Jason說好"
+def test_given_name_list_is_used_when_chinese_is_chosen():
+    assert Pipeline().obfuscate("Jason說好", Session(label="t"), "zh").text == "[PERSON_A]說好"
+
+
+def test_given_name_list_has_english_names_common_in_taiwan():
+    assert Pipeline().obfuscate("Kiki跟Momo請假", Session(label="t")).text == "[PERSON_A]跟[PERSON_B]請假"
+
+
+def test_given_name_before_a_possessive():
+    assert Pipeline().obfuscate("Jason's 電腦", Session(label="t")).text == "[PERSON_A]'s 電腦"
+
+
+def test_name_after_a_title_is_coded_without_the_title():
+    assert Pipeline().obfuscate("Dr. Wang說", Session(label="t")).text == "Dr. [PERSON_A]說"
+    assert Pipeline().obfuscate("請Mr Lee確認", Session(label="t")).text == "請Mr [PERSON_A]確認"
+
+
+def test_title_on_english_only_line_is_left_to_the_model():
+    text = "Dr. Wang will call.\n好"
+    assert Pipeline().obfuscate(text, Session(label="t")).text == text
 
 
 def test_privacy_filter_reads_chinese_and_latin_with_spaces_between():

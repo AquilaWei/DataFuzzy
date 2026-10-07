@@ -33,6 +33,11 @@ NOT_NAMES = {
     "Karma", "Ace", "Chip", "Mac", "Gay", "Dick", "Will",
     "China", "German", "Boston", "Montana", "Phoenix", "Dell",
 }
+# English names common in Taiwan that are rare in the US data.
+EXTRA = {
+    "Benson", "Bobo", "Coco", "Fanny", "Jojo", "Kiki", "Lulu", "Momo", "Nana", "Queenie",
+    "Sammi", "Una", "Vivi", "Willy", "Yoyo", "Yuki",
+}
 
 
 def main() -> None:
@@ -42,7 +47,7 @@ def main() -> None:
         for row in rows:
             if int(row["year"]) >= SINCE:
                 share[row["name"]] += float(row["percent"])
-    names = [n for n, _ in share.most_common(NAMES) if n not in NOT_NAMES]
+    names = {n for n, _ in share.most_common(NAMES) if n not in NOT_NAMES} | EXTRA
     OUT.write_text("\n".join(sorted(names)) + "\n")
     print(f"wrote {len(names)} names to {OUT.relative_to(ROOT)}")
 

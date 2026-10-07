@@ -372,6 +372,7 @@ Benjamin
 Bennett
 Bennie
 Benny
+Benson
 Benton
 Berenice
 Bernadette
@@ -418,6 +419,7 @@ Bob
 Bobbi
 Bobbie
 Bobby
+Bobo
 Bonita
 Bonnie
 Bonny
@@ -768,6 +770,7 @@ Clinton
 Cloe
 Clyde
 Coby
+Coco
 Codey
 Codie
 Cody
@@ -1306,6 +1309,7 @@ Fabiola
 Faith
 Fallon
 Fannie
+Fanny
 Faron
 Farrah
 Farrell
@@ -1911,6 +1915,7 @@ Johnnie
 Johnny
 Johnpaul
 Johnson
+Jojo
 Joleen
 Jolene
 Jolie
@@ -2189,6 +2194,7 @@ Kiera
 Kieran
 Kierra
 Kiersten
+Kiki
 Kiley
 Killian
 Kim
@@ -2517,6 +2523,7 @@ Luka
 Lukas
 Luke
 Lula
+Lulu
 Luna
 Lupe
 Lura
@@ -2846,6 +2853,7 @@ Moira
 Moises
 Mollie
 Molly
+Momo
 Mona
 Monica
 Monika
@@ -2883,6 +2891,7 @@ Najee
 Nakia
 Nakisha
 Nan
+Nana
 Nanci
 Nancie
 Nancy
@@ -3087,6 +3096,7 @@ Preston
 Priscilla
 Prudence
 Qiana
+Queenie
 Quentin
 Quiana
 Quincy
@@ -3330,6 +3340,7 @@ Samara
 Samatha
 Samir
 Samira
+Sammi
 Sammie
 Sammy
 Samson
@@ -3774,6 +3785,7 @@ Tyshawn
 Tyson
 Ulises
 Ulysses
+Una
 Uriah
 Uriel
 Ursula
@@ -3827,6 +3839,7 @@ Virgil
 Virginia
 Viridiana
 Vito
+Vivi
 Vivian
 Viviana
 Von
@@ -3873,6 +3886,7 @@ Williams
 Willie
 Willis
 Willow
+Willy
 Wilma
 Wilmer
 Wilson
@@ -3913,6 +3927,8 @@ Yolanda
 Yolonda
 Yosef
 Yoselin
+Yoyo
+Yuki
 Yuliana
 Yuridia
 Yusuf

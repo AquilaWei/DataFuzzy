@@ -16,11 +16,14 @@ from ..lang import has_cjk
 from ..mapping import PERSON
 from .base import Span
 
-_WORD = r"[A-Z][a-z]+(?:[-'’][A-Z]?[a-z]+)*"
+# "O'Neil" is one word; "Jason's" is "Jason" and a possessive.
+_WORD = r"[A-Z][a-z]+(?:[-'’][A-Z]?[a-z]+(?<![-'’]s))*"
 # Capitalized words in a row ("Hi Emily Chen"), not touching other letters or digits.
 WORDS_RE = re.compile(rf"(?<![A-Za-z0-9_]){_WORD}(?: {_WORD})*(?![A-Za-z0-9_])")
 # A given name takes at most this many capitalized words after it as its surname(s).
 MAX_SURNAMES = 2
+# A title and the name after it ("Dr. Wang"), coded without the title.
+TITLE_RE = re.compile(rf"(?<![A-Za-z])(?:Mr|Mrs|Ms|Miss|Dr|Prof)\.? ?({_WORD}(?: {_WORD})?)(?![A-Za-z0-9_])")
 
 
 @cache
@@ -47,4 +50,7 @@ class GivenNameDetector:
                 value = " ".join(words[first:first + 1 + MAX_SURNAMES])
                 start = line.start() + m.start() + len(" ".join(words[:first])) + (first > 0)
                 spans.append(Span(start, start + len(value), PERSON, value))
+            for m in TITLE_RE.finditer(line.group()):
+                start = line.start() + m.start(1)
+                spans.append(Span(start, start + len(m.group(1)), PERSON, m.group(1)))
         return spans
