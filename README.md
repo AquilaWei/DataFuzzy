@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml/badge.svg)](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/AquilaWei/DataFuzzy/graph/badge.svg)](https://codecov.io/gh/AquilaWei/DataFuzzy)
-![Version](https://img.shields.io/badge/version-0.6.2-blue)
+![Version](https://img.shields.io/badge/version-0.7.0-blue)
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
@@ -164,6 +164,7 @@ packaging/           # PyInstaller 設定、.dmg / AppImage 打包、第三方�
 - [x] 0.5 — 手動補標記漏掉的名字、人名召回率提升
 - [x] 0.5.1 — Mac `.dmg` / Linux AppImage（不含模型，安裝後下載），推 tag 自動發佈
 - [x] 0.6 — 改用個資專用模型（`openai/privacy-filter`）、只遮個人資料、「只處理人名」模式
+- [x] 0.7 — 中文夾英文名：中英夾雜人名模型（`Davlan/xlm-roberta-large-ner-hrl`）與常見英文名名單
 
 ## 🤝 參與貢獻
 

@@ -3,6 +3,24 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0] - 2026-10-07
+
+Verified by hand on an Apple Silicon Mac. English names written inside Chinese text are
+found; everything below was released as the test builds 0.6.1–0.6.2.
+
+### Added
+- New optional model in the model manager, **中英夾雜人名** (XLM-RoBERTa large, about
+  578 MB): it reads the context, so English names in Chinese text are found with or
+  without spaces, in lowercase, romanized or uncommon (`跟Jason說`, `跟jason說`,
+  `Wei-Ting說好`), while `June跟May的報告` stays readable.
+- Without a model, common English given names in Chinese text are coded from a list
+  (US Social Security baby names, public domain, plus names common in Taiwan such as
+  `Kiki`, `Momo`, `Sammi`), as are names after a title (`Dr. Wang說`) and before a
+  possessive (`Jason's 電腦`). English-only text is unaffected.
+
+### Fixed
+- English words in Chinese text (`stand-up`) are no longer taken for Chinese names.
+
 ## [0.6.2] - 2026-10-06
 
 Second test build of English names in Chinese text, for hands-on checks before 0.7.0.
