@@ -11,7 +11,7 @@ from .detect import Detector, RegexDetector, Span, resolve_overlaps
 from .detect.names import GivenNameDetector
 from .detect.ner import NerDetector
 from .detect.privacy_filter import PrivacyFilterDetector
-from .lang import Lang, detect_language, languages_in, space_scripts
+from .lang import Lang, detect_language, has_cjk, languages_in, space_scripts
 from .mapping import PERSON, RestoreResult, Session, find_all, name_aliases
 from .models import ModelSpec, is_installed
 from .speakers import speaker_spans
@@ -77,7 +77,7 @@ def latin_parts(text: str, spans: list[Span]) -> list[Span]:
 
 
 def pii_spans(model: Detector, text: str) -> list[Span]:
-    """Privacy filter spans, found in `text` spaced at Chinese/Latin boundaries
+    """`model` spans, found in `text` spaced at Chinese/Latin boundaries
     ("跟Jason說" is read as "跟 Jason 說") and mapped back to `text`."""
     spaced, index = space_scripts(text)
     if spaced == text:
@@ -96,8 +96,9 @@ class Pipeline:
         self.names = GivenNameDetector()
         # Personal data in any language (openai/privacy-filter), once installed.
         self.pii: Detector | None = None
-        # People in one language the privacy filter reads poorly (Chinese), once installed.
-        self.models: dict[Lang, Detector] = {}
+        # People in one language the privacy filter reads poorly (Chinese), once installed;
+        # "mixed": English names in Chinese text.
+        self.models: dict[Lang | Literal["mixed"], Detector] = {}
 
     def load_models(self, specs: list[ModelSpec], root: Path) -> None:
         """(Re)register detectors for installed models. Models load lazily on first use."""
@@ -132,6 +133,9 @@ class Pipeline:
                 if x == "zh":  # it reads Latin words poorly ("stand-up" as a person)
                     found = [s for s in found if CJK_RUN.search(s.text)]
                 spans += found
+        if has_cjk(text) and (model := self.models.get("mixed")):
+            # Only its Latin names: its Chinese ones are untested, the Chinese model has those.
+            spans += [s for s in latin_parts(text, pii_spans(model, text)) if s.label == PERSON]
         model_used = self.pii is not None and all(x in self.models for x in langs if x != "en")
         spans = [s for s in spans if s.text not in ignore]
         # Names are what models miss most: once a value is found anywhere in this text,

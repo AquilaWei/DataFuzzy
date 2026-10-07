@@ -125,6 +125,14 @@ MIXED = [
     ("我們邀請了Prof. Chen-Wei Lin來演講。", ["Chen-Wei Lin"]),
     ("Grace昨天說她要請假，Kevin Huang會代班。", ["Grace", "Kevin Huang"]),
     ("Mandy的email我再寄給你。", ["Mandy"]),
+    # Not in the given-name list, or written as an ordinary word: only the mixed model.
+    ("Wei-Ting說好", ["Wei-Ting"]),
+    ("請Yu-Chen確認一下報價", ["Yu-Chen"]),
+    ("昨天Hsiao-Wen有來嗎", ["Hsiao-Wen"]),
+    ("剛剛跟jason討論過了", ["jason"]),
+    ("May說她五點會到", ["May"]),
+    ("Yuki跟Kenji是日本同事", ["Yuki", "Kenji"]),
+    ("Chia-Hao負責後端，Pei-Shan負責前端", ["Chia-Hao", "Pei-Shan"]),
 ]
 
 MIXED_NO_NAMES = [
@@ -134,6 +142,9 @@ MIXED_NO_NAMES = [
     "今天的stand-up改到下午。",
     "我們用Slack跟Notion溝通，資料放Google Drive。",
     "請在May之前把Q3 report交出來。",
+    "June跟May的報告",
+    "這部分用React寫，後端是Django",
+    "我們用Docker跟Kubernetes部署",
 ]
 
 # Public figures in a public context are not personal data: the privacy filter leaves them

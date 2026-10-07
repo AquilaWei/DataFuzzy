@@ -22,13 +22,13 @@
 - 🧠 **個資辨識** — 本機模型（[OpenAI Privacy Filter](https://huggingface.co/openai/privacy-filter)）辨識人名、地址、日期、帳號與各種編號；同一個值在全文與後續輸入都換成同一代號
 - 🏢 **只遮個人資料** — 公司、醫院、地名、疾病、藥名、部門都保留原字，文字仍然讀得懂
 - 👤 **只處理人名模式** — 範圍選「只處理人名」時，只替換人名，其他都保留
-- 🌏 **中英文** — 中文人名另用 CKIP 中文模型；中英混合的文字兩個模型一起用，中文夾英文名（`跟Jason說`、`這是Annie的電腦`）沒空格也抓得到；聊天紀錄（`張明：好的`、LINE 匯出）的說話者也會一併代號化
+- 🌏 **中英文** — 中文人名另用 CKIP 中文模型；中文夾英文名另用多語模型（XLM-RoBERTa）依上下文判斷，沒空格、小寫或拼音名（`跟Jason說`、`跟jason說`、`Wei-Ting說好`）也抓得到，`June跟May的報告` 則不會誤遮；聊天紀錄（`張明：好的`、LINE 匯出）的說話者也會一併代號化
 
 目前可偵測：
 
 | 類別 | 代號 | 範例 |
 |---|---|---|
-| 人名 | `PERSON` | `王小明`、`歐陽娜娜`、`John Smith`、`Wei-Chuang Huang`（需安裝模型）；中文裡的常見英文名 `Kevin`、`Emily Chen`（不需模型） |
+| 人名 | `PERSON` | `王小明`、`歐陽娜娜`、`John Smith`、`Wei-Chuang Huang`（需安裝模型）；中文裡的英文名 `Wei-Ting`、`jason`（需安裝中英夾雜模型）；中文裡的常見英文名 `Kevin`、`Emily Chen`（不需模型） |
 | 日期（含生日） | `DATE` | `1968/03/14`、`7 May 1987`、`October 12, 2026`（需安裝模型） |
 | 地址 | `LOC` | `桃園市中壢區中央西路二段 76 號 3 樓`、`742 Maple Grove Avenue, Apt 3B, Austin, TX 78704`、`18 Birchwood Lane, Leeds LS6 2AB` |
 | Email | `EMAIL` | `bob@corp.io` |
@@ -70,7 +70,7 @@ uv sync
 uv run datafuzzy
 ```
 
-**第一次啟動**會跳出「模型管理」，按 **下載** 取得個資偵測模型（約 945 MB）與中文人名模型（約 103 MB），只需一次。之後可從選單 **模型 → 模型管理…** 新增或刪除。不下載也能用，只是人名、日期、帳號等不會被替換。兩個模型載入後約佔 **0.5 GB 記憶體**；長文件會分段處理，再長也維持在約 1.4 GB 以內（其中約 0.9 GB 是從模型檔映射的權重，系統可回收）。
+**第一次啟動**會跳出「模型管理」，按 **下載** 取得個資偵測模型（約 945 MB）、中文人名模型（約 103 MB）與中英夾雜人名模型（約 578 MB），只需一次。之後可從選單 **模型 → 模型管理…** 新增或刪除。不下載也能用，只是人名、日期、帳號等不會被替換；只用中文或只用英文的話，可以不裝中英夾雜模型。三個模型都載入後，記憶體高峰約 **1.4–2.1 GB**（含從模型檔映射、系統可回收的權重）；長文件會分段處理，不會再往上長太多。
 
 ![模型管理](docs/assets/model-manager.png)
 
@@ -101,12 +101,12 @@ uv run datafuzzy
 
 **範圍**選「全部敏感資料」會替換上表所有類別；選「只處理人名」只替換人名，Email、電話、地址、日期等都保留原字。
 
-**語言**選「自動偵測」時，文字含中文就加用中文人名模型；選 English 則不用中文人名模型。個資偵測模型一律使用。
+**語言**選「自動偵測」時，文字含中文就加用中文人名模型；選 English 則不用中文人名模型。個資偵測模型一律使用；中英夾雜模型在文字含中文時使用，只取它找到的英文名。
 
 ## 🛡️ 隱私與安全
 
 - 所有偵測與替換都在本機執行；**唯一會連網的是你按下「下載模型」時**
-- 模型直接從 Hugging Face 原發佈者下載，鎖定固定版本並以 SHA-256 驗證
+- 模型鎖定固定版本並以 SHA-256 驗證。個資偵測與中文人名模型直接從 Hugging Face 下載；中英夾雜模型的原作者沒有提供 ONNX 格式，由本專案轉換後放在 [GitHub Release `models-v1`](https://github.com/AquilaWei/DataFuzzy/releases/tag/models-v1)（`tools/export_xlmr.py` 可重現同樣的檔案）
 - 代號檔存於系統暫存目錄 `datafuzzy-<pid>/`，以 **AES-256-GCM** 加密，金鑰只存在記憶體
 - 關閉視窗、`Ctrl+C`、`SIGTERM` 都會刪除代號檔；若程式被強制結束，下次啟動時自動清除殘留
 
@@ -114,7 +114,7 @@ uv run datafuzzy
 
 - **公眾人物不遮**：英文文字中，新聞語境裡的名人（`Apple hired Steve Jobs`）視為公開資訊而保留；同名的一般人（`our intern Tim Cook`）會依上下文判斷替換，但非常有名的名字偶爾仍會被當成名人（中文模型則一律替換）
 - 單獨出現、同時也是地名的英文名字（`assigned to Chris by Jordan`）偶爾會漏掉
-- 中文裡的英文名另外用常見英文名名單比對：名單中的字（`Grace`、`Mark`、`Ruby`）夾在中文裡一律當人名；名單外的英文名（`Xochitl`）只靠模型。純英文的句子不使用名單
+- 中文裡的英文名另外用常見英文名名單比對：名單中的字（`Grace`、`Mark`、`Ruby`）夾在中文裡一律當人名，所以 `Grace period是三十天`、`Hello Kitty` 會被誤遮；名單外的英文名只靠模型。純英文的句子不使用名單
 - 公司、醫院、地名不替換；若需要遮，選取後按右鍵手動標記
 - 單獨出現的名或姓會沿用全名的代號（`John Smith`、`John` → `[PERSON_A]`；`王小明`、`小明` → `[PERSON_A]`），還原時一律還原成全名；一個名字一旦在代號檔中連到某人，之後出現同名的另一人也不會改變
 - 中文只連結「名」，單獨的姓（`王先生`）不連結；中文模型以繁體中文訓練，簡體中文效果可能較差
@@ -172,6 +172,7 @@ uv sync                  # 安裝含開發工具的環境
 uv run pytest            # 執行測試
 tools/test_arm64.sh      # 在 arm64 + 8GB 限制的容器中測試（模擬 Apple Silicon）
 uv run tools/update_manifest.py  # 更新模型版本後重新產生 models_manifest.json
+uv run tools/export_xlmr.py      # 重新轉換中英夾雜模型（上傳到 release models-v1）
 uv run tools/update_names.py     # 重新產生英文名名單 given_names.txt
 packaging/build_appimage.sh      # 打包 Linux AppImage → dist/
 packaging/build_dmg.sh           # 打包 Mac .dmg（需在 macOS 上執行）→ dist/
@@ -192,5 +193,6 @@ Copyright (C) 2026 AquilaWei，採用 [GPL-3.0-or-later](LICENSE)。
 |---|---|---|
 | [`openai/privacy-filter`](https://huggingface.co/openai/privacy-filter) | Apache-2.0 | 同左（官方 q4 ONNX） |
 | [`ckiplab/bert-base-chinese-ner`](https://huggingface.co/ckiplab/bert-base-chinese-ner) | GPL-3.0，© CKIP Lab | [`Xenova/bert-base-chinese-ner`](https://huggingface.co/Xenova/bert-base-chinese-ner)（int8） |
+| [`Davlan/xlm-roberta-large-ner-hrl`](https://huggingface.co/Davlan/xlm-roberta-large-ner-hrl) | AFL-3.0，© David Adelani | 本專案轉換：[release `models-v1`](https://github.com/AquilaWei/DataFuzzy/releases/tag/models-v1)（int8） |
 
 模型不隨程式散布，由使用者在 App 內自行下載。英文名名單取自美國社會安全局（SSA）的[新生兒名字資料](https://www.ssa.gov/oact/babynames/)（公有領域）。安裝檔內附的第三方套件授權（Qt 以 LGPL-3.0 動態連結）可在 App 的 **說明 → 關於 DataFuzzy** 查看。

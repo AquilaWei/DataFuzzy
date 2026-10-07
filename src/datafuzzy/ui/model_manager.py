@@ -25,7 +25,7 @@ from ..core.models import (
     is_installed,
 )
 
-LANG_NAMES = {"en": "英文", "zh": "中文", "any": "所有語言"}
+LANG_NAMES = {"en": "英文", "zh": "中文", "mixed": "中英夾雜", "any": "所有語言"}
 
 
 class DownloadThread(QThread):

@@ -63,6 +63,11 @@ def decode_entities(
             mean = float(np.mean(current[3]))
             if mean >= (person_min if labels[current[0]] == "PERSON" else min_score):
                 s, e = current[1], current[2]
+                # SentencePiece (XLM-RoBERTa) counts the space before a word as part of it.
+                while s < e and text[s].isspace():
+                    s += 1
+                while e > s and text[e - 1].isspace():
+                    e -= 1
                 spans.append(Span(s, e, labels[current[0]], text[s:e], mean))
 
     for start, end, tag, score in words:
@@ -140,8 +145,9 @@ class NerDetector:
                 str(self.model_dir / "model.onnx"), opts, providers=["CPUExecutionProvider"]
             )
             self._tokenizer = tok
-            self._cls = tok.token_to_id("[CLS]")
-            self._sep = tok.token_to_id("[SEP]")
+            # BERT names them [CLS]/[SEP]; XLM-RoBERTa <s>/</s>.
+            self._cls = tok.token_to_id("[CLS]") or tok.token_to_id("<s>")
+            self._sep = tok.token_to_id("[SEP]") or tok.token_to_id("</s>")
 
     def _threshold(self, kind: str) -> float:
         return self.person_min if self.labels.get(kind) == "PERSON" else self.min_score

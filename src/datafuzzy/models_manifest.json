@@ -74,6 +74,37 @@
           "sha256": "fbcd62e5b97cf06ce28fb6eaf8f39d6e1e6c82ea9519e3df9c5adfb8571bff32"
         }
       ]
+    },
+    {
+      "id": "mixed-xlmr-ner",
+      "kind": "ner",
+      "lang": "mixed",
+      "name": "中英夾雜人名 (XLM-RoBERTa large, int8)",
+      "source": "Davlan/xlm-roberta-large-ner-hrl",
+      "license": "AFL-3.0",
+      "labels": {
+        "PER": "PERSON"
+      },
+      "files": [
+        {
+          "name": "model.onnx",
+          "url": "https://github.com/AquilaWei/DataFuzzy/releases/download/models-v1/xlm-roberta-large-ner-hrl-int8.onnx",
+          "size": 560650689,
+          "sha256": "e4ddb267ebd8792ee16b3dd273a3bde7948d4c72abb233c866b9674be6ea0f07"
+        },
+        {
+          "name": "tokenizer.json",
+          "url": "https://github.com/AquilaWei/DataFuzzy/releases/download/models-v1/xlm-roberta-large-ner-hrl-tokenizer.json",
+          "size": 17098251,
+          "sha256": "b74659c780d49afad7a7b9799868f75cbd3014fb6c34956e85a793028d38094a"
+        },
+        {
+          "name": "config.json",
+          "url": "https://github.com/AquilaWei/DataFuzzy/releases/download/models-v1/xlm-roberta-large-ner-hrl-config.json",
+          "size": 1051,
+          "sha256": "50abc3aab4c50a717a5a46290d05af42e1acd8b42b4d26979ecb609a58099d10"
+        }
+      ]
     }
   ]
 }

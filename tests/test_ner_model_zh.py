@@ -94,8 +94,9 @@ def test_mixed_text_uses_both_models():
 
 
 @needs_all
-def test_memory_budget_with_both_models():
-    """Like the app: Qt plus one copy of each model."""
+def test_memory_budget_with_all_models():
+    """Like the app: Qt plus one copy of each model. Three models peak at 1.4-2.1 GB on
+    macOS (it varies from run to run); the mixed-text model adds 0.5-0.9 GB of that."""
     rss_mb = peak_rss_mb(f"""
 import sys
 sys.path.insert(0, {str(Path(__file__).parent)!r})
@@ -104,4 +105,4 @@ from conftest import real_pipeline
 app = QApplication([])
 real_pipeline().detect("王小明 met John Smith at Google in Taipei, john@x.com, born 1990-01-02.")
 """)
-    assert rss_mb < 1200, rss_mb
+    assert rss_mb < 2500, rss_mb

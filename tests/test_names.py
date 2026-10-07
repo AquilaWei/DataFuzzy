@@ -35,6 +35,12 @@ def test_hyphenated_name_is_one_entity():
     assert [s.text for s in decode(text, words, tags)] == ["Wei-Chuang Huang"]
 
 
+def test_space_before_a_sentencepiece_word_is_not_part_of_the_name():
+    text = "請 John Smith 跟"
+    spans = decode(text, [(0, 1), (1, 6), (6, 12), (12, 14)], ["O", "B-PER", "I-PER", "O"])
+    assert [(s.start, s.text) for s in spans] == [(2, "John Smith")]
+
+
 def test_low_confidence_dropped():
     spans = decode_entities("Bob", [0], [(0, 3)], ["B-PER"], [0.2], LABELS)
     assert spans == []
@@ -371,3 +377,33 @@ def test_chinese_model_latin_words_are_dropped():
     p = Pipeline()
     p.models["zh"] = FindNer([("王小明", "PERSON"), ("stand-up", "PERSON")])
     assert p.obfuscate("王小明主持stand-up", Session(label="t")).text == "[PERSON_A]主持stand-up"
+
+
+def test_mixed_model_finds_english_names_in_chinese_text():
+    p = Pipeline()
+    p.models["mixed"] = FindNer([("Wei-Ting", "PERSON")])
+    assert p.obfuscate("Wei-Ting說好", Session(label="t")).text == "[PERSON_A]說好"
+
+
+def test_mixed_model_reads_chinese_and_latin_with_spaces_between():
+    p = Pipeline()
+    p.models["mixed"] = FindNer([("Zyx 說", "PERSON")])  # found only in the spaced text
+    assert p.obfuscate("跟Zyx說", Session(label="t")).text == "跟[PERSON_A]說"
+
+
+def test_mixed_model_chinese_names_are_dropped():
+    p = Pipeline()
+    p.models["mixed"] = FindNer([("明天", "PERSON")])
+    assert p.obfuscate("明天見", Session(label="t")).text == "明天見"
+
+
+def test_mixed_model_is_not_used_on_english_only_text():
+    p = Pipeline()
+    p.models["mixed"] = FindNer([("Zyx", "PERSON")])
+    assert p.obfuscate("Zyx is here", Session(label="t")).text == "Zyx is here"
+
+
+def test_mixed_model_is_used_when_chinese_is_chosen():
+    p = Pipeline()
+    p.models["mixed"] = FindNer([("Zyx", "PERSON")])
+    assert p.obfuscate("Zyx說好", Session(label="t"), "zh").text == "[PERSON_A]說好"

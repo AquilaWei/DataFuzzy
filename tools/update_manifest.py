@@ -1,9 +1,10 @@
-"""Regenerate src/datafuzzy/models_manifest.json from pinned Hugging Face revisions.
+"""Regenerate src/datafuzzy/models_manifest.json from pinned model files.
 
     uv run tools/update_manifest.py
 
 Downloads each file once (cached in models/cache/) to record its size and SHA-256.
-Bump a model by changing its `revision` below and re-running.
+Bump a model by changing its `revision` below and re-running. A model with a `base_url`
+is our own conversion, published as assets of a GitHub release (tools/export_xlmr.py).
 """
 
 from __future__ import annotations
@@ -57,6 +58,23 @@ MODELS = [
             "config.json": "config.json",
         },
     },
+    {
+        "id": "mixed-xlmr-ner",
+        "kind": "ner",
+        "lang": "mixed",
+        "name": "中英夾雜人名 (XLM-RoBERTa large, int8)",
+        "source": "Davlan/xlm-roberta-large-ner-hrl",
+        "license": "AFL-3.0",
+        # English names in Chinese text: the other models miss "Wei-Ting說好", "跟jason說".
+        "labels": {"PER": "PERSON"},
+        # No ONNX upstream: converted by tools/export_xlmr.py.
+        "base_url": "https://github.com/AquilaWei/DataFuzzy/releases/download/models-v1/",
+        "files": {
+            "model.onnx": "xlm-roberta-large-ner-hrl-int8.onnx",
+            "tokenizer.json": "xlm-roberta-large-ner-hrl-tokenizer.json",
+            "config.json": "xlm-roberta-large-ner-hrl-config.json",
+        },
+    },
 ]
 
 
@@ -84,7 +102,8 @@ def main() -> None:
     for m in MODELS:
         files = []
         for name, remote in m["files"].items():
-            url = f"https://huggingface.co/{m['repo']}/resolve/{m['revision']}/{remote}"
+            url = (m["base_url"] + remote if "base_url" in m
+                   else f"https://huggingface.co/{m['repo']}/resolve/{m['revision']}/{remote}")
             path = fetch(url, CACHE / m["id"] / name)
             files.append({"name": name, "url": url, "size": path.stat().st_size, "sha256": sha256(path)})
             print(f"{m['id']}/{name}: {path.stat().st_size / 1e6:.1f} MB")
