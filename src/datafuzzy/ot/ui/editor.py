@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from PySide6.QtCore import QTimer, Signal
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
@@ -77,6 +78,7 @@ class RecordEditor(QWidget):
         self.tabs = QTabWidget()
         self.tabs.addTab(self.zh_edit, "中文")
         self.tabs.addTab(self.en_edit, "English")
+        self.tabs.setToolTip("點兩下「中文」或「English」複製整份病歷")
 
         top = QHBoxLayout()
         top.addWidget(self.back_btn)
@@ -111,6 +113,15 @@ class RecordEditor(QWidget):
         self.en_edit.textChanged.connect(lambda: self._changed("en_text"))
         self.back_btn.clicked.connect(self.close_editor)
         self.date_btn.clicked.connect(lambda: self.change_date())
+        self.tabs.tabBarDoubleClicked.connect(self.copy_tab)
+
+    def copy_tab(self, index: int) -> None:
+        """Put the whole Chinese (0) or English (1) chart on the clipboard."""
+        if index < 0:
+            return
+        edit = (self.zh_edit, self.en_edit)[index]
+        QGuiApplication.clipboard().setText(edit.toPlainText())
+        self.status.setText(f"已複製{('中文', '英文')[index]}病歷")
 
     def _show_title(self) -> None:
         self.title.setText(f"{self.student_name} · {self.visit_date.isoformat()}")

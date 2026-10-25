@@ -159,3 +159,14 @@ def test_cancelled_date_prompt_changes_nothing(qtbot, store, record, monkeypatch
     monkeypatch.setattr(editor, "_ask_date", lambda: None)
     editor.date_btn.click()
     assert store.get_record(record.id).visit_date == DAY
+
+
+def test_double_clicking_a_tab_copies_that_chart(qtbot, store, record):
+    from PySide6.QtGui import QGuiApplication
+    editor = make_editor(qtbot, store, record)
+    editor.tabs.tabBarDoubleClicked.emit(1)
+    assert QGuiApplication.clipboard().text() == "Cutting practice"
+    assert editor.status.text() == "已複製英文病歷"
+    editor.tabs.tabBarDoubleClicked.emit(0)
+    assert QGuiApplication.clipboard().text() == "今天練習剪紙"
+    assert editor.status.text() == "已複製中文病歷"
