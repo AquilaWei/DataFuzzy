@@ -77,6 +77,23 @@ def test_other_student_named_in_a_record_is_masked_even_if_exported_earlier(stor
     assert "陳美玲" not in result.text
 
 
+def test_student_without_record_in_range_is_masked_when_mentioned(store, pipeline):
+    a = store.add_student("王小明")
+    b = store.add_student("陳美玲")
+    store.add_record(a.id, date(2026, 10, 1), zh_text="王小明和陳美玲一起玩")
+    store.add_record(b.id, date(2026, 11, 1), zh_text="陳美玲獨自玩")
+    result = export_range(store, date(2026, 10, 1), date(2026, 10, 1), pipeline)
+    assert "陳美玲" not in result.text
+
+
+def test_codes_follow_record_order_even_when_other_students_are_marked(store, pipeline):
+    a = store.add_student("王小明")
+    store.add_student("陳美玲")
+    store.add_record(a.id, date(2026, 10, 1), zh_text="王小明剪紙")
+    result = export_range(store, date(2026, 10, 1), date(2026, 10, 1), pipeline)
+    assert result.text == "=== REC-1 | [PERSON_A] | 2026-10-01 ===\n[PERSON_A]剪紙\n"
+
+
 def test_only_records_in_range_are_exported_oldest_first(store, pipeline):
     student = store.add_student("王小明")
     store.add_record(student.id, date(2026, 10, 9), zh_text="第三")

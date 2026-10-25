@@ -39,9 +39,9 @@ def export_range(store: RecordStore, date_from: date, date_to: date,
                  pipeline: Pipeline) -> ExportResult:
     """Export every record from `date_from` to `date_to` (inclusive), oldest first.
 
-    Only people's names are coded ("names" scope). Every student's name is marked before any
-    text is processed, so it is coded even where no model finds it, and also where another
-    student's chart mentions them. One session covers the batch: the same person gets the
+    Only people's names are coded ("names" scope). Every student's name in the store is marked
+    before any text is processed, so it is coded even where no model finds it, and also where
+    another student's chart mentions them, whether or not they have a record in the range. One session covers the batch: the same person gets the
     same code in every chart. The mapping is saved encrypted; it may block while a model
     runs, so call it from a worker for a large range."""
     records = store.records_between(date_from, date_to)
@@ -49,8 +49,10 @@ def export_range(store: RecordStore, date_from: date, date_to: date,
         return ExportResult("", None, 0)
     names = {s.id: s.name for s in store.students()}
     session = Session(label=f"{APP_NAME} {date_from.isoformat()} ~ {date_to.isoformat()}")
-    for record in records:
-        session.mark(names[record.student_id], PERSON)
+    # Students in the range first, so codes follow record order; then everyone else, because
+    # a chart may mention a child who has no record in the range.
+    for name in [names[r.student_id] for r in records] + list(names.values()):
+        session.mark(name, PERSON)
     blocks: list[str] = []
     entries: list[dict] = []
     for record in records:
