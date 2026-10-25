@@ -170,3 +170,21 @@ def test_double_clicking_a_tab_copies_that_chart(qtbot, store, record):
     editor.tabs.tabBarDoubleClicked.emit(0)
     assert QGuiApplication.clipboard().text() == "今天練習剪紙"
     assert editor.status.text() == "已複製中文病歷"
+
+
+@pytest.mark.parametrize("typed, saved", [("9:30", "09:30"), ("14：05", "14:05"), ("", "")])
+def test_start_time_is_saved_as_hh_mm(qtbot, store, record, typed, saved):
+    store.update_record(record.id, start_time="08:00")
+    editor = make_editor(qtbot, store, record)
+    editor.time_box.setEditText(typed)
+    editor.flush()
+    assert store.get_record(record.id).start_time == saved
+
+
+def test_half_typed_start_time_is_not_saved(qtbot, store, record):
+    store.update_record(record.id, start_time="08:00")
+    editor = make_editor(qtbot, store, record)
+    editor.time_box.setEditText("9:")
+    editor.flush()
+    assert store.get_record(record.id).start_time == "08:00"
+    assert "09:30" in editor.status.text()

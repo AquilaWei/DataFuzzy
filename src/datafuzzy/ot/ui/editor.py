@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 
 from PySide6.QtCore import QTimer, Signal
@@ -26,6 +27,17 @@ from ..db import DuplicateRecord, RecordStore
 from .date_view import to_date, to_qdate
 
 AUTOSAVE_MS = 800
+TIME_CHOICES = [f"{h:02d}:{m:02d}" for h in range(7, 20) for m in (0, 15, 30, 45)]
+_TIME = re.compile(r"([01]?\d|2[0-3]):([0-5]\d)")
+
+
+def normal_time(text: str) -> str | None:
+    """`text` as "HH:MM" ("" for blank), or None if it is not a time."""
+    text = text.strip().replace("：", ":")
+    if not text:
+        return ""
+    match = _TIME.fullmatch(text)
+    return f"{int(match[1]):02d}:{match[2]}" if match else None
 ACTIVITY_LINES = 3  # height of the activity box, in lines
 
 
@@ -66,6 +78,14 @@ class RecordEditor(QWidget):
         self.location_box.addItems(store.all_locations())
         self.location_box.setEditText(record.location)
 
+        self.time_box = QComboBox()
+        self.time_box.setEditable(True)
+        self.time_box.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.time_box.lineEdit().setPlaceholderText("例如 09:30")
+        self.time_box.addItems(TIME_CHOICES)
+        self.time_box.setEditText(record.start_time)
+        self.time_box.setMinimumContentsLength(6)
+
         self.activity_edit = QPlainTextEdit(record.activity)
         self.activity_edit.setPlaceholderText("今天的治療活動與手段（只留在本機，不會匯出）")
         lines = self.activity_edit.fontMetrics().lineSpacing() * ACTIVITY_LINES
@@ -87,6 +107,9 @@ class RecordEditor(QWidget):
         place = QHBoxLayout()
         place.addWidget(QLabel("地點"))
         place.addWidget(self.location_box, 1)
+        place.addSpacing(12)
+        place.addWidget(QLabel("開始時間"))
+        place.addWidget(self.time_box)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 16, 24, 20)
         layout.setSpacing(10)
@@ -109,6 +132,7 @@ class RecordEditor(QWidget):
         # Connected after the texts are filled in, so showing a record is not an edit.
         self.location_box.editTextChanged.connect(lambda: self._changed("location"))
         self.activity_edit.textChanged.connect(lambda: self._changed("activity"))
+        self.time_box.editTextChanged.connect(lambda: self._changed("start_time"))
         self.zh_edit.textChanged.connect(lambda: self._changed("zh_text"))
         self.en_edit.textChanged.connect(lambda: self._changed("en_text"))
         self.back_btn.clicked.connect(self.close_editor)
@@ -173,9 +197,14 @@ class RecordEditor(QWidget):
         values = {"location": self.location_box.currentText().strip(),
                   "activity": self.activity_edit.toPlainText(),
                   "zh_text": self.zh_edit.toPlainText(),
-                  "en_text": self.en_edit.toPlainText()}
-        changed = {field: values[field] for field in self._dirty}
+                  "en_text": self.en_edit.toPlainText(),
+                  "start_time": normal_time(self.time_box.currentText())}
+        # A half-typed time ("9:") is not saved; the last good one stays until it is complete.
+        changed = {field: values[field] for field in self._dirty if values[field] is not None}
         self._dirty.clear()
+        if not changed:
+            self.status.setText("時間請填成 09:30 這樣的格式")
+            return
         self.store.update_record(self.record_id, **changed)
         self.status.setText(f"已儲存 {datetime.now():%H:%M:%S}")
         self.saved.emit(self.record_id)

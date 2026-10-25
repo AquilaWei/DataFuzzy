@@ -51,7 +51,8 @@ class RecordCard(QWidget):
         self.index = index
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFixedHeight(CARD_H)
-        self.date_label = QLabel(date_label(record.visit_date))
+        when = date_label(record.visit_date) + (f"  {record.start_time}" if record.start_time else "")
+        self.date_label = QLabel(when)
         self.date_label.setStyleSheet("font-size: 15px; font-weight: 600;")
         self.location_label = QLabel(record.location or "未填地點")
         self.location_label.setObjectName("subtle")

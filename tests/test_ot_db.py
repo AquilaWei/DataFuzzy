@@ -368,3 +368,30 @@ def test_record_cannot_move_onto_a_day_already_taken(store):
         store.move_record(first.id, date(2026, 10, 2))
     assert e.value.record_id == other.id
     assert store.get_record(first.id).visit_date == date(2026, 10, 1)
+
+
+def test_start_time_is_saved_cleared_and_kept_by_other_updates(store):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, date(2026, 10, 1))
+    assert record.start_time == ""
+    store.update_record(record.id, start_time="09:30")
+    store.update_record(record.id, zh_text="中文")
+    store.set_en_texts({record.id: "English"})
+    assert store.get_record(record.id).start_time == "09:30"
+    store.update_record(record.id, start_time="")
+    assert store.get_record(record.id).start_time == ""
+
+
+def test_chart_book_from_before_start_times_opens_with_none(tmp_path):
+    path = tmp_path / "t.db"
+    with RecordStore(path, KEY) as store:
+        student = store.add_student("王小明")
+        record = store.add_record(student.id, date(2026, 10, 1), zh_text="舊病歷")
+    old = sqlite3.connect(path)
+    old.execute("ALTER TABLE record DROP COLUMN start_time")
+    old.commit()
+    old.close()
+    with RecordStore(path, KEY) as again:
+        assert again.get_record(record.id).start_time == ""
+        again.update_record(record.id, start_time="14:00")
+        assert again.get_record(record.id).start_time == "14:00"

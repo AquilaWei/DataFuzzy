@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS record (
     en_text    BLOB NOT NULL,
     updated_at TEXT NOT NULL,
     activity   BLOB,  -- NULL in records made before the column existed
+    start_time TEXT,  -- "HH:MM", or NULL when not filled in
     UNIQUE (student_id, visit_date)
 );
 CREATE INDEX IF NOT EXISTS record_by_date ON record(visit_date);
@@ -72,6 +73,8 @@ def connect(path: Path, check_same_thread: bool = True) -> sqlite3.Connection:
     columns = {row[1] for row in db.execute("PRAGMA table_info(record)")}
     if "activity" not in columns:  # a chart book from before activities
         db.execute("ALTER TABLE record ADD COLUMN activity BLOB")
+    if "start_time" not in columns:  # a chart book from before session times
+        db.execute("ALTER TABLE record ADD COLUMN start_time TEXT")
     path.chmod(0o600)
     return db
 
@@ -114,6 +117,7 @@ class Record:
     en_text: str
     updated_at: datetime
     activity: str = ""  # the day's therapy activities; never exported
+    start_time: str = ""  # when the session began, "HH:MM", or "" if not filled in; never exported
 
 
 @dataclass(frozen=True)
@@ -247,10 +251,11 @@ class RecordStore:
 
     def update_record(self, record_id: int, *, location: str | None = None,
                       zh_text: str | None = None, en_text: str | None = None,
-                      activity: str | None = None) -> Record:
+                      activity: str | None = None, start_time: str | None = None) -> Record:
         """Change only the fields given (None leaves one alone), for autosave. The English
         text is overwritten, not versioned. Raises NotFound for an unknown record."""
-        given = {"location": location, "zh_text": zh_text, "en_text": en_text, "activity": activity}
+        given = {"location": location, "zh_text": zh_text, "en_text": en_text, "activity": activity,
+                 "start_time": start_time}
         with self._lock:
             record = self.get_record(record_id)
             new = replace(record, updated_at=self._now(),
@@ -284,10 +289,10 @@ class RecordStore:
     def _write_texts(self, r: Record) -> None:
         self._db.execute(
             "UPDATE record SET location = ?, zh_text = ?, en_text = ?, updated_at = ?,"
-            " activity = ? WHERE id = ?",
+            " activity = ?, start_time = ? WHERE id = ?",
             (self._enc(r.location, "record.location"), self._enc(r.zh_text, "record.zh_text"),
              self._enc(r.en_text, "record.en_text"), r.updated_at.isoformat(),
-             self._enc(r.activity, "record.activity"), r.id))
+             self._enc(r.activity, "record.activity"), r.start_time or None, r.id))
 
     def delete_record(self, record_id: int) -> None:
         """Remove a record for good. Raises NotFound for an unknown record."""
@@ -297,7 +302,7 @@ class RecordStore:
             raise NotFound(f"record {record_id}")
 
     _RECORD_COLUMNS = ("id, student_id, visit_date, location, zh_text, en_text, updated_at,"
-                       " activity")
+                       " activity, start_time")
 
     def get_record(self, record_id: int) -> Record:
         with self._lock:
@@ -318,7 +323,7 @@ class RecordStore:
         return Record(row[0], row[1], date.fromisoformat(row[2]),
                       self._dec(row[3], "record.location"), self._dec(row[4], "record.zh_text"),
                       self._dec(row[5], "record.en_text"), datetime.fromisoformat(row[6]),
-                      "" if row[7] is None else self._dec(row[7], "record.activity"))
+                      "" if row[7] is None else self._dec(row[7], "record.activity"), row[8] or "")
 
     def _records(self, where: str, args: tuple, order: str) -> list[Record]:
         with self._lock:
@@ -368,6 +373,12 @@ class RecordStore:
             if record.location:
                 return record.location
         return ""
+
+    def records_at(self, location: str) -> list[Record]:
+        """Records at `location` ("" for those with none), newest first. Locations are
+        encrypted, so this reads every record."""
+        records = self._records("1 = 1", (), "visit_date DESC, start_time DESC, id DESC")
+        return [r for r in records if r.location.strip() == location]
 
     def all_locations(self) -> list[str]:
         """Every location used so far, most recently visited first, for a drop-down."""
