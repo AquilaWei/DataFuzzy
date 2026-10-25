@@ -368,6 +368,9 @@ class ExcelExportDialog(QDialog):
                 continue
             self.written.append(path)
             lines.insert(len(self.written) - 1, f"已匯出：{path}")
+        if self.written and len(lines) == len(self.written):
+            self.accept()  # every location written: nothing left to read here
+            return
         self.status.setText("\n".join(lines) or "沒有可匯出的地點。")
         self.reveal_btn.setEnabled(bool(self.written))
 

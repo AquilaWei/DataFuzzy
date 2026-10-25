@@ -105,6 +105,16 @@ def test_dialog_remembers_folder_and_writes_one_file_per_location(qtbot, charts,
     assert dialog.written == [out]
     assert load_workbook(out).sheetnames == ["Amy", "王小明"]
     assert "略過「新竹國小」" in dialog.status.text()
+    assert dialog.result() != dialog.DialogCode.Accepted  # a skipped location keeps it open
+
+
+def test_dialog_closes_when_every_location_is_written(qtbot, charts, tmp_path):
+    charts.set_excel_folder("Lincoln", str(tmp_path / "a"))
+    charts.set_excel_folder("新竹國小", str(tmp_path / "b"))
+    dialog = make_dialog(qtbot, charts)
+    dialog.export_btn.click()
+    assert len(dialog.written) == 2
+    assert dialog.result() == dialog.DialogCode.Accepted
 
 
 def test_dialog_asks_before_replacing_a_file(qtbot, charts, tmp_path):
