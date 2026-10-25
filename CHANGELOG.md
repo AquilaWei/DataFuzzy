@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.5.1] - 2026-10-25
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 修正
+- 病歷的「開始時間」欄右側加上時鐘圖示，提示點那裡可以選時間。
+
 ## [0.7.0.5.0] - 2026-10-25
 
 TheraNote 分支功能測試版，尚待實機驗收。本次不建立 tag、不發佈。
