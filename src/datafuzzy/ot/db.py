@@ -14,6 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
+from typing import Self
 
 from platformdirs import user_data_dir
 
@@ -164,7 +165,7 @@ class RecordStore:
         with self._lock:
             self._db.close()
 
-    def __enter__(self) -> RecordStore:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *exc: object) -> None:

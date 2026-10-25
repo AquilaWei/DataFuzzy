@@ -163,7 +163,8 @@ class PasswordKeyProvider:
             key = Scrypt(salt=salt, length=KEY_BYTES, n=SCRYPT_N, r=SCRYPT_R, p=SCRYPT_P).derive(password.encode())
             if creating:
                 write_meta(self._path, "password_salt", salt)
-                write_meta(self._path, "password_check", Cipher(key).encrypt(PASSWORD_CHECK_TEXT, "meta.password_check"))
+                sealed = Cipher(key).encrypt(PASSWORD_CHECK_TEXT, "meta.password_check")
+                write_meta(self._path, "password_check", sealed)
                 return key
             try:
                 Cipher(key).decrypt(check, "meta.password_check")
