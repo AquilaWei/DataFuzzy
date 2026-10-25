@@ -367,6 +367,24 @@ class RecordStore:
                 seen.setdefault(location)
         return list(seen)
 
+    # --- Excel export folders ---------------------------------------------------------
+
+    def excel_folders(self) -> dict[str, str]:
+        """The Excel export folder chosen for each location. Kept encrypted, since the
+        location names are."""
+        with self._lock:
+            row = self._db.execute("SELECT value FROM meta WHERE key = 'excel_folders'").fetchone()
+        return json.loads(self._dec(row[0], "meta.excel_folders")) if row else {}
+
+    def set_excel_folder(self, location: str, folder: str) -> None:
+        with self._lock:
+            folders = self.excel_folders()
+            folders[location] = folder
+            blob = self._enc(json.dumps(folders, ensure_ascii=False), "meta.excel_folders")
+            with self._db:
+                self._db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('excel_folders', ?)",
+                                 (blob,))
+
     # --- export batches -------------------------------------------------------------
 
     def add_batch(self, data: dict) -> int:

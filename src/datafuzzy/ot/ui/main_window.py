@@ -36,7 +36,7 @@ from ..db import DuplicateRecord, RecordStore
 from .about import AboutDialog
 from .date_view import DayRecordsView, MarkedCalendar, to_date, to_qdate
 from .editor import RecordEditor
-from .exchange_dialogs import ExportDialog, ImportDialog
+from .exchange_dialogs import ExcelExportDialog, ExportDialog, ImportDialog
 from .student_view import StudentRecordsView
 from .widgets import SegmentedControl
 
@@ -93,6 +93,7 @@ class TheraNoteWindow(QMainWindow):
         self.add_record_btn = QPushButton("新增病歷")
         self.export_btn = QPushButton("匯出")
         self.import_btn = QPushButton("貼回")
+        self.excel_btn = QPushButton("Excel 匯出")
         self.student_list = QListWidget()
         self.calendar = MarkedCalendar(store)
         self.sidebar_stack = QStackedWidget()
@@ -118,6 +119,7 @@ class TheraNoteWindow(QMainWindow):
         actions.addWidget(self.add_record_btn, 0, 1)
         actions.addWidget(self.export_btn, 1, 0)
         actions.addWidget(self.import_btn, 1, 1)
+        actions.addWidget(self.excel_btn, 2, 0, 1, 2)
         side = QVBoxLayout(sidebar)
         side.setContentsMargins(14, 16, 14, 12)
         side.setSpacing(10)
@@ -143,6 +145,7 @@ class TheraNoteWindow(QMainWindow):
         self.add_record_btn.clicked.connect(lambda: self.new_record())
         self.export_btn.clicked.connect(self.open_export)
         self.import_btn.clicked.connect(self.open_import)
+        self.excel_btn.clicked.connect(self.open_excel_export)
 
         self.refresh_students()
         self.day_view.show_day(self.calendar.selected())
@@ -315,6 +318,10 @@ class TheraNoteWindow(QMainWindow):
     def open_export(self) -> None:
         self.flush()  # export what is on screen, not what was last auto-saved
         ExportDialog(self.store, self.pipeline, parent=self).exec()
+
+    def open_excel_export(self) -> None:
+        self.flush()
+        ExcelExportDialog(self.store, parent=self).exec()
 
     def open_import(self) -> None:
         self.flush()

@@ -36,6 +36,7 @@ a = Analysis(
         (str(PKG / "models_manifest.json"), "datafuzzy"),
         (str(PKG / "icon.png"), "datafuzzy"),
         (str(PKG / "ot" / "icon.png"), "datafuzzy/ot"),
+        (str(PKG / "ot" / "excel_template.xlsx"), "datafuzzy/ot"),
         (str(PKG / "given_names.txt"), "datafuzzy"),
         (str(ROOT / "LICENSE"), "datafuzzy"),
         (str(ROOT / "build" / "THIRD_PARTY_LICENSES.txt"), "datafuzzy"),

@@ -14,6 +14,7 @@ dependencies = [
     "keyring>=25.7.0",
     "numpy>=1.26",
     "onnxruntime>=1.19",
+    "openpyxl>=3.1",
     "platformdirs>=4",
     "pyobjc-framework-localauthentication>=12.2.2 ; sys_platform == 'darwin'",
     "tokenizers>=0.20",
