@@ -1,0 +1,1 @@
+"""TheraNote's Qt interface."""
