@@ -4,7 +4,7 @@ import pytest
 from PySide6.QtCore import QDate, Qt
 
 from datafuzzy.ot.db import RecordStore
-from datafuzzy.ot.ui.date_view import DayRecordsView, MarkedCalendar
+from datafuzzy.ot.ui.date_view import NAME_ROLE, PLACE_ROLE, PREVIEW_ROLE, DayRecordDelegate, DayRecordsView, MarkedCalendar
 
 KEY = bytes(range(32))
 
@@ -79,6 +79,14 @@ def test_calendar_reports_the_selected_day(qtbot, seen):
 def test_day_view_lists_children_with_a_record_sorted_by_name(qtbot, seen):
     view = make_day_view(qtbot, seen, date(2026, 10, 1))
     assert item_texts(view) == ["王小明\n新竹國小 · 王的第一次", "陳美玲\n台北診所 · 陳的第一次"]
+
+
+def test_day_view_rows_keep_name_place_and_preview_apart(qtbot, seen):
+    view = make_day_view(qtbot, seen, date(2026, 10, 1))
+    item = view.list.item(0)
+    assert [item.data(r) for r in (NAME_ROLE, PLACE_ROLE, PREVIEW_ROLE)] == ["王小明", "新竹國小", "王的第一次"]
+    assert isinstance(view.list.itemDelegate(), DayRecordDelegate)
+    assert view.list.visualItemRect(item).height() > view.fontMetrics().height() * 2
 
 
 def test_day_view_header_gives_date_and_count(qtbot, seen):

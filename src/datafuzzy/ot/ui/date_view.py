@@ -4,14 +4,17 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from PySide6.QtCore import QDate, QPoint, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QTextCharFormat
+from PySide6.QtCore import QDate, QModelIndex, QPoint, QRect, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPalette, QTextCharFormat
 from PySide6.QtWidgets import (
     QCalendarWidget,
     QLabel,
     QListWidget,
     QListWidgetItem,
     QMenu,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QVBoxLayout,
     QWidget,
 )
@@ -65,6 +68,76 @@ class MarkedCalendar(QCalendarWidget):
         return to_date(self.selectedDate())
 
 
+NAME_ROLE = Qt.ItemDataRole.UserRole + 1
+PLACE_ROLE = Qt.ItemDataRole.UserRole + 2
+PREVIEW_ROLE = Qt.ItemDataRole.UserRole + 3
+
+
+class DayRecordDelegate(QStyledItemDelegate):
+    """A row of the day list in three distinct looks, so they are not read as one another:
+    the student's name in bold, the location as a small accent-tinted tag, and the start of
+    the chart in grey."""
+
+    PAD_X, PAD_Y, GAP, TAG_PAD = 12, 8, 4, 6
+
+    def _fonts(self, option: QStyleOptionViewItem) -> tuple[QFont, QFont, QFont]:
+        name = QFont(option.font)
+        name.setPointSizeF(name.pointSizeF() + 2)
+        name.setWeight(QFont.Weight.Bold)
+        tag = QFont(option.font)
+        tag.setPointSizeF(tag.pointSizeF() - 1)
+        return name, tag, QFont(option.font)
+
+    def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
+        name, tag, body = self._fonts(option)
+        second = max(QFontMetrics(tag).height() + 4, QFontMetrics(body).height())
+        return QSize(option.rect.width(), 2 * self.PAD_Y + QFontMetrics(name).height() + self.GAP + second)
+
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex) -> None:
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        opt.text = ""
+        style = opt.widget.style() if opt.widget else None
+        if style:  # hover and selection backgrounds from the stylesheet
+            style.drawPrimitive(QStyle.PrimitiveElement.PE_PanelItemViewItem, opt, painter, opt.widget)
+        selected = bool(opt.state & QStyle.StateFlag.State_Selected)
+        palette = opt.palette
+        text = palette.color(QPalette.ColorRole.HighlightedText if selected else QPalette.ColorRole.Text)
+        grey = text if selected else palette.color(QPalette.ColorRole.PlaceholderText)
+        name_font, tag_font, body_font = self._fonts(opt)
+        r = opt.rect.adjusted(self.PAD_X, self.PAD_Y, -self.PAD_X, -self.PAD_Y)
+
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setFont(name_font)
+        painter.setPen(text)
+        name_h = QFontMetrics(name_font).height()
+        painter.drawText(QRect(r.left(), r.top(), r.width(), name_h),
+                         Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, index.data(NAME_ROLE))
+
+        top = r.top() + name_h + self.GAP
+        tag_fm = QFontMetrics(tag_font)
+        place = index.data(PLACE_ROLE)
+        tag_rect = QRect(r.left(), top, tag_fm.horizontalAdvance(place) + 2 * self.TAG_PAD, tag_fm.height() + 4)
+        fill = QColor(text if selected else ACCENT)
+        fill.setAlpha(50 if selected else 36)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(fill)
+        painter.drawRoundedRect(tag_rect, 5, 5)
+        painter.setFont(tag_font)
+        painter.setPen(text if selected else QColor(ACCENT))
+        painter.drawText(tag_rect, Qt.AlignmentFlag.AlignCenter, place)
+
+        body_left = tag_rect.right() + 10
+        body_rect = QRect(body_left, top, r.right() - body_left, tag_rect.height())
+        painter.setFont(body_font)
+        painter.setPen(grey)
+        preview = QFontMetrics(body_font).elidedText(index.data(PREVIEW_ROLE), Qt.TextElideMode.ElideRight,
+                                                    body_rect.width())
+        painter.drawText(body_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, preview)
+        painter.restore()
+
+
 class DayRecordsView(QWidget):
     """The children with a record on one day; clicking one opens the record."""
 
@@ -83,6 +156,7 @@ class DayRecordsView(QWidget):
         self.empty.setObjectName("subtle")
         self.list = QListWidget()
         self.list.setSpacing(4)
+        self.list.setItemDelegate(DayRecordDelegate(self.list))
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 12)
         layout.setSpacing(0)
@@ -126,6 +200,9 @@ class DayRecordsView(QWidget):
             first_line = preview_text(record.zh_text, record.en_text).splitlines()[0]
             item = QListWidgetItem(f"{names[record.student_id]}\n{place} · {first_line}")
             item.setData(Qt.ItemDataRole.UserRole, record.id)
+            item.setData(NAME_ROLE, names[record.student_id])
+            item.setData(PLACE_ROLE, place)
+            item.setData(PREVIEW_ROLE, first_line)
             self.list.addItem(item)
         self.empty.setVisible(not records)
         self.list.setVisible(bool(records))
