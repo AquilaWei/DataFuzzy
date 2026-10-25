@@ -268,6 +268,13 @@ class RecordStore:
             (self._enc(r.location, "record.location"), self._enc(r.zh_text, "record.zh_text"),
              self._enc(r.en_text, "record.en_text"), r.updated_at.isoformat(), r.id))
 
+    def delete_record(self, record_id: int) -> None:
+        """Remove a record for good. Raises NotFound for an unknown record."""
+        with self._lock, self._db:
+            cur = self._db.execute("DELETE FROM record WHERE id = ?", (record_id,))
+        if cur.rowcount == 0:
+            raise NotFound(f"record {record_id}")
+
     _RECORD_COLUMNS = ("id, student_id, visit_date, location, zh_text, en_text, updated_at")
 
     def get_record(self, record_id: int) -> Record:

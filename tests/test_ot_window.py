@@ -1,7 +1,7 @@
 from datetime import date
 
 import pytest
-from PySide6.QtCore import QDate, Qt
+from PySide6.QtCore import QDate, QPoint, Qt
 
 from datafuzzy import __version__
 from datafuzzy.core.pipeline import Pipeline
@@ -288,3 +288,56 @@ def test_switching_mode_with_the_sidebar_control(qtbot, store):
     assert (window.mode_switch.index(), window.sidebar_stack.currentWidget() is window.calendar) == (DATE_MODE, True)
     window.mode_switch.button(0).click()
     assert window.mode_switch.index() == STUDENT_MODE
+
+
+def delete_from_card(window, index=0):
+    window.student_list.setCurrentRow(0)
+    window.student_view.stack.cards[index].context_menu().actions()[0].trigger()
+
+
+def test_card_menu_deletes_the_record_after_confirming(qtbot, store, monkeypatch):
+    student = store.add_student("王小明")
+    store.add_record(student.id, OCT_1, "A校", "王")
+    window = make_window(qtbot, store)
+    monkeypatch.setattr(window, "_confirm_delete", lambda name, day: (name, day) == ("王小明", OCT_1))
+    delete_from_card(window)
+    assert store.records_for_student(student.id) == []
+    assert window.student_view.stack.cards == []
+    assert window.calendar.marked_dates() == set()
+
+
+def test_declining_the_delete_prompt_keeps_the_record(qtbot, store, monkeypatch):
+    student = store.add_student("王小明")
+    store.add_record(student.id, OCT_1, "A校", "王")
+    window = make_window(qtbot, store)
+    monkeypatch.setattr(window, "_confirm_delete", lambda name, day: False)
+    delete_from_card(window)
+    assert len(store.records_for_student(student.id)) == 1
+    assert len(window.student_view.stack.cards) == 1
+
+
+def test_day_list_menu_deletes_the_record(qtbot, store, monkeypatch):
+    wang = store.add_student("王小明")
+    chen = store.add_student("陳美玲")
+    store.add_record(wang.id, OCT_1, "A校", "王")
+    store.add_record(chen.id, OCT_1, "B校", "陳")
+    window = make_window(qtbot, store)
+    monkeypatch.setattr(window, "_confirm_delete", lambda name, day: True)
+    window.set_mode(DATE_MODE)
+    window.calendar.setSelectedDate(QDate(2026, 10, 1))
+    rows = window.day_view.list
+    rows.viewport().resize(400, 400)
+    window.day_view.context_menu(rows.visualItemRect(rows.item(0)).center()).actions()[0].trigger()
+    assert [r.student_id for r in store.records_on(OCT_1)] == [chen.id]
+    assert rows.count() == 1
+
+
+def test_day_list_has_no_menu_below_the_rows(qtbot, store):
+    student = store.add_student("王小明")
+    store.add_record(student.id, OCT_1, "A校", "王")
+    window = make_window(qtbot, store)
+    window.set_mode(DATE_MODE)
+    window.calendar.setSelectedDate(QDate(2026, 10, 1))
+    rows = window.day_view.list
+    below = rows.visualItemRect(rows.item(0)).bottomLeft() + QPoint(5, 200)
+    assert window.day_view.context_menu(below) is None

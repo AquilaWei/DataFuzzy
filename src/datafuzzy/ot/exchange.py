@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Literal
 
 from ..core.mapping import PERSON, Session
 from . import APP_NAME
-from .db import RecordStore, StoredBatch
+from .db import NotFound, RecordStore, StoredBatch
 
 if TYPE_CHECKING:
     from ..core.pipeline import Pipeline
@@ -164,8 +164,8 @@ class UnrecognizedHeader:
     header: str
     # malformed: not "=== REC-<id> | <code> | <date> ==="; not_in_export: a record this
     # batch never contained; header_changed: code or date differs from the export;
-    # duplicate: the record id appeared before.
-    reason: Literal["malformed", "not_in_export", "header_changed", "duplicate"]
+    # duplicate: the record id appeared before; deleted: the record was deleted after export.
+    reason: Literal["malformed", "not_in_export", "header_changed", "duplicate", "deleted"]
 
 
 @dataclass(frozen=True)
@@ -211,7 +211,11 @@ def preview_import(store: RecordStore, text: str, batch_id: int | None = None) -
             unrecognized.append(UnrecognizedHeader(block.header, "header_changed"))
         else:
             seen.add(block.record_id)
-            record = store.get_record(block.record_id)
+            try:
+                record = store.get_record(block.record_id)
+            except NotFound:
+                unrecognized.append(UnrecognizedHeader(block.header, "deleted"))
+                continue
             restored = session.restore(block.body)
             items.append(ImportItem(
                 block.record_id, session.restore(block.code).text, record.visit_date, restored.text,

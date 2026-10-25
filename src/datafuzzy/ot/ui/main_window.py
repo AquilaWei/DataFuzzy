@@ -137,6 +137,8 @@ class TheraNoteWindow(QMainWindow):
         self.calendar.selectionChanged.connect(self._day_selected)
         self.student_view.open_record.connect(self.open_record)
         self.day_view.open_record.connect(self.open_record)
+        self.student_view.delete_record.connect(self.delete_record)
+        self.day_view.delete_record.connect(self.delete_record)
         self.add_student_btn.clicked.connect(lambda: self.add_student())
         self.add_record_btn.clicked.connect(lambda: self.new_record())
         self.export_btn.clicked.connect(self.open_export)
@@ -251,6 +253,23 @@ class TheraNoteWindow(QMainWindow):
         self.refresh_after_change()
         self.open_record(record.id)
         return record.id
+
+    def _confirm_delete(self, student_name: str, day: date) -> bool:
+        answer = QMessageBox.warning(
+            self, "刪除病歷", f"要刪除 {student_name} 在 {day.isoformat()} 的病歷嗎？\n"
+            "中英文內容都會一併刪除，無法復原。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel)
+        return answer == QMessageBox.StandardButton.Yes
+
+    def delete_record(self, record_id: int) -> bool:
+        """Delete a record after asking. Returns whether it was deleted."""
+        record = self.store.get_record(record_id)
+        if not self._confirm_delete(self.store.get_student(record.student_id).name, record.visit_date):
+            return False
+        self.store.delete_record(record_id)
+        self.refresh_after_change()
+        return True
 
     def open_record(self, record_id: int) -> None:
         """Show a record in the editor. Whatever was being edited is saved first."""

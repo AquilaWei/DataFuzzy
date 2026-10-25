@@ -39,6 +39,7 @@ REASONS = {
     "not_in_export": "這份匯出沒有這筆病歷",
     "header_changed": "標頭的代號或日期被改過",
     "duplicate": "同一筆出現第二次",
+    "deleted": "這筆病歷已刪除",
 }
 
 

@@ -236,3 +236,11 @@ def test_export_translate_import_round_trip_with_classmate_in_text(store, pipeli
         "王小明 played with 陳美玲",
         "陳美玲 played alone",
     ]
+
+
+def test_record_deleted_after_export_is_reported_not_written(store, two_visits):
+    store.delete_record(1)
+    preview = preview_import(store, FIRST + "one\n\n" + SECOND + "two\n")
+    assert [i.record_id for i in preview.items] == [2]
+    assert preview.unrecognized == [UnrecognizedHeader(FIRST.strip(), "deleted")]
+    assert preview.missing == []

@@ -6,11 +6,12 @@ from __future__ import annotations
 from datetime import date
 
 from PySide6.QtCore import QEasingCurve, QRectF, Qt, QVariantAnimation, Signal
-from PySide6.QtGui import QCursor, QMouseEvent, QPainter, QPalette
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PySide6.QtGui import QContextMenuEvent, QCursor, QMouseEvent, QPainter, QPalette
+from PySide6.QtWidgets import QLabel, QMenu, QVBoxLayout, QWidget
 
 from ..db import Record
 from .theme import add_shadow
+from .widgets import record_menu
 
 MARGIN = 16
 STEP = 56          # visible height of a folded card: its date and location line
@@ -40,6 +41,7 @@ def preview_text(zh_text: str, en_text: str) -> str:
 
 class RecordCard(QWidget):
     clicked = Signal(int)   # record id
+    delete_requested = Signal(int)  # record id, from the right-click menu
     entered = Signal(int)   # index in the stack
     left = Signal(int)
 
@@ -82,6 +84,12 @@ class RecordCard(QWidget):
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
             self.clicked.emit(self.record_id)
 
+    def context_menu(self) -> QMenu:
+        return record_menu(self, lambda: self.delete_requested.emit(self.record_id))
+
+    def contextMenuEvent(self, event: QContextMenuEvent) -> None:
+        self.context_menu().exec(event.globalPos())
+
 
 class CardStack(QWidget):
     """Cards laid out top to bottom, each one overlapping the one before it.
@@ -90,6 +98,7 @@ class CardStack(QWidget):
     EXPAND, so its whole body shows. Moving to another card hands the lift over."""
 
     clicked = Signal(int)  # record id of the card that was clicked
+    delete_requested = Signal(int)  # record id chosen for deletion from a card's menu
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -110,6 +119,7 @@ class CardStack(QWidget):
         for i, record in enumerate(records):
             card = RecordCard(record, i, self)
             card.clicked.connect(self.clicked)
+            card.delete_requested.connect(self.delete_requested)
             card.entered.connect(self.set_hovered)
             card.left.connect(self._card_left)
             card.show()

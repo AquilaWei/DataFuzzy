@@ -15,6 +15,7 @@ OLDEST_FIRST = 1
 
 class StudentRecordsView(QWidget):
     open_record = Signal(int)  # record id of the clicked card
+    delete_record = Signal(int)  # record id chosen from a card's right-click menu
 
     def __init__(self, store: RecordStore, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -48,6 +49,7 @@ class StudentRecordsView(QWidget):
 
         self.sort.changed.connect(lambda _: self.refresh())
         self.stack.clicked.connect(self.open_record)
+        self.stack.delete_requested.connect(self.delete_record)
         self.refresh()
 
     def show_student(self, student_id: int | None) -> None:

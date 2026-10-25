@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from PySide6.QtCore import QDate, Qt, Signal
+from PySide6.QtCore import QDate, QPoint, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QTextCharFormat
 from PySide6.QtWidgets import (
     QCalendarWidget,
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QVBoxLayout,
     QWidget,
 )
@@ -18,6 +19,7 @@ from PySide6.QtWidgets import (
 from ..db import RecordStore
 from .cards import date_label, preview_text
 from .theme import ACCENT
+from .widgets import record_menu
 
 
 def to_qdate(day: date) -> QDate:
@@ -67,6 +69,7 @@ class DayRecordsView(QWidget):
     """The children with a record on one day; clicking one opens the record."""
 
     open_record = Signal(int)  # record id
+    delete_record = Signal(int)  # record id chosen from a row's right-click menu
 
     def __init__(self, store: RecordStore, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -89,7 +92,21 @@ class DayRecordsView(QWidget):
         layout.addWidget(self.empty)
         layout.addWidget(self.list, 1)
         self.list.itemClicked.connect(lambda item: self.open_record.emit(item.data(Qt.ItemDataRole.UserRole)))
+        self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.list.customContextMenuRequested.connect(self._show_menu)
         self.empty.setVisible(False)
+
+    def context_menu(self, pos: QPoint) -> QMenu | None:
+        """The menu for the row at `pos` (list viewport coordinates), None off the rows."""
+        item = self.list.itemAt(pos)
+        if item is None:
+            return None
+        record_id = item.data(Qt.ItemDataRole.UserRole)
+        return record_menu(self, lambda: self.delete_record.emit(record_id))
+
+    def _show_menu(self, pos: QPoint) -> None:
+        if menu := self.context_menu(pos):
+            menu.exec(self.list.viewport().mapToGlobal(pos))
 
     def show_day(self, day: date) -> None:
         self.day = day

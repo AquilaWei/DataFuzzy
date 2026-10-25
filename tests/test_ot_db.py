@@ -270,3 +270,24 @@ def test_batch_round_trips_encrypted_after_reopen(tmp_path):
 def test_unknown_batch_raises_not_found(store):
     with pytest.raises(NotFound):
         store.get_batch(99)
+
+
+def test_deleted_record_is_gone(store):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, date(2026, 10, 1))
+    store.delete_record(record.id)
+    assert store.records_for_student(student.id) == []
+    assert store.dates_with_records() == set()
+
+
+def test_deleting_one_record_keeps_the_others(store):
+    student = store.add_student("王小明")
+    first = store.add_record(student.id, date(2026, 10, 1))
+    second = store.add_record(student.id, date(2026, 10, 8))
+    store.delete_record(first.id)
+    assert store.records_for_student(student.id) == [second]
+
+
+def test_deleting_unknown_record_raises_not_found(store):
+    with pytest.raises(NotFound):
+        store.delete_record(99)
