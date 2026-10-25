@@ -79,6 +79,7 @@ class RecordEditor(QWidget):
         self.location_box.setEditText(record.location)
 
         self.time_box = QComboBox()
+        self.time_box.setObjectName("time")  # the stylesheet gives it a clock icon
         self.time_box.setEditable(True)
         self.time_box.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.time_box.lineEdit().setPlaceholderText("例如 09:30")

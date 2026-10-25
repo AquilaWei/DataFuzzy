@@ -44,3 +44,9 @@ def test_date_fields_show_a_calendar_icon():
     assert theme.CALENDAR_ICON.is_file()
     assert theme.CALENDAR_ICON.with_name("calendar@2x.png").is_file()
     assert theme.CALENDAR_ICON.as_posix() in theme.stylesheet()
+
+
+def test_time_fields_show_a_clock_icon():
+    assert theme.CLOCK_ICON.is_file()
+    assert theme.CLOCK_ICON.with_name("clock@2x.png").is_file()
+    assert theme.CLOCK_ICON.as_posix() in theme.stylesheet()

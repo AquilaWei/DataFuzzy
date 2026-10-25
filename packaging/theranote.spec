@@ -39,6 +39,8 @@ a = Analysis(
         (str(PKG / "ot" / "excel_template.xlsx"), "datafuzzy/ot"),
         (str(PKG / "ot" / "ui" / "calendar.png"), "datafuzzy/ot/ui"),
         (str(PKG / "ot" / "ui" / "calendar@2x.png"), "datafuzzy/ot/ui"),
+        (str(PKG / "ot" / "ui" / "clock.png"), "datafuzzy/ot/ui"),
+        (str(PKG / "ot" / "ui" / "clock@2x.png"), "datafuzzy/ot/ui"),
         (str(PKG / "given_names.txt"), "datafuzzy"),
         (str(ROOT / "LICENSE"), "datafuzzy"),
         (str(ROOT / "build" / "THIRD_PARTY_LICENSES.txt"), "datafuzzy"),
