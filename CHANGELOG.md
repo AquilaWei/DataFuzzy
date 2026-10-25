@@ -3,6 +3,27 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.0.1] - 2026-10-24
+
+TheraNote 首個分支測試版，尚待實機驗收。本分支採五段版號：前三碼 `0.7.0` 是分支的
+基底版本，第四碼是功能驗收版（類似 MINOR），第五碼是測試／修正版（類似 PATCH）。
+本次不建立 tag、不發佈。
+
+### 新增
+- 以學生或日期瀏覽職能治療病歷，中英文分別編輯、自動儲存；地點可沿用上次或從歷史選取。
+- 病歷與匯出代號表加密保存；macOS 以 Touch ID／登入密碼驗證後讀取 Keychain，
+  Linux 使用 Secret Service，沒有鑰匙圈的新資料庫可設定密碼。
+- 依日期區間匯出病歷並遮蔽姓名；貼回帶標頭的修訂文字後還原姓名，確認後更新英文版。
+  代號表持久保存，重開仍可貼回。
+- TheraNote 的側邊欄、文件卡片、滑鼠預覽與系統淺深色介面；保留原有模型管理。
+- `uv run theranote`、`uv run datafuzzy` 與 `uv run python -m datafuzzy.ot` 開啟 TheraNote；
+  原 DataFuzzy 介面仍可用 `uv run python -m datafuzzy` 開啟。
+- 建置腳本改產出 TheraNote DMG／AppImage，隨附系統鑰匙圈依賴及第三方授權。
+
+### 待實機驗收
+- macOS Touch ID／密碼解鎖、未公證 App 的鑰匙圈提示、外觀與浮起動畫、DMG 啟動，
+  以及真實模型下的姓名遮蔽品質。
+
 ## [0.7.0] - 2026-10-07
 
 Verified by hand on an Apple Silicon Mac. English names written inside Chinese text are
