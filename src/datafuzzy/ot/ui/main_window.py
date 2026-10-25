@@ -30,10 +30,10 @@ from PySide6.QtWidgets import (
 from ... import __version__
 from ...core.models import ModelSpec
 from ...core.pipeline import Pipeline
-from ...ui.about import AboutDialog
 from ...ui.model_manager import ModelManager
 from .. import APP_NAME
 from ..db import DuplicateRecord, RecordStore
+from .about import AboutDialog
 from .date_view import DayRecordsView, MarkedCalendar, to_date, to_qdate
 from .editor import RecordEditor
 from .exchange_dialogs import ExportDialog, ImportDialog
