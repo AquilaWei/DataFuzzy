@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.2.0] - 2026-10-25
+
+TheraNote 分支功能測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 「Excel 匯出」：依學校表單範本，每個地點產生 `地點-匯出日期.xlsx`，每位學生一個分頁，
+  依日期填入 Date／Activity（病歷的活動）／Comment（英文病歷）；超過範本 10 格會自動延伸。
+  每個地點各自設定匯出資料夾並加密記住；同名檔案存在時先詢問是否取代；未填地點的病歷不匯出。
+
 ## [0.7.0.1.0] - 2026-10-25
 
 TheraNote 分支功能測試版，尚待實機驗收。本次不建立 tag、不發佈。
