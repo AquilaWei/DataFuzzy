@@ -6,11 +6,14 @@ and dark means swapping the palette; nothing is repainted by hand.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QGuiApplication, QPalette
 from PySide6.QtWidgets import QApplication, QGraphicsDropShadowEffect, QWidget
 
 ACCENT = "#0a84ff"
+CALENDAR_ICON = Path(__file__).with_name("calendar.png")  # Qt picks calendar@2x.png on Retina
 
 # role -> (light, dark)
 COLORS: dict[QPalette.ColorRole, tuple[str, str]] = {
@@ -95,6 +98,15 @@ QScrollArea { border: none; background: transparent; }
 """
 
 
+def stylesheet() -> str:
+    """STYLESHEET plus the rules that need a file path: a calendar icon on date fields, so
+    it is clear that clicking there opens a calendar."""
+    icon = CALENDAR_ICON.as_posix()
+    return STYLESHEET + (
+        "QDateEdit::drop-down { border: none; width: 26px; }\n"
+        f"QDateEdit::down-arrow {{ image: url(\"{icon}\"); width: 16px; height: 16px; }}\n")
+
+
 def is_dark(scheme: Qt.ColorScheme) -> bool:
     """Unknown (no system setting, e.g. headless) is treated as light."""
     return scheme == Qt.ColorScheme.Dark
@@ -112,7 +124,7 @@ def apply_theme(app: QApplication) -> None:
     """Fusion style (the same look on every platform) with our palette and stylesheet, kept
     in step with the system's light/dark setting while the app runs."""
     app.setStyle("Fusion")
-    app.setStyleSheet(STYLESHEET)
+    app.setStyleSheet(stylesheet())
     hints = QGuiApplication.styleHints()
     app.setPalette(palette_for(hints.colorScheme()))
     hints.colorSchemeChanged.connect(lambda scheme: app.setPalette(palette_for(scheme)))

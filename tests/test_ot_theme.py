@@ -2,6 +2,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QGraphicsDropShadowEffect, QWidget
 
+from datafuzzy.ot.ui import theme
 from datafuzzy.ot.ui.theme import add_shadow, apply_theme, palette_for
 
 
@@ -37,3 +38,9 @@ def test_shadow_is_a_soft_drop_shadow_on_the_widget(qtbot):
     effect = add_shadow(widget, blur=30)
     assert isinstance(widget.graphicsEffect(), QGraphicsDropShadowEffect)
     assert effect.blurRadius() == 30
+
+
+def test_date_fields_show_a_calendar_icon():
+    assert theme.CALENDAR_ICON.is_file()
+    assert theme.CALENDAR_ICON.with_name("calendar@2x.png").is_file()
+    assert theme.CALENDAR_ICON.as_posix() in theme.stylesheet()
