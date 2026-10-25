@@ -15,6 +15,8 @@ from pathlib import Path
 
 from packaging.requirements import Requirement
 
+from datafuzzy.ot import APP_NAME
+
 # Substrings that mark a license as incompatible with distributing the app under GPL-3.0.
 FORBIDDEN = ("GPL-2.0-only", "GPLv2 only", "GPL-2.0 only", "Proprietary", "Commercial",
              "AGPL", "SSPL", "BUSL", "CC-BY-NC")
@@ -65,7 +67,7 @@ def main() -> int:
 
     bad = []
     parts = [
-        "DataFuzzy is licensed under GPL-3.0-or-later. It bundles the following packages,\n"
+        f"{APP_NAME} is licensed under GPL-3.0-or-later. It bundles the following packages,\n"
         "each under its own license. NER models are not bundled; they are downloaded by the\n"
         "user and carry their own licenses (see the model manager).\n\n"
         "given_names.txt lists common US given names from the Social Security\n"

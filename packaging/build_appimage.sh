@@ -1,29 +1,29 @@
 #!/usr/bin/env bash
-# Build dist/DataFuzzy-<version>-<arch>.AppImage. Models are not included.
+# Build a versioned AppImage. Models are not included.
 source "$(dirname "$0")/common.sh"
 ARCH=$(uname -m)
 APPIMAGETOOL_VERSION=1.9.0
 
 build_app
-check_no_models dist/DataFuzzy
+check_no_models "dist/$APP_NAME"
 
 APPDIR=build/AppDir
 rm -rf "$APPDIR"
 mkdir -p "$APPDIR/usr/lib"
-cp -a dist/DataFuzzy "$APPDIR/usr/lib/datafuzzy"
-cp src/datafuzzy/icon.png "$APPDIR/datafuzzy.png"
-cat > "$APPDIR/datafuzzy.desktop" <<DESKTOP
+cp -a "dist/$APP_NAME" "$APPDIR/usr/lib/$APP_SLUG"
+cp src/datafuzzy/icon.png "$APPDIR/$APP_SLUG.png"
+cat > "$APPDIR/$APP_SLUG.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
-Name=DataFuzzy
-Comment=Replace sensitive data with reversible codes, locally
-Exec=datafuzzy
-Icon=datafuzzy
-Categories=Utility;Security;
+Name=$APP_NAME
+Comment=Encrypted occupational therapy charts with reversible name masking
+Exec=$APP_SLUG
+Icon=$APP_SLUG
+Categories=Science;MedicalSoftware;
 DESKTOP
-cat > "$APPDIR/AppRun" <<'APPRUN'
+cat > "$APPDIR/AppRun" <<APPRUN
 #!/bin/sh
-exec "$(dirname "$(readlink -f "$0")")/usr/lib/datafuzzy/datafuzzy" "$@"
+exec "\$(dirname "\$(readlink -f "\$0")")/usr/lib/$APP_SLUG/$APP_SLUG" "\$@"
 APPRUN
 chmod +x "$APPDIR/AppRun"
 
@@ -33,7 +33,7 @@ if [ ! -x "$TOOL" ]; then
         "https://github.com/AppImage/appimagetool/releases/download/$APPIMAGETOOL_VERSION/appimagetool-$ARCH.AppImage"
     chmod +x "$TOOL"
 fi
-OUT="dist/DataFuzzy-$VERSION-$ARCH.AppImage"
+OUT="dist/$APP_NAME-$VERSION-$ARCH.AppImage"
 # Extract-and-run: no FUSE needed on the build machine.
 APPIMAGE_EXTRACT_AND_RUN=1 ARCH="$ARCH" "$TOOL" --no-appstream "$APPDIR" "$OUT"
 echo "built $OUT"

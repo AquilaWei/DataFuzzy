@@ -38,7 +38,7 @@ uv run theranote
 
 ![demo](docs/assets/demo.gif)
 
-## ✨ 功能
+## ✨ DataFuzzy 核心與原介面功能
 
 - 🔒 **完全本機處理** — 文字不會離開你的電腦
 - 🏷️ **可還原的代號** — `alice@acme.com` → `[EMAIL_A]`；同一個值永遠是同一個代號
@@ -72,18 +72,19 @@ uv run theranote
 
 ### 安裝檔（一般使用者）
 
-到 [**Releases**](https://github.com/AquilaWei/DataFuzzy/releases/latest) 下載：
+本分支建置下列 TheraNote 安裝檔，仍待實機驗收，尚未發佈；先前 DataFuzzy 正式版見
+[**Releases**](https://github.com/AquilaWei/DataFuzzy/releases/latest)。
 
 | 平台 | 檔案 | 安裝 |
 |---|---|---|
-| **macOS 14+**（Apple Silicon） | `DataFuzzy-x.y.z-arm64.dmg` | 打開 `.dmg` → 把 **DataFuzzy** 拖進「應用程式」 |
-| **Linux**（x86_64） | `DataFuzzy-x.y.z-x86_64.AppImage` | `chmod +x DataFuzzy-*.AppImage && ./DataFuzzy-*.AppImage` |
+| **macOS 14+**（Apple Silicon） | `TheraNote-<version>-arm64.dmg` | 打開 `.dmg` → 把 **TheraNote** 拖進「應用程式」 |
+| **Linux**（x86_64） | `TheraNote-<version>-x86_64.AppImage` | `chmod +x TheraNote-*.AppImage && ./TheraNote-*.AppImage` |
 
 - **Mac 第一次開啟**：App 沒有 Apple 付費簽章，macOS 會擋下並顯示「無法驗證」。到 **系統設定 → 隱私權與安全性**，在下方按 **強制打開**（只需一次）。或在終端機執行：
   ```bash
-  xattr -dr com.apple.quarantine /Applications/DataFuzzy.app
+  xattr -dr com.apple.quarantine /Applications/TheraNote.app
   ```
-- **Linux**：若系統沒有 FUSE，改用 `./DataFuzzy-*.AppImage --appimage-extract-and-run`
+- **Linux**：若系統沒有 FUSE，改用 `./TheraNote-*.AppImage --appimage-extract-and-run`
 - 安裝檔**不含模型**；下載的 `SHA256SUMS.txt` 可用來驗證檔案
 
 ### 從原始碼執行（開發者）
@@ -94,10 +95,10 @@ uv run theranote
 git clone https://github.com/AquilaWei/DataFuzzy.git
 cd DataFuzzy
 uv sync
-uv run datafuzzy
+uv run theranote
 ```
 
-**第一次啟動**會跳出「模型管理」，按 **下載** 取得個資偵測模型（約 945 MB）、中文人名模型（約 103 MB）與中英夾雜人名模型（約 578 MB），只需一次。之後可從選單 **模型 → 模型管理…** 新增或刪除。不下載也能用，只是人名、日期、帳號等不會被替換；只用中文或只用英文的話，可以不裝中英夾雜模型。三個模型都載入後，記憶體高峰約 **1.4–2.1 GB**（含從模型檔映射、系統可回收的權重）；長文件會分段處理，不會再往上長太多。
+**第一次解鎖後**會跳出「模型管理」，按 **下載** 取得個資偵測模型（約 945 MB）、中文人名模型（約 103 MB）與中英夾雜人名模型（約 578 MB），只需一次。之後可從選單 **TheraNote → 模型管理…** 新增或刪除。不下載也能記錄病歷；學生姓名仍會強制遮蔽，但其他人名的辨識較有限。只用中文或只用英文的話，可以不裝中英夾雜模型。三個模型都載入後，記憶體高峰約 **1.4–2.1 GB**（含從模型檔映射、系統可回收的權重）；長文件會分段處理，不會再往上長太多。
 
 ![模型管理](docs/assets/model-manager.png)
 
@@ -105,7 +106,7 @@ uv run datafuzzy
 |---|---|---|
 | `DATAFUZZY_MODELS_DIR` | 模型存放位置 | macOS `~/Library/Application Support/DataFuzzy/models`<br>Linux `~/.local/share/DataFuzzy/models` |
 
-## 📖 使用方式
+## 📖 原 DataFuzzy 介面使用方式
 
 1. **模糊化**：選「模糊化」→ 代號檔選「＋ 新代號檔」→ 貼上文字 → **⌘/Ctrl + Enter**
    ```
@@ -223,4 +224,4 @@ Copyright (C) 2026 AquilaWei，採用 [GPL-3.0-or-later](LICENSE)。
 | [`ckiplab/bert-base-chinese-ner`](https://huggingface.co/ckiplab/bert-base-chinese-ner) | GPL-3.0，© CKIP Lab | [`Xenova/bert-base-chinese-ner`](https://huggingface.co/Xenova/bert-base-chinese-ner)（int8） |
 | [`Davlan/xlm-roberta-large-ner-hrl`](https://huggingface.co/Davlan/xlm-roberta-large-ner-hrl) | AFL-3.0，© David Adelani | 本專案轉換：[release `models-v1`](https://github.com/AquilaWei/DataFuzzy/releases/tag/models-v1)（int8） |
 
-模型不隨程式散布，由使用者在 App 內自行下載。英文名名單取自美國社會安全局（SSA）的[新生兒名字資料](https://www.ssa.gov/oact/babynames/)（公有領域）。安裝檔內附的第三方套件授權（Qt 以 LGPL-3.0 動態連結）可在 App 的 **說明 → 關於 DataFuzzy** 查看。
+模型不隨程式散布，由使用者在 App 內自行下載。英文名名單取自美國社會安全局（SSA）的[新生兒名字資料](https://www.ssa.gov/oact/babynames/)（公有領域）。安裝檔內附的第三方套件授權（Qt 以 LGPL-3.0 動態連結）可在 App 的 **說明 → 關於 TheraNote** 查看。
