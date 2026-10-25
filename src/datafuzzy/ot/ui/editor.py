@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import (
     QComboBox,
+    QDateEdit,
+    QDialog,
+    QDialogButtonBox,
+    QFormLayout,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QTabWidget,
@@ -16,7 +21,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..db import RecordStore
+from ..db import DuplicateRecord, RecordStore
+from .date_view import to_date, to_qdate
 
 AUTOSAVE_MS = 800
 ACTIVITY_LINES = 3  # height of the activity box, in lines
@@ -37,12 +43,18 @@ class RecordEditor(QWidget):
         record = store.get_record(record_id)
         student = store.get_student(record.student_id)
         self.record_id = record_id
+        self.student_name = student.name
+        self.visit_date = record.visit_date
         self._dirty: set[str] = set()
 
         self.back_btn = QPushButton("‹ 返回")
         self.back_btn.setObjectName("flat")
-        self.title = QLabel(f"{student.name} · {record.visit_date.isoformat()}")
+        self.title = QLabel("")
         self.title.setObjectName("title")
+        self.date_btn = QPushButton("✎")
+        self.date_btn.setObjectName("flat")
+        self.date_btn.setToolTip("修改日期")
+        self._show_title()
         self.status = QLabel("")
         self.status.setObjectName("subtle")
 
@@ -77,7 +89,12 @@ class RecordEditor(QWidget):
         layout.setContentsMargins(24, 16, 24, 20)
         layout.setSpacing(10)
         layout.addLayout(top)
-        layout.addWidget(self.title)
+        heading = QHBoxLayout()
+        heading.setSpacing(4)
+        heading.addWidget(self.title)
+        heading.addWidget(self.date_btn)
+        heading.addStretch(1)
+        layout.addLayout(heading)
         layout.addLayout(place)
         layout.addWidget(QLabel("活動"))
         layout.addWidget(self.activity_edit)
@@ -93,6 +110,44 @@ class RecordEditor(QWidget):
         self.zh_edit.textChanged.connect(lambda: self._changed("zh_text"))
         self.en_edit.textChanged.connect(lambda: self._changed("en_text"))
         self.back_btn.clicked.connect(self.close_editor)
+        self.date_btn.clicked.connect(lambda: self.change_date())
+
+    def _show_title(self) -> None:
+        self.title.setText(f"{self.student_name} · {self.visit_date.isoformat()}")
+
+    def _ask_date(self) -> date | None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle("修改日期")
+        edit = QDateEdit(to_qdate(self.visit_date))
+        edit.setCalendarPopup(True)
+        edit.setDisplayFormat("yyyy-MM-dd")
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form = QFormLayout(dialog)
+        form.addRow("日期", edit)
+        form.addRow(buttons)
+        return to_date(edit.date()) if dialog.exec() == QDialog.DialogCode.Accepted else None
+
+    def _warn_taken(self, day: date) -> None:
+        QMessageBox.warning(self, "修改日期", f"{self.student_name} 在 {day.isoformat()} 已經有一份病歷，"
+                            "日期沒有更改。")
+
+    def change_date(self, day: date | None = None) -> bool:
+        """Move the record to another day, asking which unless given. Refused (with a
+        warning) if the student already has a record that day. Returns whether it moved."""
+        day = self._ask_date() if day is None else day
+        if day is None or day == self.visit_date:
+            return False
+        try:
+            self.store.move_record(self.record_id, day)
+        except DuplicateRecord:
+            self._warn_taken(day)
+            return False
+        self.visit_date = day
+        self._show_title()
+        self.saved.emit(self.record_id)
+        return True
 
     def _changed(self, field: str) -> None:
         self._dirty.add(field)

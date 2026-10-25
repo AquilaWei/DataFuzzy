@@ -134,3 +134,28 @@ def test_activity_box_stays_visible_above_the_tabs(qtbot, store, record):
     editor.tabs.setCurrentIndex(1)
     assert editor.activity_edit.isVisible()
     assert editor.activity_edit.geometry().bottom() < editor.tabs.geometry().top()
+
+
+def test_changing_the_date_moves_the_record_and_updates_the_title(qtbot, store, record):
+    editor = make_editor(qtbot, store, record)
+    with qtbot.waitSignal(editor.saved):
+        assert editor.change_date(date(2026, 10, 2))
+    assert editor.title.text() == "王小明 · 2026-10-02"
+    assert store.get_record(record.id).visit_date == date(2026, 10, 2)
+
+
+def test_date_already_taken_is_refused(qtbot, store, record, monkeypatch):
+    store.add_record(record.student_id, date(2026, 10, 2))
+    editor = make_editor(qtbot, store, record)
+    warned = []
+    monkeypatch.setattr(editor, "_warn_taken", warned.append)
+    assert not editor.change_date(date(2026, 10, 2))
+    assert warned == [date(2026, 10, 2)]
+    assert editor.title.text() == "王小明 · 2026-10-01"
+
+
+def test_cancelled_date_prompt_changes_nothing(qtbot, store, record, monkeypatch):
+    editor = make_editor(qtbot, store, record)
+    monkeypatch.setattr(editor, "_ask_date", lambda: None)
+    editor.date_btn.click()
+    assert store.get_record(record.id).visit_date == DAY

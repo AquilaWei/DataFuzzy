@@ -341,3 +341,33 @@ def test_day_list_has_no_menu_below_the_rows(qtbot, store):
     rows = window.day_view.list
     below = rows.visualItemRect(rows.item(0)).bottomLeft() + QPoint(5, 200)
     assert window.day_view.context_menu(below) is None
+
+
+def test_pencil_renames_the_student_everywhere(qtbot, store, monkeypatch):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小名")
+    monkeypatch.setattr(window, "_ask_new_name", lambda current: "王小明")
+    assert window.student_view.rename_btn.isVisible()
+    window.student_view.rename_btn.click()
+    assert student_names(window) == ["王小明"]
+    assert window.current_student_id() == student_id
+    assert window.student_view.title.text() == "王小明"
+
+
+def test_empty_or_cancelled_rename_keeps_the_name(qtbot, store, monkeypatch):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小明")
+    assert not window.rename_student(student_id, "  ")
+    monkeypatch.setattr(window, "_ask_new_name", lambda current: "")
+    assert not window.rename_student(student_id)
+    assert store.get_student(student_id).name == "王小明"
+
+
+def test_moving_a_record_updates_the_calendar(qtbot, store):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小明")
+    window.new_record(student_id, OCT_1)
+    window.editor.change_date(date(2026, 10, 3))
+    window.calendar.setCurrentPage(2026, 10)
+    assert date(2026, 10, 3) in window.calendar.marked_dates()
+    assert OCT_1 not in window.calendar.marked_dates()

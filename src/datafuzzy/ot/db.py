@@ -259,6 +259,20 @@ class RecordStore:
                 self._write_texts(new)
         return new
 
+    def move_record(self, record_id: int, visit_date: date) -> Record:
+        """Correct the day of a record. Raises DuplicateRecord if the student already has
+        another record that day, NotFound for an unknown record."""
+        with self._lock:
+            record = self.get_record(record_id)
+            existing = self.find_record(record.student_id, visit_date)
+            if existing and existing.id != record_id:
+                raise DuplicateRecord(record.student_id, visit_date, existing.id)
+            new = replace(record, visit_date=visit_date, updated_at=self._now())
+            with self._db:
+                self._db.execute("UPDATE record SET visit_date = ?, updated_at = ? WHERE id = ?",
+                                 (visit_date.isoformat(), new.updated_at.isoformat(), record_id))
+        return new
+
     def set_en_texts(self, texts: dict[int, str]) -> None:
         """Replace the English text of several records in one transaction: either all are
         written or, if one id is unknown (NotFound), none."""

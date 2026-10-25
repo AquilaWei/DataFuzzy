@@ -348,3 +348,23 @@ def test_excel_folders_are_kept_encrypted_and_survive_reopen(tmp_path):
     assert "新竹國小".encode() not in path.read_bytes()
     with RecordStore(path, KEY) as again:
         assert again.excel_folders() == {"新竹國小": "/Users/ot/hsinchu", "Lincoln": "/Users/ot/lincoln"}
+
+
+def test_moved_record_keeps_its_texts_on_the_new_day(store):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, date(2026, 10, 1), "A校", "中文", "English", activity="剪紙")
+    store.move_record(record.id, date(2026, 10, 2))
+    moved = store.get_record(record.id)
+    assert moved.visit_date == date(2026, 10, 2)
+    assert (moved.zh_text, moved.en_text, moved.activity) == ("中文", "English", "剪紙")
+    assert store.find_record(student.id, date(2026, 10, 1)) is None
+
+
+def test_record_cannot_move_onto_a_day_already_taken(store):
+    student = store.add_student("王小明")
+    first = store.add_record(student.id, date(2026, 10, 1))
+    other = store.add_record(student.id, date(2026, 10, 2))
+    with pytest.raises(DuplicateRecord) as e:
+        store.move_record(first.id, date(2026, 10, 2))
+    assert e.value.record_id == other.id
+    assert store.get_record(first.id).visit_date == date(2026, 10, 1)

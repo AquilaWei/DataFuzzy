@@ -141,6 +141,7 @@ class TheraNoteWindow(QMainWindow):
         self.day_view.open_record.connect(self.open_record)
         self.student_view.delete_record.connect(self.delete_record)
         self.day_view.delete_record.connect(self.delete_record)
+        self.student_view.rename_student.connect(lambda sid: self.rename_student(sid))
         self.add_student_btn.clicked.connect(lambda: self.add_student())
         self.add_record_btn.clicked.connect(lambda: self.new_record())
         self.export_btn.clicked.connect(self.open_export)
@@ -196,6 +197,22 @@ class TheraNoteWindow(QMainWindow):
         self.set_mode(STUDENT_MODE)
         self.refresh_students(select_id=student.id)
         return student.id
+
+    def _ask_new_name(self, current: str) -> str:
+        name, ok = QInputDialog.getText(self, "修改姓名", "學生姓名", text=current)
+        return name.strip() if ok else ""
+
+    def rename_student(self, student_id: int, name: str | None = None) -> bool:
+        """Correct a student's name, asking for it unless given. False if the name was empty,
+        unchanged or the dialog cancelled."""
+        current = self.store.get_student(student_id).name
+        name = self._ask_new_name(current) if name is None else name.strip()
+        if not name or name == current:
+            return False
+        self.store.rename_student(student_id, name)
+        self.refresh_students(select_id=student_id)
+        self.day_view.refresh()
+        return True
 
     def set_mode(self, mode: int) -> None:
         """Switch between the by-student and the by-date arrangement."""
