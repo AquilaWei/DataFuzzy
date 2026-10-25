@@ -1,6 +1,7 @@
 from datetime import date, datetime
 
 import pytest
+from PySide6.QtCore import Qt
 
 from datafuzzy.ot.db import RecordStore
 from datafuzzy.ot.ui.editor import RecordEditor
@@ -44,6 +45,16 @@ def test_location_drop_down_lists_locations_used_so_far(qtbot, store, record):
     store.add_record(other.id, date(2026, 10, 2), "台北診所")
     editor = make_editor(qtbot, store, record)
     assert [editor.location_box.itemText(i) for i in range(editor.location_box.count())] == ["台北診所", "新竹國小"]
+
+
+def test_double_click_on_location_opens_the_drop_down(qtbot, store, record, monkeypatch):
+    editor = make_editor(qtbot, store, record)
+    opened = []
+    monkeypatch.setattr(editor.location_box, "showPopup", lambda: opened.append(True))
+    qtbot.mouseClick(editor.location_box.lineEdit(), Qt.MouseButton.LeftButton)
+    assert opened == []  # a single click is for typing
+    qtbot.mouseDClick(editor.location_box.lineEdit(), Qt.MouseButton.LeftButton)
+    assert opened == [True]
 
 
 def test_typing_chinese_text_is_saved_after_the_pause(qtbot, store, record):
