@@ -3,6 +3,20 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.3.0] - 2026-10-25
+
+TheraNote 分支功能測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 學生頁姓名旁的 ✎ 可修改學生姓名；病歷編輯器日期旁的 ✎ 可修改病歷日期
+  （該學生當天已有病歷時拒絕並提示），月曆標記一併更新。
+
+### 變更
+- Excel 匯出：所有地點都成功匯出後自動關閉視窗；有略過或失敗時保留視窗顯示原因。
+
+### 修正
+- 淺色主題下月曆底色是黑的、日期看不清楚，改用主題底色與文字色。
+
 ## [0.7.0.2.0] - 2026-10-25
 
 TheraNote 分支功能測試版，尚待實機驗收。本次不建立 tag、不發佈。
