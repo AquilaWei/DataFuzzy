@@ -26,6 +26,7 @@ FALLBACK = {
     "PySide6": "LGPL-3.0-only", "PySide6_Addons": "LGPL-3.0-only",
     "PySide6_Essentials": "LGPL-3.0-only", "shiboken6": "LGPL-3.0-only",
     "tokenizers": "Apache-2.0", "flatbuffers": "Apache-2.0",
+    "pyobjc-framework-Security": "MIT-pyobjc",
 }
 
 
