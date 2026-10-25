@@ -1,0 +1,290 @@
+from datetime import date
+
+import pytest
+from PySide6.QtCore import QDate, Qt
+
+from datafuzzy import __version__
+from datafuzzy.core.pipeline import Pipeline
+from datafuzzy.ot.db import RecordStore
+from datafuzzy.ot.ui import main_window
+from datafuzzy.ot.ui.main_window import DATE_MODE, STUDENT_MODE, TheraNoteWindow
+
+KEY = bytes(range(32))
+OCT_1 = date(2026, 10, 1)
+
+
+@pytest.fixture
+def store(tmp_path):
+    with RecordStore(tmp_path / "t.db", KEY) as s:
+        yield s
+
+
+def make_window(qtbot, store, debounce_ms=10):
+    window = TheraNoteWindow(store, Pipeline(), debounce_ms=debounce_ms)
+    qtbot.addWidget(window)
+    window.show()
+    return window
+
+
+def student_names(window):
+    return [window.student_list.item(i).text() for i in range(window.student_list.count())]
+
+
+def test_window_title_has_app_name_and_version(qtbot, store):
+    window = make_window(qtbot, store)
+    assert window.windowTitle() == f"TheraNote {__version__}"
+
+
+def test_new_record_button_is_disabled_until_a_student_exists(qtbot, store):
+    window = make_window(qtbot, store)
+    assert window.add_record_btn.isEnabled() is False
+
+
+def test_added_student_is_listed_and_selected(qtbot, store):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小明")
+    assert student_names(window) == ["王小明"]
+    assert window.current_student_id() == student_id
+
+
+def test_empty_student_name_adds_nobody(qtbot, store):
+    window = make_window(qtbot, store)
+    assert window.add_student("  ") is None
+    assert store.students() == []
+
+
+def test_add_student_asks_for_the_name_when_none_given(qtbot, store, monkeypatch):
+    window = make_window(qtbot, store)
+    monkeypatch.setattr(window, "_ask_student_name", lambda: "陳美玲")
+    window.add_student()
+    assert student_names(window) == ["陳美玲"]
+
+
+def test_cancelled_name_prompt_adds_nobody(qtbot, store, monkeypatch):
+    window = make_window(qtbot, store)
+    monkeypatch.setattr(window, "_ask_student_name", lambda: "")
+    window.add_student()
+    assert store.students() == []
+
+
+def test_selecting_a_student_shows_their_cards_newest_first(qtbot, store):
+    student = store.add_student("王小明")
+    store.add_record(student.id, date(2026, 10, 1), "A校", "一")
+    store.add_record(student.id, date(2026, 10, 8), "A校", "二")
+    window = make_window(qtbot, store)
+    window.student_list.setCurrentRow(0)
+    assert [c.date_label.text()[:10] for c in window.student_view.stack.cards] == ["2026-10-08", "2026-10-01"]
+
+
+def test_first_record_of_a_student_starts_with_empty_location(qtbot, store):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小明")
+    window.new_record(student_id, OCT_1)
+    assert window.editor.location_box.currentText() == ""
+
+
+def test_next_record_starts_with_the_students_last_location(qtbot, store):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小明")
+    first = window.new_record(student_id, OCT_1)
+    store.update_record(first, location="新竹國小")
+    window.new_record(student_id, date(2026, 10, 8))
+    assert window.editor.location_box.currentText() == "新竹國小"
+
+
+def test_new_record_opens_the_editor(qtbot, store):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小明")
+    window.new_record(student_id, OCT_1)
+    assert (window.content.currentWidget() is window.editor, window.editor.title.text()) == (
+        True, "王小明 · 2026-10-01")
+
+
+def test_new_record_appears_as_a_card(qtbot, store):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小明")
+    window.new_record(student_id, OCT_1)
+    assert len(window.student_view.stack.cards) == 1
+
+
+def test_second_record_on_same_day_asks_and_opens_the_existing_one(qtbot, store, monkeypatch):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小明")
+    first = window.new_record(student_id, OCT_1)
+    window.close_editor()
+    asked = []
+    monkeypatch.setattr(window, "_confirm_open_existing", lambda name, day: asked.append((name, day)) or True)
+    again = window.new_record(student_id, OCT_1)
+    assert (again, asked, window.editor.record_id) == (first, [("王小明", OCT_1)], first)
+    assert len(store.records_for_student(student_id)) == 1
+
+
+def test_declining_the_duplicate_prompt_opens_nothing(qtbot, store, monkeypatch):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小明")
+    window.new_record(student_id, OCT_1)
+    window.close_editor()
+    monkeypatch.setattr(window, "_confirm_open_existing", lambda name, day: False)
+    assert window.new_record(student_id, OCT_1) is None
+    assert window.editor is None
+
+
+def test_new_record_button_asks_which_student_and_day(qtbot, store, monkeypatch):
+    student = store.add_student("王小明")
+    window = make_window(qtbot, store)
+    monkeypatch.setattr(window, "_pick_new_record", lambda: (student.id, OCT_1))
+    window.add_record_btn.click()
+    assert window.editor.title.text() == "王小明 · 2026-10-01"
+
+
+def test_cancelled_new_record_dialog_creates_nothing(qtbot, store, monkeypatch):
+    store.add_student("王小明")
+    window = make_window(qtbot, store)
+    monkeypatch.setattr(window, "_pick_new_record", lambda: None)
+    window.add_record_btn.click()
+    assert store.records_between(date(2000, 1, 1), date(2100, 1, 1)) == []
+
+
+def test_typing_in_the_editor_is_saved_to_the_database(qtbot, store):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小明")
+    record_id = window.new_record(student_id, OCT_1)
+    window.editor.zh_edit.setPlainText("今天練習剪紙")
+    qtbot.waitUntil(lambda: store.get_record(record_id).zh_text == "今天練習剪紙", timeout=2000)
+
+
+def test_saved_text_shows_up_on_the_card(qtbot, store):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小明")
+    window.new_record(student_id, OCT_1)
+    window.editor.zh_edit.setPlainText("今天練習剪紙")
+    qtbot.waitUntil(lambda: window.student_view.stack.cards[0].preview_label.text() == "今天練習剪紙", timeout=2000)
+
+
+def test_closing_the_window_saves_pending_edit(qtbot, store):
+    window = make_window(qtbot, store, debounce_ms=60000)
+    student_id = window.add_student("王小明")
+    record_id = window.new_record(student_id, OCT_1)
+    window.editor.zh_edit.setPlainText("關閉前輸入")
+    window.close()
+    assert store.get_record(record_id).zh_text == "關閉前輸入"
+
+
+def test_quitting_flush_saves_pending_edit(qtbot, store):
+    window = make_window(qtbot, store, debounce_ms=60000)
+    student_id = window.add_student("王小明")
+    record_id = window.new_record(student_id, OCT_1)
+    window.editor.en_edit.setPlainText("typed before quit")
+    window.flush()
+    assert store.get_record(record_id).en_text == "typed before quit"
+
+
+def test_selecting_another_student_saves_and_leaves_the_editor(qtbot, store):
+    window = make_window(qtbot, store, debounce_ms=60000)
+    store.add_student("陳美玲")
+    student_id = window.add_student("王小明")
+    record_id = window.new_record(student_id, OCT_1)
+    window.editor.zh_edit.setPlainText("換人前輸入")
+    window.student_list.setCurrentRow(1)  # 陳美玲; 王小明 sorts first and is selected
+    assert store.get_record(record_id).zh_text == "換人前輸入"
+    assert window.editor is None
+
+
+def test_back_button_returns_to_the_students_cards(qtbot, store):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小明")
+    window.new_record(student_id, OCT_1)
+    window.editor.back_btn.click()
+    assert window.content.currentWidget() is window.student_view
+
+
+def test_opening_a_card_opens_the_editor_for_that_record(qtbot, store):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, OCT_1, "A校", "內容")
+    window = make_window(qtbot, store)
+    window.student_list.setCurrentRow(0)
+    qtbot.mouseClick(window.student_view.stack.cards[0], Qt.MouseButton.LeftButton)
+    assert window.editor.record_id == record.id
+
+
+def test_export_saves_pending_edit_first(qtbot, store, monkeypatch):
+    monkeypatch.setattr(main_window.ExportDialog, "exec", lambda self: 0)
+    window = make_window(qtbot, store, debounce_ms=60000)
+    student_id = window.add_student("王小明")
+    record_id = window.new_record(student_id, OCT_1)
+    window.editor.zh_edit.setPlainText("匯出前輸入")
+    window.export_btn.click()
+    assert store.get_record(record_id).zh_text == "匯出前輸入"
+
+
+def test_import_applied_refreshes_open_editor(qtbot, store, monkeypatch):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小明")
+    record_id = window.new_record(student_id, OCT_1)
+
+    def fake_exec(dialog):
+        store.set_en_texts({record_id: "Imported"})
+        dialog.applied.emit(1)
+
+    monkeypatch.setattr(main_window.ImportDialog, "exec", fake_exec)
+    window.import_btn.click()
+    assert window.editor.en_edit.toPlainText() == "Imported"
+
+
+def test_date_mode_lists_children_seen_on_the_selected_day(qtbot, store):
+    wang = store.add_student("王小明")
+    chen = store.add_student("陳美玲")
+    store.add_record(wang.id, OCT_1, "A校", "王")
+    store.add_record(chen.id, OCT_1, "B校", "陳")
+    store.add_record(wang.id, date(2026, 10, 8), "A校", "王二")
+    window = make_window(qtbot, store)
+    window.set_mode(DATE_MODE)
+    window.calendar.setSelectedDate(QDate(2026, 10, 1))
+    assert (window.content.currentWidget() is window.day_view, window.day_view.list.count()) == (True, 2)
+
+
+def test_date_mode_marks_days_with_records(qtbot, store):
+    student = store.add_student("王小明")
+    store.add_record(student.id, OCT_1, "A校", "王")
+    window = make_window(qtbot, store)
+    window.set_mode(DATE_MODE)
+    window.calendar.setCurrentPage(2026, 10)
+    assert OCT_1 in window.calendar.marked_dates()
+
+
+def test_opening_a_child_from_the_day_list_opens_the_editor(qtbot, store):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, OCT_1, "A校", "王")
+    window = make_window(qtbot, store)
+    window.set_mode(DATE_MODE)
+    window.calendar.setSelectedDate(QDate(2026, 10, 1))
+    rect = window.day_view.list.visualItemRect(window.day_view.list.item(0))
+    qtbot.mouseClick(window.day_view.list.viewport(), Qt.MouseButton.LeftButton, pos=rect.center())
+    assert window.editor.record_id == record.id
+
+
+def test_back_from_editor_in_date_mode_returns_to_the_day_list(qtbot, store):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, OCT_1, "A校", "王")
+    window = make_window(qtbot, store)
+    window.set_mode(DATE_MODE)
+    window.open_record(record.id)
+    window.editor.back_btn.click()
+    assert window.content.currentWidget() is window.day_view
+
+
+def test_new_record_marks_its_day_in_the_calendar(qtbot, store):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小明")
+    window.set_mode(DATE_MODE)
+    window.calendar.setCurrentPage(2026, 10)
+    window.new_record(student_id, date(2026, 10, 15))
+    assert date(2026, 10, 15) in window.calendar.marked_dates()
+
+
+def test_switching_mode_with_the_sidebar_control(qtbot, store):
+    window = make_window(qtbot, store)
+    window.mode_switch.button(1).click()
+    assert (window.mode_switch.index(), window.sidebar_stack.currentWidget() is window.calendar) == (DATE_MODE, True)
+    window.mode_switch.button(0).click()
+    assert window.mode_switch.index() == STUDENT_MODE
