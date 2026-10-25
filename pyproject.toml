@@ -20,7 +20,8 @@ dependencies = [
 ]
 
 [project.scripts]
-datafuzzy = "datafuzzy.__main__:main"
+datafuzzy = "datafuzzy.ot.ui.app:main"
+theranote = "datafuzzy.ot.ui.app:main"
 
 [dependency-groups]
 dev = [
