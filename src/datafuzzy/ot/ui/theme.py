@@ -86,7 +86,7 @@ QTabBar::tab:selected { background: palette(midlight); color: palette(text); }
 
 QCalendarWidget QWidget { background: transparent; }
 QCalendarWidget QAbstractItemView {
-    background: transparent; selection-background-color: palette(highlight);
+    background: palette(base); color: palette(text); selection-background-color: palette(highlight);
     selection-color: palette(highlighted-text); outline: none;
 }
 QCalendarWidget QToolButton { border-radius: 8px; padding: 4px 8px; color: palette(text); }
