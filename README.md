@@ -9,6 +9,33 @@
 
 **在本機把文字中的機敏資訊換成代號，之後再一鍵換回來。** 適合把內容貼給外部 AI 或同事之前先「去識別化」。
 
+## TheraNote（職能治療病歷）
+
+本分支加入以 DataFuzzy 為核心的 **TheraNote**：依學生或月曆日期整理病歷，記錄地點，
+中英文內容可分別編輯並自動儲存。新增病歷會帶入該學生最近一次的地點，也能從用過的地點選取。
+
+```bash
+uv sync
+uv run theranote
+# 也可用 uv run datafuzzy 或 uv run python -m datafuzzy.ot
+```
+
+- **解鎖**：macOS 先以 Touch ID 或登入密碼通過系統驗證，再從 Keychain 取得金鑰；
+  未公證的 App 首次取用鑰匙圈時可能另有系統提示。Linux 使用 Secret Service；新資料庫在
+  沒有可用鑰匙圈時改由使用者設定密碼。取消或驗證失敗不會開啟病歷；請保管密碼與系統鑰匙圈。
+- **匯出 → 貼回**：選日期區間匯出，學生姓名會強制換成代號，其他人名由本機偵測器處理；
+  複製文字後保留分隔標頭，將修正或翻譯的文字貼回。程式檢查標頭、還原姓名並存為英文版，
+  覆蓋前會確認。代號對應表隨病歷加密保存，重開仍可貼回。
+- **資料位置**：macOS 為 `~/Library/Application Support/TheraNote/theranote.db`，
+  Linux 為 `~/.local/share/TheraNote/theranote.db`（遵循 `XDG_DATA_HOME`）。
+  可用 `THERANOTE_DB=/path/to/charts.db uv run theranote` 指定其他資料庫。
+  病歷與代號表會持久保存，日期及識別編號仍可讀；備份時也須保留對應的鑰匙圈金鑰或密碼。
+- **模型**：解鎖後從 TheraNote 選單開啟原有模型管理。匯出前請檢查遮蔽結果，真實模型的姓名辨識仍須實機驗收。
+
+`uv run theranote --version` 顯示名稱與版本；`uv run theranote --self-test` 執行不取用個人
+鑰匙圈的暫存病歷往返檢查。原 DataFuzzy 介面保留於 `uv run python -m datafuzzy`，下方原有
+模糊化／還原功能說明適用於該介面。
+
 ![demo](docs/assets/demo.gif)
 
 ## ✨ 功能

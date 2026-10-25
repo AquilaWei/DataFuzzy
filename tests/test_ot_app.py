@@ -1,9 +1,11 @@
 import os
+import runpy
 import subprocess
 import sys
 from datetime import date
 from importlib.metadata import entry_points
 
+import pytest
 from PySide6.QtWidgets import QApplication
 
 from datafuzzy import __version__
@@ -193,17 +195,28 @@ def test_datafuzzy_and_theranote_scripts_launch_theranote():
     assert scripts == {"datafuzzy": "datafuzzy.ot.ui.app:main", "theranote": "datafuzzy.ot.ui.app:main"}
 
 
-def run_app(flag, tmp_path):
+def run_app(flag, tmp_path, module="datafuzzy.ot.ui.app"):
     env = {**os.environ, "QT_QPA_PLATFORM": "offscreen", "DATAFUZZY_MODELS_DIR": str(tmp_path),
            "DATAFUZZY_REQUIRE_MODEL": ""}
-    return subprocess.run([sys.executable, "-m", "datafuzzy.ot.ui.app", flag], env=env,
+    return subprocess.run([sys.executable, "-m", module, flag], env=env,
                           capture_output=True, text=True, check=True).stdout
 
 
-def test_version_flag_prints_app_name_and_version(tmp_path):
-    assert run_app("--version", tmp_path).strip() == f"TheraNote {__version__}"
+@pytest.mark.parametrize("module", ["datafuzzy.ot", "datafuzzy.ot.ui.app"])
+def test_version_flag_prints_app_name_and_version(tmp_path, module):
+    assert run_app("--version", tmp_path, module).strip() == f"TheraNote {__version__}"
 
 
-def test_self_test_flag_round_trips_a_chart_with_the_name_masked(tmp_path):
-    out = run_app("--self-test", tmp_path)
+@pytest.mark.parametrize("module", ["datafuzzy.ot", "datafuzzy.ot.ui.app"])
+def test_self_test_flag_round_trips_a_chart_with_the_name_masked(tmp_path, module):
+    out = run_app("--self-test", tmp_path, module)
     assert "TheraNote" in out and "self-test OK" in out and "[PERSON_A]" in out
+
+
+def test_ot_module_launches_theranote_main(monkeypatch):
+    import datafuzzy.ot.ui.app as app_module
+
+    monkeypatch.setattr(app_module, "main", lambda: 37)
+    with pytest.raises(SystemExit) as result:
+        runpy.run_module("datafuzzy.ot", run_name="__main__")
+    assert result.value.code == 37
