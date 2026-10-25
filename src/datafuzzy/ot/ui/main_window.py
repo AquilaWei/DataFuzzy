@@ -36,15 +36,17 @@ from ..db import DuplicateRecord, RecordStore
 from .about import AboutDialog
 from .date_view import DayRecordsView, MarkedCalendar, to_date, to_qdate
 from .editor import RecordEditor
+from .location_view import NO_LOCATION, LocationRecordsView
 from .exchange_dialogs import ExcelExportDialog, ExportDialog, ImportDialog
 from .student_view import StudentRecordsView
 from .widgets import SegmentedControl
 
 STUDENT_MODE = 0
 DATE_MODE = 1
+LOCATION_MODE = 2
 
 # Content pages
-PLACEHOLDER, STUDENT_PAGE, DAY_PAGE, EDITOR_PAGE = range(4)
+PLACEHOLDER, STUDENT_PAGE, DAY_PAGE, EDITOR_PAGE, LOCATION_PAGE = range(5)
 
 
 class NewRecordDialog(QDialog):
@@ -88,7 +90,7 @@ class TheraNoteWindow(QMainWindow):
         self.resize(1100, 720)
 
         self._build_menus()
-        self.mode_switch = SegmentedControl(["學生", "日期"])
+        self.mode_switch = SegmentedControl(["學生", "日期", "地點"])
         self.add_student_btn = QPushButton("新增學生")
         self.add_record_btn = QPushButton("新增病歷")
         self.export_btn = QPushButton("匯出")
@@ -96,18 +98,21 @@ class TheraNoteWindow(QMainWindow):
         self.excel_btn = QPushButton("Excel 匯出")
         self.student_list = QListWidget()
         self.calendar = MarkedCalendar(store)
+        self.location_list = QListWidget()
         self.sidebar_stack = QStackedWidget()
         self.sidebar_stack.addWidget(self.student_list)
         self.sidebar_stack.addWidget(self.calendar)
+        self.sidebar_stack.addWidget(self.location_list)
 
         self.student_view = StudentRecordsView(store)
         self.day_view = DayRecordsView(store)
+        self.location_view = LocationRecordsView(store)
         self.placeholder = QLabel("選擇一位學生，或新增學生開始記錄。")
         self.placeholder.setObjectName("subtle")
         self.placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.content = QStackedWidget()
         self.content.setObjectName("Content")
-        for page in (self.placeholder, self.student_view, self.day_view, QWidget()):
+        for page in (self.placeholder, self.student_view, self.day_view, QWidget(), self.location_view):
             self.content.addWidget(page)
 
         sidebar = QWidget()
@@ -137,6 +142,9 @@ class TheraNoteWindow(QMainWindow):
         self.mode_switch.changed.connect(self.set_mode)
         self.student_list.currentItemChanged.connect(self._student_selected)
         self.calendar.selectionChanged.connect(self._day_selected)
+        self.location_list.currentItemChanged.connect(self._location_selected)
+        self.location_view.open_record.connect(self.open_record)
+        self.location_view.delete_record.connect(self.delete_record)
         self.student_view.open_record.connect(self.open_record)
         self.day_view.open_record.connect(self.open_record)
         self.student_view.delete_record.connect(self.delete_record)
@@ -149,6 +157,7 @@ class TheraNoteWindow(QMainWindow):
         self.excel_btn.clicked.connect(self.open_excel_export)
 
         self.refresh_students()
+        self.refresh_locations()
         self.day_view.show_day(self.calendar.selected())
 
     def _build_menus(self) -> None:
@@ -214,8 +223,46 @@ class TheraNoteWindow(QMainWindow):
         self.day_view.refresh()
         return True
 
+    def refresh_locations(self) -> None:
+        """Reload the location list (most recently visited first, then records without a
+        location), keeping the selection."""
+        keep = self.current_location()
+        locations = self.store.all_locations()
+        if self.store.records_at(""):
+            locations.append("")
+        self.location_list.blockSignals(True)
+        self.location_list.clear()
+        for location in locations:
+            item = QListWidgetItem(location or NO_LOCATION)
+            item.setData(Qt.ItemDataRole.UserRole, location)
+            self.location_list.addItem(item)
+            if location == keep:
+                self.location_list.setCurrentItem(item)
+        if self.location_list.currentItem() is None and self.location_list.count():
+            self.location_list.setCurrentRow(0)
+        self.location_list.blockSignals(False)
+        self.location_view.show_location(self.current_location())
+
+    def current_location(self) -> str | None:
+        item = self.location_list.currentItem()
+        return item.data(Qt.ItemDataRole.UserRole) if item else None
+
+    def _location_selected(self, *_: object) -> None:
+        self.close_editor()
+        self.location_view.show_location(self.current_location())
+        self.content.setCurrentIndex(self._mode_page())
+
+    def _mode_page(self) -> int:
+        """The content page that goes with the current mode and selection."""
+        mode = self.mode_switch.index()
+        if mode == STUDENT_MODE:
+            return STUDENT_PAGE if self.current_student_id() else PLACEHOLDER
+        if mode == DATE_MODE:
+            return DAY_PAGE
+        return LOCATION_PAGE
+
     def set_mode(self, mode: int) -> None:
-        """Switch between the by-student and the by-date arrangement."""
+        """Switch between the by-student, by-date and by-location arrangements."""
         self.close_editor()
         self.mode_switch.blockSignals(True)
         self.mode_switch.set_index(mode)
@@ -223,10 +270,11 @@ class TheraNoteWindow(QMainWindow):
         self.sidebar_stack.setCurrentIndex(mode)
         if mode == STUDENT_MODE:
             self.student_view.refresh()
-            self.content.setCurrentIndex(STUDENT_PAGE if self.current_student_id() else PLACEHOLDER)
-        else:
+        elif mode == DATE_MODE:
             self.day_view.show_day(self.calendar.selected())
-            self.content.setCurrentIndex(DAY_PAGE)
+        else:
+            self.refresh_locations()
+        self.content.setCurrentIndex(self._mode_page())
 
     def _student_selected(self, *_: object) -> None:
         self.close_editor()
@@ -314,15 +362,14 @@ class TheraNoteWindow(QMainWindow):
     def _editor_closed(self) -> None:
         self.editor = None
         self.refresh_after_change()
-        if self.mode_switch.index() == STUDENT_MODE:
-            self.content.setCurrentIndex(STUDENT_PAGE)
-        else:
-            self.content.setCurrentIndex(DAY_PAGE)
+        self.content.setCurrentIndex(self._mode_page())
 
     def refresh_after_change(self) -> None:
-        """Records changed: update the cards, the day list and the calendar markers."""
+        """Records changed: update the cards, the day and location lists and the calendar
+        markers."""
         self.student_view.refresh()
         self.day_view.refresh()
+        self.refresh_locations()
         self.calendar.refresh_markers()
 
     def flush(self) -> None:

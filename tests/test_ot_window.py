@@ -7,7 +7,7 @@ from datafuzzy import __version__
 from datafuzzy.core.pipeline import Pipeline
 from datafuzzy.ot.db import RecordStore
 from datafuzzy.ot.ui import main_window
-from datafuzzy.ot.ui.main_window import DATE_MODE, STUDENT_MODE, TheraNoteWindow
+from datafuzzy.ot.ui.main_window import DATE_MODE, LOCATION_MODE, STUDENT_MODE, TheraNoteWindow
 
 KEY = bytes(range(32))
 OCT_1 = date(2026, 10, 1)
@@ -371,3 +371,40 @@ def test_moving_a_record_updates_the_calendar(qtbot, store):
     window.calendar.setCurrentPage(2026, 10)
     assert date(2026, 10, 3) in window.calendar.marked_dates()
     assert OCT_1 not in window.calendar.marked_dates()
+
+
+def location_names(window):
+    return [window.location_list.item(i).text() for i in range(window.location_list.count())]
+
+
+def test_location_mode_lists_places_and_their_records_newest_first(qtbot, store):
+    amy = store.add_student("Amy")
+    ming = store.add_student("王小明")
+    store.add_record(amy.id, date(2026, 10, 1), "新竹國小", "一")
+    store.add_record(ming.id, date(2026, 10, 8), "新竹國小", "二")
+    store.add_record(ming.id, date(2026, 10, 9), "台北診所", "三")
+    store.add_record(amy.id, date(2026, 10, 2), "", "四")
+    window = make_window(qtbot, store)
+    window.mode_switch.button(LOCATION_MODE).click()
+    assert window.sidebar_stack.currentWidget() is window.location_list
+    assert location_names(window) == ["台北診所", "新竹國小", "未填地點"]
+    window.location_list.setCurrentRow(1)
+    view = window.location_view
+    assert window.content.currentWidget() is view
+    assert (view.title.text(), view.count.text()) == ("新竹國小", "2 份病歷 · 2 位學生")
+    assert [view.list.item(i).text().split("\n")[0] for i in range(view.list.count())] == ["王小明", "Amy"]
+    window.location_list.setCurrentRow(2)
+    assert view.list.count() == 1
+
+
+def test_editing_a_location_moves_the_record_between_places(qtbot, store):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, OCT_1, "新竹國小", "一")
+    window = make_window(qtbot, store)
+    window.set_mode(LOCATION_MODE)
+    window.location_view.list.itemClicked.emit(window.location_view.list.item(0))
+    window.editor.location_box.setEditText("台北診所")
+    window.editor.close_editor()
+    assert location_names(window) == ["台北診所"]
+    assert window.content.currentWidget() is window.location_view
+    assert store.get_record(record.id).location == "台北診所"

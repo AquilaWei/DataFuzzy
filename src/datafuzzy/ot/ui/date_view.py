@@ -69,14 +69,15 @@ class MarkedCalendar(QCalendarWidget):
 
 
 NAME_ROLE = Qt.ItemDataRole.UserRole + 1
-PLACE_ROLE = Qt.ItemDataRole.UserRole + 2
+PLACE_ROLE = Qt.ItemDataRole.UserRole + 2  # the tag: the location, or the date in the by-location list
 PREVIEW_ROLE = Qt.ItemDataRole.UserRole + 3
+TIME_ROLE = Qt.ItemDataRole.UserRole + 4
 
 
 class DayRecordDelegate(QStyledItemDelegate):
     """A row of the day list in three distinct looks, so they are not read as one another:
     the student's name in bold, the location as a small accent-tinted tag, and the start of
-    the chart in grey."""
+    the chart in grey. The session's start time, if any, follows the name in grey."""
 
     PAD_X, PAD_Y, GAP, TAG_PAD = 12, 8, 4, 6
 
@@ -112,8 +113,15 @@ class DayRecordDelegate(QStyledItemDelegate):
         painter.setFont(name_font)
         painter.setPen(text)
         name_h = QFontMetrics(name_font).height()
+        name = index.data(NAME_ROLE)
         painter.drawText(QRect(r.left(), r.top(), r.width(), name_h),
-                         Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, index.data(NAME_ROLE))
+                         Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, name)
+        if start := index.data(TIME_ROLE):
+            left = r.left() + QFontMetrics(name_font).horizontalAdvance(name) + 10
+            painter.setFont(body_font)
+            painter.setPen(grey)
+            painter.drawText(QRect(left, r.top(), r.right() - left, name_h),
+                             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, start)
 
         top = r.top() + name_h + self.GAP
         tag_fm = QFontMetrics(tag_font)
@@ -203,6 +211,7 @@ class DayRecordsView(QWidget):
             item.setData(NAME_ROLE, names[record.student_id])
             item.setData(PLACE_ROLE, place)
             item.setData(PREVIEW_ROLE, first_line)
+            item.setData(TIME_ROLE, record.start_time)
             self.list.addItem(item)
         self.empty.setVisible(not records)
         self.list.setVisible(bool(records))
