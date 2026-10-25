@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml/badge.svg)](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/AquilaWei/DataFuzzy/graph/badge.svg)](https://codecov.io/gh/AquilaWei/DataFuzzy)
-![Version](https://img.shields.io/badge/version-0.7.0.0.2-blue)
+![Version](https://img.shields.io/badge/version-0.7.0.1.0-blue)
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
@@ -13,6 +13,8 @@
 
 本分支加入以 DataFuzzy 為核心的 **TheraNote**：依學生或月曆日期整理病歷，記錄地點，
 中英文內容可分別編輯並自動儲存。新增病歷會帶入該學生最近一次的地點，也能從用過的地點選取。
+每份病歷另有「活動」欄記錄當天的治療活動與手段，只留在本機、不參與匯出與貼回。
+在病歷卡片或日期清單上按右鍵可刪除病歷（會先確認，無法復原）。
 
 ```bash
 uv sync

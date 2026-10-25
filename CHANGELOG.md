@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.1.0] - 2026-10-25
+
+TheraNote 分支功能測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 病歷卡片與日期清單可按右鍵「刪除病歷…」，確認後刪除，月曆標記一併更新。
+  已刪除病歷若出現在之後貼回的文字中，會列為「這筆病歷已刪除」而不寫入。
+- 病歷新增「活動」欄，固定在編輯器分頁上方，記錄當天的治療活動與手段；加密保存、
+  自動儲存，不參與匯出與貼回。舊資料庫開啟時自動加上此欄。
+- TheraNote 專屬圖示：青綠底的病歷紙加愛心。原 DataFuzzy 圖示不變。
+
 ## [0.7.0.0.2] - 2026-10-24
 
 TheraNote 分支修正版。本次不建立 tag、不發佈。
