@@ -11,7 +11,7 @@ APPDIR=build/AppDir
 rm -rf "$APPDIR"
 mkdir -p "$APPDIR/usr/lib"
 cp -a "dist/$APP_NAME" "$APPDIR/usr/lib/$APP_SLUG"
-cp src/datafuzzy/icon.png "$APPDIR/$APP_SLUG.png"
+cp src/datafuzzy/ot/icon.png "$APPDIR/$APP_SLUG.png"
 cat > "$APPDIR/$APP_SLUG.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application

@@ -35,6 +35,7 @@ a = Analysis(
     datas=[
         (str(PKG / "models_manifest.json"), "datafuzzy"),
         (str(PKG / "icon.png"), "datafuzzy"),
+        (str(PKG / "ot" / "icon.png"), "datafuzzy/ot"),
         (str(PKG / "given_names.txt"), "datafuzzy"),
         (str(ROOT / "LICENSE"), "datafuzzy"),
         (str(ROOT / "build" / "THIRD_PARTY_LICENSES.txt"), "datafuzzy"),
@@ -72,7 +73,7 @@ if sys.platform == "darwin":
     app = BUNDLE(
         coll,
         name=f"{APP_NAME}.app",
-        icon=str(PKG / "icon.png"),  # converted to .icns (needs Pillow)
+        icon=str(PKG / "ot" / "icon.png"),  # converted to .icns (needs Pillow)
         bundle_identifier=f"io.github.aquilawei.{SLUG}",
         version=PLIST_VERSION,
         info_plist={

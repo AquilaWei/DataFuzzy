@@ -176,7 +176,7 @@ def main() -> int:
     sweep_stale()  # temp folders left by crashed DataFuzzy runs
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
-    app.setWindowIcon(QIcon(str(files("datafuzzy").joinpath("icon.png"))))
+    app.setWindowIcon(QIcon(str(files("datafuzzy.ot").joinpath("icon.png"))))
     apply_theme(app)
 
     # Qt's event loop blocks Python signal handlers; a periodic no-op timer lets them run,
