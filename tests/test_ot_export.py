@@ -134,3 +134,10 @@ def test_export_batch_is_not_plaintext_in_database_file(store, pipeline):
     store.add_record(student.id, date(2026, 10, 1), zh_text="王小明剪紙")
     export_range(store, date(2026, 10, 1), date(2026, 10, 1), pipeline)
     assert "王小明".encode() not in store.path.read_bytes()
+
+
+def test_activity_is_not_exported(store, pipeline):
+    student = store.add_student("王小明")
+    store.add_record(student.id, date(2026, 10, 1), zh_text="剪紙", activity="感覺統合鞦韆")
+    result = export_range(store, date(2026, 10, 1), date(2026, 10, 1), pipeline)
+    assert "感覺統合鞦韆" not in result.text

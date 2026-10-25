@@ -1,4 +1,4 @@
-"""Editor for one student's chart on one day: location, Chinese text and English text."""
+"""Editor for one student's chart on one day: location, activities, Chinese and English text."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from ..db import RecordStore
 
 AUTOSAVE_MS = 800
+ACTIVITY_LINES = 3  # height of the activity box, in lines
 
 
 class RecordEditor(QWidget):
@@ -52,6 +53,11 @@ class RecordEditor(QWidget):
         self.location_box.addItems(store.all_locations())
         self.location_box.setEditText(record.location)
 
+        self.activity_edit = QPlainTextEdit(record.activity)
+        self.activity_edit.setPlaceholderText("今天的治療活動與手段（只留在本機，不會匯出）")
+        lines = self.activity_edit.fontMetrics().lineSpacing() * ACTIVITY_LINES
+        self.activity_edit.setFixedHeight(lines + 2 * self.activity_edit.frameWidth() + 12)
+
         self.zh_edit = QPlainTextEdit(record.zh_text)
         self.zh_edit.setPlaceholderText("中文病歷（可中英夾雜）")
         self.en_edit = QPlainTextEdit(record.en_text)
@@ -73,6 +79,8 @@ class RecordEditor(QWidget):
         layout.addLayout(top)
         layout.addWidget(self.title)
         layout.addLayout(place)
+        layout.addWidget(QLabel("活動"))
+        layout.addWidget(self.activity_edit)
         layout.addWidget(self.tabs, 1)
 
         self._timer = QTimer(self)
@@ -81,6 +89,7 @@ class RecordEditor(QWidget):
         self._timer.timeout.connect(self.flush)
         # Connected after the texts are filled in, so showing a record is not an edit.
         self.location_box.editTextChanged.connect(lambda: self._changed("location"))
+        self.activity_edit.textChanged.connect(lambda: self._changed("activity"))
         self.zh_edit.textChanged.connect(lambda: self._changed("zh_text"))
         self.en_edit.textChanged.connect(lambda: self._changed("en_text"))
         self.back_btn.clicked.connect(self.close_editor)
@@ -96,6 +105,7 @@ class RecordEditor(QWidget):
         if not self._dirty:
             return
         values = {"location": self.location_box.currentText().strip(),
+                  "activity": self.activity_edit.toPlainText(),
                   "zh_text": self.zh_edit.toPlainText(),
                   "en_text": self.en_edit.toPlainText()}
         changed = {field: values[field] for field in self._dirty}

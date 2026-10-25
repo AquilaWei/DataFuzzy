@@ -112,3 +112,25 @@ def test_reload_does_not_discard_pending_chinese_edit(qtbot, store, record):
     editor.zh_edit.setPlainText("還沒存的中文")
     editor.reload()
     assert store.get_record(record.id).zh_text == "還沒存的中文"
+
+
+def test_editor_shows_the_records_activity(qtbot, store):
+    student = store.add_student("陳美玲")
+    record = store.add_record(student.id, DAY, activity="串珠")
+    editor = make_editor(qtbot, store, record)
+    assert editor.activity_edit.toPlainText() == "串珠"
+
+
+def test_typing_an_activity_is_saved_and_texts_stay(qtbot, store, record):
+    editor = make_editor(qtbot, store, record)
+    editor.activity_edit.setPlainText("平衡木、拋接球")
+    qtbot.waitUntil(lambda: store.get_record(record.id).activity == "平衡木、拋接球", timeout=2000)
+    assert (store.get_record(record.id).zh_text, store.get_record(record.id).en_text) == ("今天練習剪紙", "Cutting practice")
+
+
+def test_activity_box_stays_visible_above_the_tabs(qtbot, store, record):
+    editor = make_editor(qtbot, store, record)
+    editor.show()
+    editor.tabs.setCurrentIndex(1)
+    assert editor.activity_edit.isVisible()
+    assert editor.activity_edit.geometry().bottom() < editor.tabs.geometry().top()

@@ -1,4 +1,5 @@
 import os
+import sqlite3
 from datetime import date, datetime
 
 import pytest
@@ -291,3 +292,47 @@ def test_deleting_one_record_keeps_the_others(store):
 def test_deleting_unknown_record_raises_not_found(store):
     with pytest.raises(NotFound):
         store.delete_record(99)
+
+
+def test_activity_is_saved_and_read_back(store):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, date(2026, 10, 1), activity="串珠、剪紙")
+    assert store.get_record(record.id).activity == "串珠、剪紙"
+
+
+def test_update_changes_activity_and_keeps_the_texts(store):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, date(2026, 10, 1), "新竹國小", "中文", "English")
+    store.update_record(record.id, activity="平衡木")
+    again = store.get_record(record.id)
+    assert (again.activity, again.location, again.zh_text, again.en_text) == ("平衡木", "新竹國小", "中文", "English")
+
+
+def test_set_en_texts_keeps_the_activity(store):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, date(2026, 10, 1), activity="串珠")
+    store.set_en_texts({record.id: "Beading"})
+    assert store.get_record(record.id).activity == "串珠"
+
+
+def test_activity_is_not_plaintext_in_database_file(tmp_path):
+    path = tmp_path / "t.db"
+    with RecordStore(path, KEY) as store:
+        student = store.add_student("王小明")
+        store.add_record(student.id, date(2026, 10, 1), activity="感覺統合鞦韆")
+    assert "感覺統合鞦韆".encode() not in path.read_bytes()
+
+
+def test_chart_book_from_before_activities_opens_with_empty_activity(tmp_path):
+    path = tmp_path / "t.db"
+    with RecordStore(path, KEY) as store:
+        student = store.add_student("王小明")
+        record = store.add_record(student.id, date(2026, 10, 1), zh_text="舊病歷")
+    old = sqlite3.connect(path)
+    old.execute("ALTER TABLE record DROP COLUMN activity")
+    old.commit()
+    old.close()
+    with RecordStore(path, KEY) as again:
+        assert (again.get_record(record.id).zh_text, again.get_record(record.id).activity) == ("舊病歷", "")
+        again.update_record(record.id, activity="新活動")
+        assert again.get_record(record.id).activity == "新活動"
