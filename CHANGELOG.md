@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.5.0] - 2026-10-25
+
+TheraNote 分支功能測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 病歷新增「開始時間」（HH:MM，可從清單選或自行輸入，可留空），顯示在學生卡片與日期、
+  地點清單中；資料庫新增 `start_time` 欄，舊資料庫開啟時自動補上。不參與匯出、貼回與 Excel 匯出。
+- 側欄新增第三種瀏覽方式「地點」：列出用過的地點（含「未填地點」），選取後依日期由新到舊
+  列出該地點的所有病歷，可點開編輯或右鍵刪除。
+
 ## [0.7.0.4.0] - 2026-10-25
 
 TheraNote 分支功能測試版，尚待實機驗收。本次不建立 tag、不發佈。
