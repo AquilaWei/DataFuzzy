@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.4.0] - 2026-10-25
+
+TheraNote 分支功能測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 病歷編輯器中點兩下「中文」或「English」分頁，即複製整份中文或英文病歷。
+
+### 變更
+- 日期頁的病歷清單：學生姓名粗體、地點改成彩色小標籤、病歷開頭灰色，三者一眼分得出來。
+
 ## [0.7.0.3.1] - 2026-10-25
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
