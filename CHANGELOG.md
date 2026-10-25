@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.0.2] - 2026-10-24
+
+TheraNote 分支修正版。本次不建立 tag、不發佈。
+
+### 修正
+- macOS 建置失敗：`pyobjc-framework-Security` 的套件未附授權全文，授權檢查因此中止；
+  改附 PyObjC 的 MIT 授權全文。已在 Apple Silicon Mac 建出 DMG，安裝後 `--self-test` 通過。
+
 ## [0.7.0.0.1] - 2026-10-24
 
 TheraNote 首個分支測試版，尚待實機驗收。本分支採五段版號：前三碼 `0.7.0` 是分支的
