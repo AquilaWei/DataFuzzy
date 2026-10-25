@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.5.3] - 2026-10-25
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 修正
+- 拿掉地點欄「點兩下展開清單」的操作。
+- 地點欄右側改用地標圖示，提示點那裡可以從用過的地點選取。
+
 ## [0.7.0.5.2] - 2026-10-25
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。

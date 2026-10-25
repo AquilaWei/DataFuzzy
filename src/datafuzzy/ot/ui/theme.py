@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QApplication, QGraphicsDropShadowEffect, QWidget
 ACCENT = "#0a84ff"
 CALENDAR_ICON = Path(__file__).with_name("calendar.png")  # Qt picks calendar@2x.png on Retina
 CLOCK_ICON = Path(__file__).with_name("clock.png")
+PLACE_ICON = Path(__file__).with_name("place.png")
 
 # role -> (light, dark)
 COLORS: dict[QPalette.ColorRole, tuple[str, str]] = {
@@ -101,12 +102,15 @@ QScrollArea { border: none; background: transparent; }
 
 def stylesheet() -> str:
     """STYLESHEET plus the rules that need a file path: a calendar icon on date fields and
-    a clock on time fields (combo boxes named "time"), so it is clear what clicking there opens."""
-    calendar, clock = CALENDAR_ICON.as_posix(), CLOCK_ICON.as_posix()
+    a clock on time fields (combo boxes named "time") and a pin on location fields (named
+    "place"), so it is clear what clicking there opens."""
+    calendar, clock, place = CALENDAR_ICON.as_posix(), CLOCK_ICON.as_posix(), PLACE_ICON.as_posix()
     return STYLESHEET + (
-        "QDateEdit::drop-down, QComboBox#time::drop-down { border: none; width: 26px; }\n"
+        "QDateEdit::drop-down, QComboBox#time::drop-down, QComboBox#place::drop-down"
+        " { border: none; width: 26px; }\n"
         f"QDateEdit::down-arrow {{ image: url(\"{calendar}\"); width: 16px; height: 16px; }}\n"
-        f"QComboBox#time::down-arrow {{ image: url(\"{clock}\"); width: 16px; height: 16px; }}\n")
+        f"QComboBox#time::down-arrow {{ image: url(\"{clock}\"); width: 16px; height: 16px; }}\n"
+        f"QComboBox#place::down-arrow {{ image: url(\"{place}\"); width: 16px; height: 16px; }}\n")
 
 
 def is_dark(scheme: Qt.ColorScheme) -> bool:

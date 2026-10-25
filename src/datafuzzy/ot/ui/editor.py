@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime
 
-from PySide6.QtCore import QEvent, QObject, QTimer, Signal
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QComboBox,
@@ -40,21 +40,6 @@ def normal_time(text: str) -> str | None:
     return f"{int(match[1]):02d}:{match[2]}" if match else None
 
 
-class HistoryComboBox(QComboBox):
-    """An editable combo box: click to type, double-click to pick from the past entries."""
-
-    def __init__(self, parent: QWidget | None = None):
-        super().__init__(parent)
-        self.setEditable(True)
-        self.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)  # Enter must not add a row
-        self.lineEdit().installEventFilter(self)
-
-    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
-        if (watched is self.lineEdit() and event.type() == QEvent.Type.MouseButtonDblClick
-                and self.count()):
-            self.showPopup()
-            return True
-        return super().eventFilter(watched, event)
 ACTIVITY_LINES = 3  # height of the activity box, in lines
 
 
@@ -88,7 +73,10 @@ class RecordEditor(QWidget):
         self.status = QLabel("")
         self.status.setObjectName("subtle")
 
-        self.location_box = HistoryComboBox()
+        self.location_box = QComboBox()
+        self.location_box.setObjectName("place")
+        self.location_box.setEditable(True)
+        self.location_box.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)  # Enter must not add a row
         self.location_box.lineEdit().setPlaceholderText("地點（例如學校、診所）")
         self.location_box.addItems(store.all_locations())
         self.location_box.setEditText(record.location)
