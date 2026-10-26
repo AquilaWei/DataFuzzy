@@ -4,8 +4,15 @@ import pytest
 from openpyxl import load_workbook
 from PySide6.QtCore import QDate
 
-from datafuzzy.ot.db import RecordStore
-from datafuzzy.ot.excel_export import file_name, group_by_location, sheet_title, write_location
+from datafuzzy.ot.db import RecordStore, StudentProfile
+from datafuzzy.ot.excel_export import (
+    build_workbook,
+    file_name,
+    group_by_location,
+    header_text,
+    sheet_title,
+    write_location,
+)
 from datafuzzy.ot.ui.exchange_dialogs import ExcelExportDialog
 
 KEY = bytes(range(32))
@@ -64,6 +71,28 @@ def test_workbook_has_a_sheet_per_student_filled_oldest_first(charts, tmp_path):
     assert ws["A10"].value is None
     assert {"A4:A6", "B4:C6", "D4:K6"} <= {str(r) for r in ws.merged_cells.ranges}
     assert (wb["Amy"]["B4"].value, wb["Amy"]["D4"].value) == ("鞦韆", None)
+
+
+def test_header_lists_the_profile_and_school_year():
+    profile = StudentProfile(diagnosis="ADHD, ODD", age="8", grade="3", classroom="301",
+                             case_manager="Ms. Lee", school_year="09/2026-06/2027")
+    assert header_text("王小明", profile, TODAY) == (
+        "Name: 王小明 / Diagnosis: ADHD, ODD / Age: 8 / Grade: 3 / Classroom: 301 / "
+        "Case manager: Ms. Lee\nSchool year: 09/2026-06/2027")
+
+
+def test_header_without_a_school_year_uses_the_current_one():
+    assert header_text("Amy", StudentProfile(), date(2027, 3, 1)).endswith("School year: 09/2026-06/2027")
+
+
+def test_sheet_header_is_filled_from_the_students_profile(store):
+    student = store.add_student("王小明")
+    store.set_profile(student.id, StudentProfile(diagnosis="ADHD", goals="Fine motor\nSelf-care"))
+    store.add_record(student.id, date(2026, 10, 1), "Lincoln", en_text="Drew.")
+    ws = build_workbook(store, store.records_for_student(student.id), today=TODAY)["王小明"]
+    assert ws["A1"].value.startswith("Name: 王小明 / Diagnosis: ADHD / ")
+    assert ws["A2"].value == "Goals: Fine motor\nSelf-care"
+    assert ws.row_dimensions[2].height == 32
 
 
 def test_more_visits_than_the_template_has_slots(store, tmp_path):

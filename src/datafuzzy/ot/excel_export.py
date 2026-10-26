@@ -14,7 +14,8 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment
 from openpyxl.worksheet.worksheet import Worksheet
 
-from .db import Record, RecordStore
+from .db import Record, RecordStore, Student, StudentProfile
+from .school_year import default_school_year, format_school_year
 
 TEMPLATE_SHEET = "blank"
 FIRST_SLOT_ROW = 4
@@ -22,6 +23,7 @@ SLOT_ROWS = 3
 TEMPLATE_SLOTS = 10
 LAST_COLUMN = 11  # K
 DATE_FORMAT = "yyyy-mm-dd"
+HEADER_LINE_HEIGHT = 16  # points per line of the Goals row
 
 _FILE_UNSAFE = re.compile(r'[/\\:*?"<>|\x00-\x1f]')
 _SHEET_UNSAFE = re.compile(r"[\[\]:*?/\\]")
@@ -58,6 +60,24 @@ def sheet_title(name: str, used: set[str]) -> str:
         n += 1
     used.add(title.lower())
     return title
+
+
+def header_text(name: str, profile: StudentProfile, today: date) -> str:
+    """The form's first row: who the student is and the school year (this one when not set)."""
+    school_year = profile.school_year or format_school_year(*default_school_year(today))
+    return (f"Name: {name} / Diagnosis: {profile.diagnosis} / Age: {profile.age} / "
+            f"Grade: {profile.grade} / Classroom: {profile.classroom} / "
+            f"Case manager: {profile.case_manager}\nSchool year: {school_year}")
+
+
+def _fill_header(ws: Worksheet, student: Student, profile: StudentProfile, today: date) -> None:
+    ws["A1"] = header_text(student.name, profile, today)
+    goals = ws["A2"]
+    goals.value = f"Goals: {profile.goals}" if profile.goals else "Goals:"
+    goals.alignment = Alignment(vertical="top", wrap_text=True)
+    lines = goals.value.count("\n") + 1
+    if lines > 1:
+        ws.row_dimensions[2].height = HEADER_LINE_HEIGHT * lines
 
 
 def _load_template() -> Workbook:
@@ -98,8 +118,9 @@ def _fill(ws: Worksheet, records: list[Record]) -> None:
         ws.cell(top, 1).number_format = DATE_FORMAT
 
 
-def build_workbook(store: RecordStore, records: Iterable[Record]) -> Workbook:
-    """One sheet per student (by name), visits oldest first; the template sheet is dropped."""
+def build_workbook(store: RecordStore, records: Iterable[Record], today: date | None = None) -> Workbook:
+    """One sheet per student (by name), visits oldest first, the header filled from the
+    student's profile; the template sheet is dropped."""
     by_student: dict[int, list[Record]] = {}
     for record in records:
         by_student.setdefault(record.student_id, []).append(record)
@@ -114,6 +135,7 @@ def build_workbook(store: RecordStore, records: Iterable[Record]) -> Workbook:
         ws.page_setup.orientation = template.page_setup.orientation
         ws.page_margins = copy(template.page_margins)
         ws.sheet_view.zoomScale = template.sheet_view.zoomScale
+        _fill_header(ws, student, store.get_profile(student.id), today or date.today())
         _fill(ws, sorted(by_student[student.id], key=lambda r: (r.visit_date, r.id)))
     wb.remove(template)
     for i, ws in enumerate(wb.worksheets):

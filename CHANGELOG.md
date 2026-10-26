@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.10.0] - 2026-10-26
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 學生頁姓名旁新增「基本資訊」，可填寫 Diagnosis（如 ADHD, ODD）、Age、Grade、Classroom、Case manager、School year（起訖月份與年份，例如 09/2026-06/2027）與 Goals。
+- Excel 匯出時，這些資訊會自動填入表單第一列與 Goals 列；沒填 School year 時使用當前學年。表頭標籤改為正確拼字（Diagnosis、School year）。
+- 基本資訊與姓名一樣加密儲存；舊的病歷本開啟時會自動加上這個欄位。
+
 ## [0.7.0.9.1] - 2026-10-26
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。

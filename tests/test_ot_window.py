@@ -5,7 +5,7 @@ from PySide6.QtCore import QDate, QPoint, Qt
 
 from datafuzzy import __version__
 from datafuzzy.core.pipeline import Pipeline
-from datafuzzy.ot.db import RecordStore
+from datafuzzy.ot.db import RecordStore, StudentProfile
 from datafuzzy.ot.ui import main_window
 from datafuzzy.ot.ui.main_window import DATE_MODE, LOCATION_MODE, STUDENT_MODE, TheraNoteWindow
 
@@ -466,6 +466,26 @@ def test_student_list_has_no_menu_below_the_rows(qtbot, store):
     rows = window.student_list
     below = rows.visualItemRect(rows.item(0)).bottomLeft() + QPoint(5, 200)
     assert window.student_menu(below) is None
+
+
+def test_profile_button_saves_the_edited_profile(qtbot, store, monkeypatch):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小明")
+    asked = []
+    monkeypatch.setattr(window, "_ask_profile",
+                        lambda name, current: asked.append((name, current)) or StudentProfile(grade="3"))
+    window.student_view.profile_btn.click()
+    assert asked == [("王小明", StudentProfile())]
+    assert store.get_profile(student_id) == StudentProfile(grade="3")
+
+
+def test_cancelled_profile_dialog_keeps_the_profile(qtbot, store, monkeypatch):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小明")
+    store.set_profile(student_id, StudentProfile(grade="3"))
+    monkeypatch.setattr(window, "_ask_profile", lambda name, current: None)
+    assert not window.edit_profile(student_id)
+    assert store.get_profile(student_id) == StudentProfile(grade="3")
 
 
 def test_moving_a_record_updates_the_calendar(qtbot, store):

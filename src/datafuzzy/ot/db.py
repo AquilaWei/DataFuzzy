@@ -1,6 +1,6 @@
 """The chart database: students, their visit records and the export batches.
 
-Names, locations, both chart texts, the activities and the export mappings are encrypted
+Names, student profiles, locations, both chart texts, the activities and the export mappings are encrypted
 column by column;
 only dates and ids stay readable so records can be found by date without the key.
 """
@@ -12,7 +12,7 @@ import os
 import sqlite3
 import threading
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import date, datetime
 from pathlib import Path
 from typing import Self
@@ -32,8 +32,9 @@ CREATE TABLE IF NOT EXISTS meta (
     value BLOB NOT NULL
 );
 CREATE TABLE IF NOT EXISTS student (
-    id   INTEGER PRIMARY KEY,
-    name BLOB NOT NULL
+    id      INTEGER PRIMARY KEY,
+    name    BLOB NOT NULL,
+    profile BLOB  -- StudentProfile as JSON; NULL until first filled in
 );
 CREATE TABLE IF NOT EXISTS record (
     id         INTEGER PRIMARY KEY,
@@ -70,6 +71,8 @@ def connect(path: Path, check_same_thread: bool = True) -> sqlite3.Connection:
     db = sqlite3.connect(path, check_same_thread=check_same_thread)
     db.execute("PRAGMA foreign_keys = ON")
     db.executescript(SCHEMA)
+    if "profile" not in {row[1] for row in db.execute("PRAGMA table_info(student)")}:
+        db.execute("ALTER TABLE student ADD COLUMN profile BLOB")  # from before profiles
     columns = {row[1] for row in db.execute("PRAGMA table_info(record)")}
     if "activity" not in columns:  # a chart book from before activities
         db.execute("ALTER TABLE record ADD COLUMN activity BLOB")
@@ -105,6 +108,19 @@ def write_meta(path: Path, name: str, value: bytes) -> None:
 class Student:
     id: int
     name: str
+
+
+@dataclass(frozen=True)
+class StudentProfile:
+    """What the school form's header asks about a student, besides the name. All free text;
+    `school_year` reads like "09/2026-06/2027"."""
+    diagnosis: str = ""
+    age: str = ""
+    grade: str = ""
+    classroom: str = ""
+    case_manager: str = ""
+    school_year: str = ""
+    goals: str = ""
 
 
 @dataclass(frozen=True)
@@ -223,6 +239,27 @@ class RecordStore:
         Raises NotFound for an unknown student."""
         with self._lock, self._db:
             cur = self._db.execute("DELETE FROM student WHERE id = ?", (student_id,))
+        if cur.rowcount == 0:
+            raise NotFound(f"student {student_id}")
+
+    def get_profile(self, student_id: int) -> StudentProfile:
+        """The student's profile; an empty one if never filled in. Raises NotFound for an
+        unknown student."""
+        with self._lock:
+            row = self._db.execute("SELECT profile FROM student WHERE id = ?",
+                                   (student_id,)).fetchone()
+        if row is None:
+            raise NotFound(f"student {student_id}")
+        if row[0] is None:
+            return StudentProfile()
+        return StudentProfile(**json.loads(self._dec(row[0], "student.profile")))
+
+    def set_profile(self, student_id: int, profile: StudentProfile) -> None:
+        """Replace the student's profile, with surrounding spaces trimmed from each field."""
+        trimmed = {k: v.strip() for k, v in asdict(profile).items()}
+        blob = self._enc(json.dumps(trimmed, ensure_ascii=False), "student.profile")
+        with self._lock, self._db:
+            cur = self._db.execute("UPDATE student SET profile = ? WHERE id = ?", (blob, student_id))
         if cur.rowcount == 0:
             raise NotFound(f"student {student_id}")
 

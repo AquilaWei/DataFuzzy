@@ -33,12 +33,13 @@ from ...core.models import ModelSpec
 from ...core.pipeline import Pipeline
 from ...ui.model_manager import ModelManager
 from .. import APP_NAME
-from ..db import DuplicateRecord, RecordStore
+from ..db import DuplicateRecord, RecordStore, StudentProfile
 from .about import AboutDialog
 from .date_view import DayRecordsView, MarkedCalendar, to_date, to_qdate
 from .editor import RecordEditor
-from .location_view import NO_LOCATION, LocationRecordsView
 from .exchange_dialogs import ExcelExportDialog, ExportDialog, ImportDialog
+from .location_view import NO_LOCATION, LocationRecordsView
+from .profile_dialog import StudentProfileDialog
 from .student_view import StudentRecordsView
 from .widgets import SegmentedControl
 
@@ -186,6 +187,7 @@ class TheraNoteWindow(QMainWindow):
         self.student_view.delete_record.connect(self.delete_record)
         self.day_view.delete_record.connect(self.delete_record)
         self.student_view.rename_student.connect(lambda sid: self.rename_student(sid))
+        self.student_view.edit_profile.connect(lambda sid: self.edit_profile(sid))
         self.add_student_btn.clicked.connect(lambda: self.add_student())
         self.add_record_btn.clicked.connect(lambda: self.new_record())
         self.export_btn.clicked.connect(self.open_export)
@@ -257,6 +259,19 @@ class TheraNoteWindow(QMainWindow):
         self.store.rename_student(student_id, name)
         self.refresh_students(select_id=student_id)
         self.day_view.refresh()
+        return True
+
+    def _ask_profile(self, name: str, current: StudentProfile) -> StudentProfile | None:
+        dialog = StudentProfileDialog(name, current, parent=self)
+        return dialog.profile() if dialog.exec() == QDialog.DialogCode.Accepted else None
+
+    def edit_profile(self, student_id: int) -> bool:
+        """Edit a student's profile in a dialog. False if it was cancelled."""
+        profile = self._ask_profile(self.store.get_student(student_id).name,
+                                    self.store.get_profile(student_id))
+        if profile is None:
+            return False
+        self.store.set_profile(student_id, profile)
         return True
 
     def student_menu(self, pos: QPoint) -> QMenu | None:

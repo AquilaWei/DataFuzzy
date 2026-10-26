@@ -6,7 +6,7 @@ import pytest
 
 from datafuzzy.ot import APP_NAME
 from datafuzzy.ot.crypto import Cipher, DecryptionError
-from datafuzzy.ot.db import DB_ENV, DuplicateRecord, NotFound, RecordStore, default_db_path
+from datafuzzy.ot.db import DB_ENV, DuplicateRecord, NotFound, RecordStore, StudentProfile, default_db_path
 
 KEY = bytes(range(32))
 
@@ -68,6 +68,46 @@ def test_deleting_a_student_removes_their_records(store):
 def test_deleting_an_unknown_student_raises_not_found(store):
     with pytest.raises(NotFound):
         store.delete_student(99)
+
+
+def test_new_student_has_an_empty_profile(store):
+    student = store.add_student("王小明")
+    assert store.get_profile(student.id) == StudentProfile()
+
+
+def test_profile_is_saved_trimmed(store):
+    student = store.add_student("王小明")
+    store.set_profile(student.id, StudentProfile(diagnosis=" ADHD, ODD ", age="8", grade="3",
+                                                 classroom="301", case_manager="Ms. Lee",
+                                                 school_year="09/2026-06/2027", goals="Fine motor\n"))
+    assert store.get_profile(student.id) == StudentProfile(
+        diagnosis="ADHD, ODD", age="8", grade="3", classroom="301", case_manager="Ms. Lee",
+        school_year="09/2026-06/2027", goals="Fine motor")
+
+
+def test_profile_is_stored_encrypted(tmp_path):
+    path = tmp_path / "t.db"
+    with RecordStore(path, KEY) as store:
+        student = store.add_student("王小明")
+        store.set_profile(student.id, StudentProfile(diagnosis="ADHD"))
+    assert b"ADHD" not in path.read_bytes()
+
+
+def test_profile_of_an_unknown_student_raises_not_found(store):
+    with pytest.raises(NotFound):
+        store.set_profile(99, StudentProfile())
+
+
+def test_chart_book_from_before_profiles_opens_with_empty_profile(tmp_path):
+    path = tmp_path / "t.db"
+    with RecordStore(path, KEY) as store:
+        student = store.add_student("王小明")
+    old = sqlite3.connect(path)
+    old.execute("ALTER TABLE student DROP COLUMN profile")
+    old.commit()
+    old.close()
+    with RecordStore(path, KEY) as again:
+        assert again.get_profile(student.id) == StudentProfile()
 
 
 def test_unknown_student_raises_not_found(store):

@@ -17,6 +17,7 @@ class StudentRecordsView(QWidget):
     open_record = Signal(int)  # record id of the clicked card
     delete_record = Signal(int)  # record id chosen from a card's right-click menu
     rename_student = Signal(int)  # student id, from the pencil next to the name
+    edit_profile = Signal(int)  # student id, from the 基本資訊 button next to the name
 
     def __init__(self, store: RecordStore, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -28,6 +29,8 @@ class StudentRecordsView(QWidget):
         self.rename_btn = QPushButton("✎")
         self.rename_btn.setObjectName("flat")
         self.rename_btn.setToolTip("修改姓名")
+        self.profile_btn = QPushButton("基本資訊")
+        self.profile_btn.setToolTip("Diagnosis、Grade、Goals 等，Excel 匯出時填入表頭")
         self.count = QLabel("")
         self.count.setObjectName("subtle")
         self.sort = SegmentedControl(["最新在前", "最舊在前"])
@@ -45,6 +48,7 @@ class StudentRecordsView(QWidget):
         name_row.setSpacing(4)
         name_row.addWidget(self.title)
         name_row.addWidget(self.rename_btn)
+        name_row.addWidget(self.profile_btn)
         name_row.addStretch(1)
         titles.addLayout(name_row)
         titles.addWidget(self.count)
@@ -60,6 +64,7 @@ class StudentRecordsView(QWidget):
         self.stack.clicked.connect(self.open_record)
         self.stack.delete_requested.connect(self.delete_record)
         self.rename_btn.clicked.connect(lambda: self.rename_student.emit(self.student_id))
+        self.profile_btn.clicked.connect(lambda: self.edit_profile.emit(self.student_id))
         self.refresh()
 
     def show_student(self, student_id: int | None) -> None:
@@ -72,12 +77,14 @@ class StudentRecordsView(QWidget):
             self.title.setText("")
             self.count.setText("")
             self.rename_btn.setVisible(False)
+            self.profile_btn.setVisible(False)
             self.stack.set_records([])
             self.empty.setVisible(False)
             return
         records = self.store.records_for_student(self.student_id, newest_first=self.sort.index() == NEWEST_FIRST)
         self.title.setText(self.store.get_student(self.student_id).name)
         self.rename_btn.setVisible(True)
+        self.profile_btn.setVisible(True)
         self.count.setText(f"{len(records)} 份病歷")
         self.stack.set_records(records)
         self.empty.setVisible(not records)
