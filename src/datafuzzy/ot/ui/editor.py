@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import replace
 from datetime import date, datetime
 
@@ -28,34 +27,13 @@ from PySide6.QtWidgets import (
 )
 
 from ..db import DuplicateRecord, RecordStore, default_end_time
-from .cards import date_label, time_label
+from .cards import TIME_CHOICES, date_label, normal_time, time_label
 from .compare_panel import ComparePanel, candidate_label, compare_candidates
 from .date_view import to_date, to_qdate
 from .i18n import language, tr
 from .profile_dialog import ProfileSummary
 
 AUTOSAVE_MS = 800
-TIME_CHOICES = [time_label(f"{h:02d}:{m:02d}") for h in range(7, 20) for m in (0, 15, 30, 45)]
-_TIME = re.compile(r"(\d{1,2}):([0-5]\d)\s*([AaPp])?\.?\s*[Mm]?\.?")
-
-
-def normal_time(text: str) -> str | None:
-    """`text` ("9:30 AM", "2:05pm", or 24-hour "14:05") as "HH:MM" ("" for blank), or None
-    if it is not a time."""
-    text = text.strip().replace("：", ":")
-    if not text:
-        return ""
-    match = _TIME.fullmatch(text)
-    if not match:
-        return None
-    hour, minute, half = int(match[1]), match[2], (match[3] or "").upper()
-    if half:
-        if not 1 <= hour <= 12:
-            return None
-        hour = hour % 12 + (12 if half == "P" else 0)
-    elif hour > 23:
-        return None
-    return f"{hour:02d}:{minute}"
 
 
 ACTIVITY_LINES = 3  # height of the activity box, in lines

@@ -144,6 +144,10 @@ ENGLISH = {
     "學校或診所；新病歷會帶入": "School or clinic; new charts use it",
     "到": "to",
     "編輯基本資訊": "Edit profile",
+    "看診時段": "Sessions",
+    "＋ 新增時段": "+ Add session",
+    "移除這個時段": "Remove this session",
+    "例如 10:30 AM": "e.g. 10:30 AM",
     # unlock and start-up
     f"這台電腦沒有可用的系統鑰匙圈。請設定一組密碼來保護 {APP_NAME} 的病歷。\n"
     "忘記密碼就無法讀回資料，請自行妥善保存。":

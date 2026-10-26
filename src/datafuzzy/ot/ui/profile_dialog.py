@@ -23,11 +23,120 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..db import StudentProfile
+from ..db import Session, StudentProfile, default_end_time
 from ..school_year import default_school_year, format_school_year, parse_school_year
-from .i18n import tr
+from .cards import TIME_CHOICES, normal_time, session_label, time_label, weekday_label
+from .i18n import language, tr
 
 MONTH_FORMAT = "MM/yyyy"
+
+
+def sessions_text(sessions: tuple[Session, ...]) -> str:
+    """"週五 10:00 AM–10:30 AM、週一 …" for the summary; "" for none."""
+    joiner = ", " if language() == "en" else "、"
+    return joiner.join(f"{weekday_label(s.weekday)} {session_label(s.start, s.end)}" for s in sessions)
+
+
+class SessionRow(QWidget):
+    """One weekly session time: weekday, start and end. The end keeps to SESSION_MINUTES after
+    the start until it is changed by hand, as in the chart editor."""
+
+    removed = Signal(object)  # this row
+
+    def __init__(self, session: Session | None = None, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.weekday = QComboBox()
+        for day in range(7):
+            self.weekday.addItem(weekday_label(day), day)
+        self.start = self._time_box(tr("例如 10:00 AM"))
+        self.end = self._time_box(tr("例如 10:30 AM"))
+        self.remove_btn = QPushButton("✕")
+        self.remove_btn.setObjectName("flat")
+        self.remove_btn.setToolTip(tr("移除這個時段"))
+        if session is not None:
+            self.weekday.setCurrentIndex(session.weekday)
+            self.start.setEditText(time_label(session.start))
+            self.end.setEditText(time_label(session.end))
+        self._end_follows = session is None or session.end == default_end_time(session.start)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(self.weekday)
+        row.addWidget(self.start)
+        row.addWidget(QLabel("–"))
+        row.addWidget(self.end)
+        row.addWidget(self.remove_btn)
+        row.addStretch(1)
+        self.start.editTextChanged.connect(self._start_changed)
+        self.end.editTextChanged.connect(self._end_changed)
+        self.remove_btn.clicked.connect(lambda: self.removed.emit(self))
+
+    @staticmethod
+    def _time_box(placeholder: str) -> QComboBox:
+        box = QComboBox()
+        box.setObjectName("time")
+        box.setEditable(True)
+        box.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        box.addItems(TIME_CHOICES)
+        box.setEditText("")
+        box.lineEdit().setPlaceholderText(placeholder)
+        box.setMinimumContentsLength(8)
+        return box
+
+    def _start_changed(self) -> None:
+        start = normal_time(self.start.currentText())
+        if self._end_follows and start:
+            self.end.blockSignals(True)  # not a hand edit: keep following
+            self.end.setEditText(time_label(default_end_time(start)))
+            self.end.blockSignals(False)
+
+    def _end_changed(self) -> None:
+        self._end_follows = False
+
+    def session(self) -> Session | None:
+        """The session, or None while the start is blank. Raises ValueError for a time that
+        cannot be read."""
+        start, end = normal_time(self.start.currentText()), normal_time(self.end.currentText())
+        if start is None or end is None:
+            raise ValueError("not a time")
+        if not start:
+            return None
+        return Session(self.weekday.currentData(), start, end or default_end_time(start))
+
+
+class SessionsEditor(QWidget):
+    """The student's weekly session times, as many as needed."""
+
+    def __init__(self, sessions: tuple[Session, ...] = (), parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.rows: list[SessionRow] = []
+        self.add_btn = QPushButton(tr("＋ 新增時段"))
+        self.add_btn.setObjectName("flat")
+        self._rows = QVBoxLayout()
+        self._rows.setContentsMargins(0, 0, 0, 0)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addLayout(self._rows)
+        layout.addWidget(self.add_btn, 0, Qt.AlignmentFlag.AlignLeft)
+        for session in sessions:
+            self.add_row(session)
+        self.add_btn.clicked.connect(lambda: self.add_row())
+
+    def add_row(self, session: Session | None = None) -> SessionRow:
+        row = SessionRow(session)
+        row.removed.connect(self.remove_row)
+        self.rows.append(row)
+        self._rows.addWidget(row)
+        return row
+
+    def remove_row(self, row: SessionRow) -> None:
+        self.rows.remove(row)
+        row.setParent(None)
+        row.deleteLater()
+
+    def sessions(self) -> tuple[Session, ...]:
+        """The filled-in rows (blank ones are left out). Raises ValueError for a time that
+        cannot be read."""
+        return tuple(s for s in (row.session() for row in self.rows) if s is not None)
 
 
 class StudentProfileDialog(QDialog):
@@ -56,6 +165,9 @@ class StudentProfileDialog(QDialog):
         self.year_from = self._month_edit(start)
         self.year_to = self._month_edit(end)
         self.goals = QPlainTextEdit(profile.goals)
+        self.sessions = SessionsEditor(profile.sessions)
+        self.problem = QLabel("")
+        self.problem.setStyleSheet("color: #ff453a;")  # as in the unlock prompt
 
         school_year = QHBoxLayout()
         school_year.addWidget(self.year_from)
@@ -71,6 +183,7 @@ class StudentProfileDialog(QDialog):
         form.addRow("Classroom", self.classroom)
         form.addRow("Case manager", self.case_manager)
         form.addRow("School year", school_year)
+        form.addRow(tr("看診時段"), self.sessions)
         form.addRow("Goals", self.goals)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
                                    | QDialogButtonBox.StandardButton.Cancel)
@@ -78,7 +191,17 @@ class StudentProfileDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout = QVBoxLayout(self)
         layout.addLayout(form, 1)
+        layout.addWidget(self.problem)
         layout.addWidget(buttons)
+
+    def accept(self) -> None:
+        """Close only when every session time can be read; otherwise say so and stay open."""
+        try:
+            self.sessions.sessions()
+        except ValueError:
+            self.problem.setText(tr("時間請填成 9:30 AM 這樣的格式"))
+            return
+        super().accept()
 
     @staticmethod
     def _month_edit(day: date) -> QDateEdit:
@@ -93,7 +216,8 @@ class StudentProfileDialog(QDialog):
             classroom=self.classroom.text(), case_manager=self.case_manager.text(),
             school_year=format_school_year(date(start.year(), start.month(), 1),
                                            date(end.year(), end.month(), 1)),
-            goals=self.goals.toPlainText(), location=self.location.currentText())
+            goals=self.goals.toPlainText(), location=self.location.currentText(),
+            sessions=self.sessions.sessions())
 
 
 class ProfileSummary(QFrame):
@@ -115,7 +239,8 @@ class ProfileSummary(QFrame):
         grid = QGridLayout()
         grid.setHorizontalSpacing(10)
         grid.setVerticalSpacing(4)
-        for i, (label, field) in enumerate(self.FIELDS + (("School year", "school_year"), ("Goals", "goals"))):
+        wide = (("看診時段", "sessions"), ("School year", "school_year"), ("Goals", "goals"))
+        for i, (label, field) in enumerate(self.FIELDS + wide):
             row, col = divmod(i, self.PER_ROW) if i < len(self.FIELDS) else (i - len(self.FIELDS) + 2, 0)
             caption = QLabel(tr(label))
             caption.setObjectName("subtle")
@@ -143,4 +268,5 @@ class ProfileSummary(QFrame):
     def show_profile(self, name: str, profile: StudentProfile) -> None:
         self.name.setText(name)
         for field, label in self.values.items():
-            label.setText(getattr(profile, field).strip() or "—")
+            value = sessions_text(profile.sessions) if field == "sessions" else getattr(profile, field)
+            label.setText(value.strip() or "—")

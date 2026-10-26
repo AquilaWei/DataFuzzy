@@ -3,6 +3,7 @@ pointer is over it, when it lifts and unfolds to preview its content."""
 
 from __future__ import annotations
 
+import re
 from datetime import date
 
 from PySide6.QtCore import (
@@ -45,10 +46,13 @@ PREVIEW_CHARS = 140
 WEEKDAYS = "一二三四五六日"
 
 
+def weekday_label(weekday: int) -> str:
+    """Monday (0) to Sunday (6) as "週一" … "週日", or "Mon" … "Sun" in English."""
+    return WEEKDAYS_EN[weekday] if language() == "en" else f"週{WEEKDAYS[weekday]}"
+
+
 def date_label(day: date) -> str:
-    if language() == "en":
-        return f"{day.isoformat()}  {WEEKDAYS_EN[day.weekday()]}"
-    return f"{day.isoformat()}  週{WEEKDAYS[day.weekday()]}"
+    return f"{day.isoformat()}  {weekday_label(day.weekday())}"
 
 
 def time_label(start_time: str) -> str:
@@ -67,6 +71,30 @@ def session_label(start_time: str, end_time: str) -> str:
     if not end_time:
         return time_label(start_time)
     return f"{time_label(start_time)}–{time_label(end_time)}"
+
+
+TIME_CHOICES = [time_label(f"{h:02d}:{m:02d}") for h in range(7, 20) for m in (0, 15, 30, 45)]
+_TIME = re.compile(r"(\d{1,2}):([0-5]\d)\s*([AaPp])?\.?\s*[Mm]?\.?")
+
+
+def normal_time(text: str) -> str | None:
+    """`text` ("9:30 AM", "2:05pm", or 24-hour "14:05") as "HH:MM" ("" for blank), or None
+    if it is not a time."""
+    text = text.strip().replace("：", ":")
+    if not text:
+        return ""
+    match = _TIME.fullmatch(text)
+    if not match:
+        return None
+    hour, minute, half = int(match[1]), match[2], (match[3] or "").upper()
+    if half:
+        if not 1 <= hour <= 12:
+            return None
+        hour = hour % 12 + (12 if half == "P" else 0)
+    elif hour > 23:
+        return None
+    return f"{hour:02d}:{minute}"
+
 
 
 def preview_text(zh_text: str, en_text: str) -> str:

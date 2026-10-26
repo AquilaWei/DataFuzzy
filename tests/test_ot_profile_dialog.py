@@ -2,8 +2,8 @@ from datetime import date
 
 from PySide6.QtCore import QDate
 
-from datafuzzy.ot.db import StudentProfile
-from datafuzzy.ot.ui.profile_dialog import StudentProfileDialog
+from datafuzzy.ot.db import Session, StudentProfile
+from datafuzzy.ot.ui.profile_dialog import ProfileSummary, StudentProfileDialog
 
 
 def test_dialog_starts_from_the_saved_profile(qtbot):
@@ -36,3 +36,57 @@ def test_location_drop_down_offers_the_known_locations(qtbot):
     assert [dialog.location.itemText(i) for i in range(dialog.location.count())] == ["A校", "B校"]
     dialog.location.setEditText("C校")
     assert dialog.profile().location == "C校"
+
+
+def test_session_times_can_be_added_as_many_as_needed(qtbot):
+    dialog = StudentProfileDialog("王小明", StudentProfile(), today=date(2026, 10, 1))
+    qtbot.addWidget(dialog)
+    friday = dialog.sessions.add_row()
+    friday.weekday.setCurrentIndex(4)
+    friday.start.setEditText("10:00 AM")
+    monday = dialog.sessions.add_row()
+    monday.start.setEditText("2:00 PM")
+    monday.end.setEditText("2:45 PM")
+    assert dialog.profile().sessions == (Session(4, "10:00", "10:30"), Session(0, "14:00", "14:45"))
+
+
+def test_a_session_ends_30_minutes_after_its_start_until_the_end_is_changed(qtbot):
+    dialog = StudentProfileDialog("王小明", StudentProfile(), today=date(2026, 10, 1))
+    qtbot.addWidget(dialog)
+    row = dialog.sessions.add_row()
+    row.start.setEditText("10:00 AM")
+    assert row.end.currentText() == "10:30 AM"
+    row.end.setEditText("11:00 AM")
+    row.start.setEditText("10:15 AM")
+    assert row.end.currentText() == "11:00 AM"
+
+
+def test_a_session_time_can_be_removed(qtbot):
+    profile = StudentProfile(sessions=(Session(4, "10:00", "10:30"), Session(0, "14:00", "14:30")))
+    dialog = StudentProfileDialog("王小明", profile, today=date(2026, 10, 1))
+    qtbot.addWidget(dialog)
+    dialog.sessions.rows[0].remove_btn.click()
+    assert dialog.profile().sessions == (Session(0, "14:00", "14:30"),)
+
+
+def test_a_blank_session_row_is_left_out(qtbot):
+    dialog = StudentProfileDialog("王小明", StudentProfile(), today=date(2026, 10, 1))
+    qtbot.addWidget(dialog)
+    dialog.sessions.add_row()
+    assert dialog.profile().sessions == ()
+
+
+def test_an_unreadable_session_time_keeps_the_dialog_open(qtbot):
+    dialog = StudentProfileDialog("王小明", StudentProfile(), today=date(2026, 10, 1))
+    qtbot.addWidget(dialog)
+    dialog.sessions.add_row().start.setEditText("10點")
+    dialog.accept()
+    assert dialog.result() != dialog.DialogCode.Accepted
+    assert "9:30 AM" in dialog.problem.text()
+
+
+def test_summary_lists_the_session_times(qtbot):
+    summary = ProfileSummary()
+    qtbot.addWidget(summary)
+    summary.show_profile("王小明", StudentProfile(sessions=(Session(0, "14:00", "14:30"), Session(4, "10:00", "10:30"))))
+    assert summary.values["sessions"].text() == "週一 2:00 PM–2:30 PM、週五 10:00 AM–10:30 AM"

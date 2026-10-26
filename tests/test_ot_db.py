@@ -11,6 +11,7 @@ from datafuzzy.ot.db import (
     DuplicateRecord,
     NotFound,
     RecordStore,
+    Session,
     StudentProfile,
     default_db_path,
     default_end_time,
@@ -628,3 +629,31 @@ def test_chart_book_from_before_start_times_opens_with_none(tmp_path):
         assert again.get_record(record.id).start_time == ""
         again.update_record(record.id, start_time="14:00")
         assert again.get_record(record.id).start_time == "14:00"
+
+
+def test_profile_keeps_any_number_of_session_times_sorted(store):
+    student = store.add_student("王小明")
+    store.set_profile(student.id, StudentProfile(sessions=(Session(4, "10:00", "10:30"), Session(0, "14:00", "14:30"),
+                                                           Session(4, "09:00", "09:30"))))
+    assert store.get_profile(student.id).sessions == (
+        Session(0, "14:00", "14:30"), Session(4, "09:00", "09:30"), Session(4, "10:00", "10:30"))
+
+
+def test_profile_from_before_session_times_has_none(store):
+    student = store.add_student("王小明")
+    store.set_profile(student.id, StudentProfile(diagnosis="ADHD"))
+    assert store.get_profile(student.id).sessions == ()
+
+
+def test_a_session_time_on_the_weekday_comes_before_past_visits(store):
+    student = store.add_student("王小明")
+    store.add_record(student.id, date(2026, 10, 2), start_time="14:00", end_time="14:45")  # Friday
+    store.set_profile(student.id, StudentProfile(sessions=(Session(4, "10:00", "10:30"),)))
+    assert store.student_default_slot(student.id, date(2026, 10, 9)) == ("10:00", "10:30")
+
+
+def test_without_a_session_time_on_the_weekday_past_visits_are_used(store):
+    student = store.add_student("王小明")
+    store.add_record(student.id, date(2026, 10, 5), start_time="09:00", end_time="09:30")  # Monday
+    store.set_profile(student.id, StudentProfile(sessions=(Session(4, "10:00", "10:30"),)))
+    assert store.student_default_slot(student.id, date(2026, 10, 12)) == ("09:00", "09:30")

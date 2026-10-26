@@ -128,6 +128,14 @@ class Student:
 
 
 @dataclass(frozen=True)
+class Session:
+    """A weekly session time of a student, e.g. Fridays 10:00–10:30."""
+    weekday: int  # Monday 0 … Sunday 6
+    start: str  # "HH:MM"
+    end: str  # "HH:MM"
+
+
+@dataclass(frozen=True)
 class StudentProfile:
     """What the school form's header asks about a student, besides the name, and where they
     are seen (one place per student; new records take it). All free text; `school_year` reads
@@ -140,6 +148,7 @@ class StudentProfile:
     school_year: str = ""
     goals: str = ""
     location: str = ""
+    sessions: tuple[Session, ...] = ()  # as many as the student has, by weekday then start
 
 
 SESSION_MINUTES = 30  # a new session's default length
@@ -284,11 +293,15 @@ class RecordStore:
             raise NotFound(f"student {student_id}")
         if row[0] is None:
             return StudentProfile()
-        return StudentProfile(**json.loads(self._dec(row[0], "student.profile")))
+        fields = json.loads(self._dec(row[0], "student.profile"))
+        sessions = tuple(Session(**s) for s in fields.pop("sessions", []))  # none before session times
+        return StudentProfile(**fields, sessions=sessions)
 
     def set_profile(self, student_id: int, profile: StudentProfile) -> None:
-        """Replace the student's profile, with surrounding spaces trimmed from each field."""
-        trimmed = {k: v.strip() for k, v in asdict(profile).items()}
+        """Replace the student's profile, with surrounding spaces trimmed from each field and the
+        sessions sorted by weekday and start."""
+        trimmed = {k: v.strip() for k, v in asdict(profile).items() if k != "sessions"}
+        trimmed["sessions"] = [asdict(s) for s in sorted(profile.sessions, key=lambda s: (s.weekday, s.start))]
         blob = self._enc(json.dumps(trimmed, ensure_ascii=False), "student.profile")
         with self._lock, self._db:
             cur = self._db.execute("UPDATE student SET profile = ? WHERE id = ?", (blob, student_id))
@@ -469,10 +482,14 @@ class RecordStore:
         return ""
 
     def student_default_slot(self, student_id: int, day: date) -> tuple[str, str]:
-        """(start, end) for a new visit on `day`: the times of the student's latest visit on the
-        same weekday that has a start time (its end, or SESSION_MINUTES later if it has none);
-        failing that, the latest visit's start time and SESSION_MINUTES later; ("", "") for none.
-        Sessions tend to repeat weekly, so the same weekday is the better guess."""
+        """(start, end) for a new visit on `day`: the student's session time on that weekday from
+        the profile (the earliest, if there are several); failing that, the times of the latest
+        visit on the same weekday that has a start time (its end, or SESSION_MINUTES later if it
+        has none); failing that, the latest visit's start time and SESSION_MINUTES later; ("", "")
+        for none. Sessions tend to repeat weekly, so the same weekday is the better guess."""
+        for session in self.get_profile(student_id).sessions:  # kept sorted by set_profile
+            if session.weekday == day.weekday():
+                return session.start, session.end or default_end_time(session.start)
         for record in self.records_for_student(student_id, newest_first=True):
             if record.start_time and record.visit_date.weekday() == day.weekday():
                 return record.start_time, record.end_time or default_end_time(record.start_time)
