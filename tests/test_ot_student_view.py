@@ -113,6 +113,19 @@ def test_hovering_the_next_card_hands_the_lift_over(qtbot, view):
     qtbot.waitUntil(lambda: [c.y() for c in view.stack.cards] == [16, 64, 220], timeout=2000)
 
 
+def test_each_card_has_a_shadow_just_below_it_that_ignores_the_mouse(view):
+    stack = view.stack
+    children = stack.children()
+    for card, shadow in zip(stack.cards, stack._shadows):
+        assert children.index(shadow) == children.index(card) - 1
+        assert shadow.testAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        assert shadow.geometry().contains(card.geometry())
+
+
+def test_cards_have_no_graphics_effect_to_reblur_on_every_frame(view):
+    assert [card.graphicsEffect() for card in view.stack.cards] == [None, None, None]
+
+
 def test_date_label_includes_weekday():
     assert date_label(date(2026, 10, 1)) == "2026-10-01  週四"
 

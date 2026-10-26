@@ -5,12 +5,28 @@ from __future__ import annotations
 
 from datetime import date
 
-from PySide6.QtCore import QEasingCurve, QRectF, Qt, QVariantAnimation, Signal
-from PySide6.QtGui import QContextMenuEvent, QCursor, QMouseEvent, QPainter, QPalette
+from PySide6.QtCore import (
+    QEasingCurve,
+    QRect,
+    QRectF,
+    QSize,
+    Qt,
+    QVariantAnimation,
+    Signal,
+)
+from PySide6.QtGui import (
+    QColor,
+    QContextMenuEvent,
+    QCursor,
+    QMouseEvent,
+    QPainter,
+    QPalette,
+    QPixmap,
+    QPixmapCache,
+)
 from PySide6.QtWidgets import QLabel, QMenu, QVBoxLayout, QWidget
 
 from ..db import Record
-from .theme import add_shadow
 from .widgets import record_menu
 
 MARGIN = 16
@@ -20,6 +36,9 @@ LIFT = 8           # how far the hovered card rises
 EXPAND = CARD_H - STEP  # how far the cards below it make room
 RADIUS = 14
 HOVER_MS = 180
+SHADOW_SPREAD = 9  # how far the soft shadow reaches past the card's edge
+SHADOW_DY = 3
+SHADOW_LAYER_ALPHA = 2  # per layer; the layers add up toward the card
 PREVIEW_LINES = 3
 PREVIEW_CHARS = 140
 WEEKDAYS = "一二三四五六日"
@@ -46,6 +65,47 @@ def preview_text(zh_text: str, en_text: str) -> str:
     lines = [line.strip() for line in text.splitlines() if line.strip()][:PREVIEW_LINES]
     joined = "\n".join(lines)
     return joined if len(joined) <= PREVIEW_CHARS else joined[:PREVIEW_CHARS].rstrip() + "…"
+
+
+def shadow_pixmap(size: QSize, dpr: float) -> QPixmap:
+    """The soft shadow of a card of `size`, SHADOW_SPREAD larger on every side. Drawn once per
+    size and kept in QPixmapCache: a QGraphicsDropShadowEffect re-blurs on every repaint, which
+    made the hover animation stutter."""
+    key = f"theranote-card-shadow-{size.width()}x{size.height()}@{dpr}"
+    cached = QPixmap()
+    if QPixmapCache.find(key, cached):
+        return cached
+    outer = QSize(size.width() + 2 * SHADOW_SPREAD, size.height() + 2 * SHADOW_SPREAD)
+    pixmap = QPixmap(outer * dpr)
+    pixmap.setDevicePixelRatio(dpr)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(0, 0, 0, SHADOW_LAYER_ALPHA))
+    # Nested translucent layers, largest first, add up to a shadow that fades toward its edge.
+    body = QRectF(SHADOW_SPREAD, SHADOW_SPREAD + SHADOW_DY, size.width(), size.height())
+    for grow in range(SHADOW_SPREAD, 0, -1):
+        painter.drawRoundedRect(body.adjusted(-grow, -grow, grow, grow), RADIUS + grow, RADIUS + grow)
+    painter.end()
+    QPixmapCache.insert(key, pixmap)
+    return pixmap
+
+
+class CardShadow(QWidget):
+    """The shadow under one card: a sibling stacked just below it, so the card above it in the
+    stack still covers it, and transparent for the mouse, so it never takes the hover."""
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    def follow(self, card: QRect) -> None:
+        self.setGeometry(card.adjusted(-SHADOW_SPREAD, -SHADOW_SPREAD, SHADOW_SPREAD, SHADOW_SPREAD))
+
+    def paintEvent(self, event) -> None:
+        card = self.size() - QSize(2 * SHADOW_SPREAD, 2 * SHADOW_SPREAD)
+        QPainter(self).drawPixmap(0, 0, shadow_pixmap(card, self.devicePixelRatioF()))
 
 
 class RecordCard(QWidget):
@@ -75,7 +135,6 @@ class RecordCard(QWidget):
         layout.addWidget(self.location_label)
         layout.addSpacing(6)
         layout.addWidget(self.preview_label, 1)
-        add_shadow(self, blur=22, dy=3, alpha=45)
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
@@ -105,7 +164,8 @@ class CardStack(QWidget):
     """Cards laid out top to bottom, each one overlapping the one before it.
 
     Hovering card k eases its `progress` to 1: it rises by LIFT and the cards below slide down
-    EXPAND, so its whole body shows. Moving to another card hands the lift over."""
+    EXPAND, so its whole body shows. Moving to another card hands the lift over. One animation
+    moves every card, so each frame lays the stack out once."""
 
     clicked = Signal(int)  # record id of the card that was clicked
     delete_requested = Signal(int)  # record id chosen for deletion from a card's menu
@@ -113,20 +173,30 @@ class CardStack(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.cards: list[RecordCard] = []
+        self._shadows: list[CardShadow] = []
         self.progress: list[float] = []
-        self._animations: list[QVariantAnimation] = []
+        self._from: list[float] = []  # progress when the running animation started
+        self._to: list[float] = []    # and where it ends
         self.hovered: int | None = None
+        self._animation = QVariantAnimation(self)
+        self._animation.setDuration(HOVER_MS)
+        self._animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._animation.setStartValue(0.0)
+        self._animation.setEndValue(1.0)
+        self._animation.valueChanged.connect(self._step)
 
     def set_records(self, records: list[Record]) -> None:
         """Replace the cards, in the order given (the first is at the top)."""
-        for card in self.cards:
-            card.deleteLater()
-        for animation in self._animations:
-            animation.stop()
-            animation.deleteLater()
+        self._animation.stop()
+        for widget in self.cards + self._shadows:
+            widget.deleteLater()
         self.cards = []
+        self._shadows = []
         self.hovered = None
         for i, record in enumerate(records):
+            shadow = CardShadow(self)  # created first, so it stacks under its card
+            shadow.show()
+            self._shadows.append(shadow)
             card = RecordCard(record, i, self)
             card.clicked.connect(self.clicked)
             card.delete_requested.connect(self.delete_requested)
@@ -135,13 +205,7 @@ class CardStack(QWidget):
             card.show()
             self.cards.append(card)
         self.progress = [0.0] * len(self.cards)
-        self._animations = []
-        for i in range(len(self.cards)):
-            animation = QVariantAnimation(self)
-            animation.setDuration(HOVER_MS)
-            animation.setEasingCurve(QEasingCurve.Type.OutCubic)
-            animation.valueChanged.connect(lambda value, i=i: self._set_progress(i, value))
-            self._animations.append(animation)
+        self._to = list(self.progress)
         self.setMinimumHeight(self._resting_height())
         self._place()
 
@@ -154,15 +218,14 @@ class CardStack(QWidget):
     def set_hovered(self, index: int | None) -> None:
         """Lift card `index` (None puts every card back), animated."""
         self.hovered = index
-        for i, animation in enumerate(self._animations):
-            target = 1.0 if i == index else 0.0
-            running = animation.state() != QVariantAnimation.State.Stopped
-            if (running and animation.endValue() == target) or (not running and self.progress[i] == target):
-                continue
-            animation.stop()
-            animation.setStartValue(self.progress[i])
-            animation.setEndValue(target)
-            animation.start()
+        target = [1.0 if i == index else 0.0 for i in range(len(self.cards))]
+        running = self._animation.state() != QVariantAnimation.State.Stopped
+        if (self._to if running else self.progress) == target:
+            return
+        self._animation.stop()
+        self._from = list(self.progress)
+        self._to = target
+        self._animation.start()
 
     def _card_left(self, index: int) -> None:
         # The card moves as it lifts, so a leave event can arrive with the pointer still on it.
@@ -170,15 +233,16 @@ class CardStack(QWidget):
         if self.hovered == index and not card.rect().contains(card.mapFromGlobal(QCursor.pos())):
             self.set_hovered(None)
 
-    def _set_progress(self, index: int, value: float) -> None:
-        self.progress[index] = float(value)
+    def _step(self, t: float) -> None:
+        self.progress = [a + (b - a) * t for a, b in zip(self._from, self._to)]
         self._place()
 
     def _place(self) -> None:
         width = max(self.width() - 2 * MARGIN, 0)
         y = float(MARGIN)
-        for card, progress in zip(self.cards, self.progress):
+        for card, shadow, progress in zip(self.cards, self._shadows, self.progress):
             card.setGeometry(MARGIN, round(y - LIFT * progress), width, CARD_H)
+            shadow.follow(card.geometry())
             y += STEP + EXPAND * progress
 
     def resizeEvent(self, event) -> None:

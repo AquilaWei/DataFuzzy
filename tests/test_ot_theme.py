@@ -1,9 +1,8 @@
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPalette
-from PySide6.QtWidgets import QGraphicsDropShadowEffect, QWidget
 
 from datafuzzy.ot.ui import theme
-from datafuzzy.ot.ui.theme import add_shadow, apply_theme, palette_for
+from datafuzzy.ot.ui.theme import apply_theme, palette_for
 
 
 def test_light_scheme_has_white_cards_on_light_grey_window():
@@ -30,14 +29,6 @@ def test_apply_theme_sets_palette_based_stylesheet(qapp):
 def test_apply_theme_sets_the_light_palette_when_system_has_no_scheme(qapp):
     apply_theme(qapp)
     assert qapp.palette().color(QPalette.ColorRole.Base).name() == "#ffffff"
-
-
-def test_shadow_is_a_soft_drop_shadow_on_the_widget(qtbot):
-    widget = QWidget()
-    qtbot.addWidget(widget)
-    effect = add_shadow(widget, blur=30)
-    assert isinstance(widget.graphicsEffect(), QGraphicsDropShadowEffect)
-    assert effect.blurRadius() == 30
 
 
 def test_date_fields_show_a_calendar_icon():

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QGuiApplication, QPalette
-from PySide6.QtWidgets import QApplication, QGraphicsDropShadowEffect, QWidget
+from PySide6.QtWidgets import QApplication
 
 ACCENT = "#0a84ff"
 CALENDAR_ICON = Path(__file__).with_name("calendar.png")  # Qt picks calendar@2x.png on Retina
@@ -134,13 +134,3 @@ def apply_theme(app: QApplication) -> None:
     hints = QGuiApplication.styleHints()
     app.setPalette(palette_for(hints.colorScheme()))
     hints.colorSchemeChanged.connect(lambda scheme: app.setPalette(palette_for(scheme)))
-
-
-def add_shadow(widget: QWidget, blur: int = 28, dy: int = 4, alpha: int = 50) -> QGraphicsDropShadowEffect:
-    """A soft drop shadow under `widget`, the cue that a card sits above the page."""
-    effect = QGraphicsDropShadowEffect(widget)
-    effect.setBlurRadius(blur)
-    effect.setOffset(0, dy)
-    effect.setColor(QColor(0, 0, 0, alpha))
-    widget.setGraphicsEffect(effect)
-    return effect

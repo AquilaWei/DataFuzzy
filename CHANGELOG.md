@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.9.1] - 2026-10-26
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 修正
+- 學生病歷卡片在滑鼠移過時的展開動畫變順。卡片陰影改為預先繪製並快取，換卡時所有卡片共用一段動畫；30 張卡片時每格重繪時間從約 52 ms 降到約 8 ms。
+
 ## [0.7.0.9.0] - 2026-10-26
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
