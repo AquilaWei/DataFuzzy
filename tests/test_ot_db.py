@@ -657,3 +657,49 @@ def test_without_a_session_time_on_the_weekday_past_visits_are_used(store):
     store.add_record(student.id, date(2026, 10, 5), start_time="09:00", end_time="09:30")  # Monday
     store.set_profile(student.id, StudentProfile(sessions=(Session(4, "10:00", "10:30"),)))
     assert store.student_default_slot(student.id, date(2026, 10, 12)) == ("09:00", "09:30")
+
+
+def test_students_are_active_by_default(store):
+    assert store.add_student("王小明").active
+    assert store.students()[0].active
+
+
+def test_a_student_can_be_made_inactive_and_active_again(store):
+    student = store.add_student("王小明")
+    store.set_active(student.id, False)
+    assert not store.get_student(student.id).active
+    store.set_active(student.id, True)
+    assert store.get_student(student.id).active
+
+
+def test_making_an_unknown_student_inactive_raises_not_found(store):
+    with pytest.raises(NotFound):
+        store.set_active(99, False)
+
+
+def test_renaming_keeps_a_student_inactive(store):
+    student = store.add_student("王小明")
+    store.set_active(student.id, False)
+    assert not store.rename_student(student.id, "王大明").active
+
+
+def test_chart_book_from_before_active_students_has_everyone_active(tmp_path):
+    path = tmp_path / "t.db"
+    with RecordStore(path, KEY) as store:
+        student = store.add_student("王小明")
+    old = sqlite3.connect(path)
+    old.execute("ALTER TABLE student DROP COLUMN active")
+    old.commit()
+    old.close()
+    with RecordStore(path, KEY) as again:
+        assert again.get_student(student.id).active
+
+
+def test_timetable_lists_active_students_sessions_by_weekday_and_time(store):
+    ming, amy, lin = store.add_student("王小明"), store.add_student("Amy"), store.add_student("林曉華")
+    store.set_profile(ming.id, StudentProfile(sessions=(Session(4, "10:00", "10:30"), Session(0, "09:00", "09:30"))))
+    store.set_profile(amy.id, StudentProfile(sessions=(Session(4, "10:00", "10:45"),)))
+    store.set_profile(lin.id, StudentProfile(sessions=(Session(1, "13:00", "13:30"),)))
+    store.set_active(lin.id, False)
+    assert [(s.weekday, s.start, st.name) for s, st in store.timetable()] == [
+        (0, "09:00", "王小明"), (4, "10:00", "Amy"), (4, "10:00", "王小明")]

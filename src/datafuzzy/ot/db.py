@@ -34,7 +34,8 @@ CREATE TABLE IF NOT EXISTS meta (
 CREATE TABLE IF NOT EXISTS student (
     id      INTEGER PRIMARY KEY,
     name    BLOB NOT NULL,
-    profile BLOB  -- StudentProfile as JSON; NULL until first filled in
+    profile BLOB,  -- StudentProfile as JSON; NULL until first filled in
+    active  INTEGER NOT NULL DEFAULT 1  -- 0 once their plan is done; they leave the timetable
 );
 CREATE TABLE IF NOT EXISTS record (
     id         INTEGER PRIMARY KEY,
@@ -72,8 +73,11 @@ def connect(path: Path, check_same_thread: bool = True) -> sqlite3.Connection:
     db = sqlite3.connect(path, check_same_thread=check_same_thread)
     db.execute("PRAGMA foreign_keys = ON")
     db.executescript(SCHEMA)
-    if "profile" not in {row[1] for row in db.execute("PRAGMA table_info(student)")}:
+    student_columns = {row[1] for row in db.execute("PRAGMA table_info(student)")}
+    if "profile" not in student_columns:
         db.execute("ALTER TABLE student ADD COLUMN profile BLOB")  # from before profiles
+    if "active" not in student_columns:  # from before students could be made inactive
+        db.execute("ALTER TABLE student ADD COLUMN active INTEGER NOT NULL DEFAULT 1")
     columns = {row[1] for row in db.execute("PRAGMA table_info(record)")}
     if "activity" not in columns:  # a chart book from before activities
         db.execute("ALTER TABLE record ADD COLUMN activity BLOB")
@@ -125,6 +129,7 @@ def write_meta(path: Path, name: str, value: bytes) -> None:
 class Student:
     id: int
     name: str
+    active: bool = True  # False once their plan is done
 
 
 @dataclass(frozen=True)
@@ -258,7 +263,7 @@ class RecordStore:
 
     def get_student(self, student_id: int) -> Student:
         with self._lock:
-            row = self._db.execute("SELECT id, name FROM student WHERE id = ?",
+            row = self._db.execute("SELECT id, name, active FROM student WHERE id = ?",
                                    (student_id,)).fetchone()
         if row is None:
             raise NotFound(f"student {student_id}")
@@ -273,7 +278,15 @@ class RecordStore:
                                    (self._enc(name, "student.name"), student_id))
         if cur.rowcount == 0:
             raise NotFound(f"student {student_id}")
-        return Student(student_id, name)
+        return self.get_student(student_id)
+
+    def set_active(self, student_id: int, active: bool) -> None:
+        """Make a student active (on the timetable) or inactive (their plan is done). Their
+        records stay either way. Raises NotFound for an unknown student."""
+        with self._lock, self._db:
+            cur = self._db.execute("UPDATE student SET active = ? WHERE id = ?", (int(active), student_id))
+        if cur.rowcount == 0:
+            raise NotFound(f"student {student_id}")
 
     def delete_student(self, student_id: int) -> None:
         """Remove a student and, through ON DELETE CASCADE, all of their records, for good.
@@ -311,11 +324,11 @@ class RecordStore:
     def students(self) -> list[Student]:
         """Everyone, sorted by name."""
         with self._lock:
-            rows = self._db.execute("SELECT id, name FROM student").fetchall()
+            rows = self._db.execute("SELECT id, name, active FROM student").fetchall()
         return sorted((self._student(r) for r in rows), key=lambda s: (s.name.casefold(), s.id))
 
     def _student(self, row: tuple) -> Student:
-        return Student(row[0], self._dec(row[1], "student.name"))
+        return Student(row[0], self._dec(row[1], "student.name"), bool(row[2]))
 
     # --- records --------------------------------------------------------------------
 
@@ -480,6 +493,12 @@ class RecordStore:
             if record.start_time:
                 return record.start_time
         return ""
+
+    def timetable(self) -> list[tuple[Session, Student]]:
+        """Every weekly session time of the active students, by weekday, start and name."""
+        slots = [(session, student) for student in self.students() if student.active
+                 for session in self.get_profile(student.id).sessions]
+        return sorted(slots, key=lambda slot: (slot[0].weekday, slot[0].start, slot[1].name.casefold()))
 
     def student_default_slot(self, student_id: int, day: date) -> tuple[str, str]:
         """(start, end) for a new visit on `day`: the student's session time on that weekday from

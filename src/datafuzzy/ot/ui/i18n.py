@@ -85,6 +85,17 @@ ENGLISH = {
         "Delete {name}'s chart of {day}?\nBoth the Chinese and the English will be deleted. "
         "This cannot be undone.",
     "（所有學生）": "(All students)",
+    "課表": "Timetable",
+    "‹ 課表": "‹ Timetable",
+    "尚未設定看診時段": "No session time yet",
+    "停用學生": "Make inactive",
+    "啟用學生": "Make active",
+    "{name}（停用）": "{name} (inactive)",
+    "還沒有學生設定看診時段。在學生的「基本資訊」加入看診時段，就會出現在課表上。":
+        "No student has a session time yet. Add session times in a student's profile and they "
+        "appear here.",
+    "{students} 位學生 · {sessions} 個時段": "{students} students · {sessions} sessions",
+    "查看 {name} 的所有病歷": "See all of {name}'s charts",
     # settings
     "介面語言": "Language",
     "病歷預覽會優先顯示這個語言的內容。": "Chart previews show this language first.",

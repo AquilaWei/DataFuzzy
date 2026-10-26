@@ -7,7 +7,7 @@ from datetime import date
 from pathlib import Path
 
 from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QAction, QCloseEvent
+from PySide6.QtGui import QAction, QCloseEvent, QPalette
 from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
@@ -44,14 +44,16 @@ from .location_view import NO_LOCATION, LocationRecordsView
 from .profile_dialog import StudentProfileDialog
 from .settings_dialog import SettingsDialog
 from .student_view import StudentRecordsView
+from .timetable_view import TimetableView
 from .widgets import SegmentedControl
 
 STUDENT_MODE = 0
 DATE_MODE = 1
 LOCATION_MODE = 2
+TIMETABLE_MODE = 3
 
 # Content pages
-PLACEHOLDER, STUDENT_PAGE, DAY_PAGE, EDITOR_PAGE, LOCATION_PAGE = range(5)
+PLACEHOLDER, STUDENT_PAGE, DAY_PAGE, EDITOR_PAGE, LOCATION_PAGE, TIMETABLE_PAGE = range(6)
 
 
 class NewRecordDialog(QDialog):
@@ -131,7 +133,7 @@ class TheraNoteWindow(QMainWindow):
         self.resize(1100, 720)
 
         self._build_menus()
-        self.mode_switch = SegmentedControl([tr("學生"), tr("日期"), tr("地點")])
+        self.mode_switch = SegmentedControl([tr("學生"), tr("日期"), tr("地點"), tr("課表")])
         self.add_student_btn = QPushButton(tr("新增學生"))
         self.add_record_btn = QPushButton(tr("新增病歷"))
         self.export_btn = QPushButton(tr("匯出"))
@@ -146,16 +148,28 @@ class TheraNoteWindow(QMainWindow):
         self.sidebar_stack.addWidget(self.student_list)
         self.sidebar_stack.addWidget(self.calendar)
         self.sidebar_stack.addWidget(self.location_list)
+        # Timetable mode: who is active but has no session time yet, to be fitted in.
+        self.unscheduled_list = QListWidget()
+        unscheduled = QWidget()
+        unscheduled_layout = QVBoxLayout(unscheduled)
+        unscheduled_layout.setContentsMargins(0, 0, 0, 0)
+        unscheduled_title = QLabel(tr("尚未設定看診時段"))
+        unscheduled_title.setObjectName("subtle")
+        unscheduled_layout.addWidget(unscheduled_title)
+        unscheduled_layout.addWidget(self.unscheduled_list, 1)
+        self.sidebar_stack.addWidget(unscheduled)
 
         self.student_view = StudentRecordsView(store)
         self.day_view = DayRecordsView(store)
         self.location_view = LocationRecordsView(store)
+        self.timetable_view = TimetableView(store)
         self.placeholder = QLabel(tr("選擇一位學生，或新增學生開始記錄。"))
         self.placeholder.setObjectName("subtle")
         self.placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.content = QStackedWidget()
         self.content.setObjectName("Content")
-        for page in (self.placeholder, self.student_view, self.day_view, QWidget(), self.location_view):
+        for page in (self.placeholder, self.student_view, self.day_view, QWidget(), self.location_view,
+                     self.timetable_view):
             self.content.addWidget(page)
 
         sidebar = QWidget()
@@ -197,6 +211,11 @@ class TheraNoteWindow(QMainWindow):
         self.day_view.delete_record.connect(self.delete_record)
         self.student_view.rename_student.connect(lambda sid: self.rename_student(sid))
         self.student_view.edit_profile.connect(lambda sid: self.edit_profile(sid))
+        self.timetable_view.open_record.connect(self.open_record)
+        self.timetable_view.delete_record.connect(self.delete_record)
+        self.timetable_view.rename_student.connect(lambda sid: self.rename_student(sid))
+        self.timetable_view.edit_profile.connect(lambda sid: self.edit_profile(sid))
+        self.unscheduled_list.itemClicked.connect(self._unscheduled_selected)
         self.add_student_btn.clicked.connect(lambda: self.add_student())
         self.add_record_btn.clicked.connect(lambda: self.new_record())
         self.export_btn.clicked.connect(self.open_export)
@@ -229,9 +248,13 @@ class TheraNoteWindow(QMainWindow):
         keep = select_id if select_id is not None else self.current_student_id()
         self.student_list.blockSignals(True)
         self.student_list.clear()
-        for student in self.store.students():
-            item = QListWidgetItem(student.name)
+        students = self.store.students()
+        grey = self.palette().color(QPalette.ColorRole.PlaceholderText)
+        for student in sorted(students, key=lambda s: not s.active):  # stable: by name within each
+            item = QListWidgetItem(student.name if student.active else tr("{name}（停用）", name=student.name))
             item.setData(Qt.ItemDataRole.UserRole, student.id)
+            if not student.active:
+                item.setForeground(grey)
             self.student_list.addItem(item)
             if student.id == keep:
                 self.student_list.setCurrentItem(item)
@@ -274,6 +297,7 @@ class TheraNoteWindow(QMainWindow):
         self.store.rename_student(student_id, name)
         self.refresh_students(select_id=student_id)
         self.day_view.refresh()
+        self.refresh_timetable()
         return True
 
     def _ask_profile(self, name: str, current: StudentProfile) -> StudentProfile | None:
@@ -292,7 +316,29 @@ class TheraNoteWindow(QMainWindow):
         if self.editor is not None and self.editor.student_id == student_id:
             self.editor.show_profile()
         self.refresh_locations()  # a location may be new
+        self.refresh_timetable()  # the session times may have changed
         return True
+
+    def set_active(self, student_id: int, active: bool) -> None:
+        """Make a student active again, or inactive once their plan is done: they then leave
+        the timetable and go to the bottom of the student list. Their charts stay."""
+        self.store.set_active(student_id, active)
+        self.refresh_students()
+        self.refresh_timetable()
+
+    def refresh_timetable(self) -> None:
+        self.timetable_view.refresh()
+        self.unscheduled_list.clear()
+        for student in self.store.students():
+            if student.active and not self.store.get_profile(student.id).sessions:
+                item = QListWidgetItem(student.name)
+                item.setData(Qt.ItemDataRole.UserRole, student.id)
+                self.unscheduled_list.addItem(item)
+
+    def _unscheduled_selected(self, item: QListWidgetItem) -> None:
+        self.close_editor()
+        self.timetable_view.show_student(item.data(Qt.ItemDataRole.UserRole))
+        self.content.setCurrentIndex(TIMETABLE_PAGE)
 
     def student_menu(self, pos: QPoint) -> QMenu | None:
         """The menu for the student at `pos` (list viewport coordinates), None off the rows."""
@@ -301,6 +347,11 @@ class TheraNoteWindow(QMainWindow):
             return None
         student_id = item.data(Qt.ItemDataRole.UserRole)
         menu = QMenu(self)
+        if self.store.get_student(student_id).active:
+            menu.addAction(tr("停用學生")).triggered.connect(lambda: self.set_active(student_id, False))
+        else:
+            menu.addAction(tr("啟用學生")).triggered.connect(lambda: self.set_active(student_id, True))
+        menu.addSeparator()
         menu.addAction(tr("刪除學生…")).triggered.connect(lambda: self.delete_student(student_id))
         return menu
 
@@ -368,10 +419,12 @@ class TheraNoteWindow(QMainWindow):
             return STUDENT_PAGE if self.current_student_id() else PLACEHOLDER
         if mode == DATE_MODE:
             return DAY_PAGE
+        if mode == TIMETABLE_MODE:
+            return TIMETABLE_PAGE
         return LOCATION_PAGE
 
     def set_mode(self, mode: int) -> None:
-        """Switch between the by-student, by-date and by-location arrangements."""
+        """Switch between the by-student, by-date, by-location and timetable arrangements."""
         self.close_editor()
         self.mode_switch.blockSignals(True)
         self.mode_switch.set_index(mode)
@@ -381,6 +434,8 @@ class TheraNoteWindow(QMainWindow):
             self.student_view.refresh()
         elif mode == DATE_MODE:
             self.day_view.show_day(self.calendar.selected())
+        elif mode == TIMETABLE_MODE:
+            self.refresh_timetable()
         else:
             self.refresh_locations()
         self.content.setCurrentIndex(self._mode_page())
@@ -489,6 +544,7 @@ class TheraNoteWindow(QMainWindow):
         self.student_view.refresh()
         self.day_view.refresh()
         self.refresh_locations()
+        self.refresh_timetable()
         self.calendar.refresh_markers()
 
     def flush(self) -> None:

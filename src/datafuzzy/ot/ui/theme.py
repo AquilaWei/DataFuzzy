@@ -65,6 +65,13 @@ QPushButton#segment[position="first"] {
 QPushButton#segment[position="last"] { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
 QPushButton#flat { background: transparent; border: none; color: palette(highlight); padding: 4px 6px; }
 QPushButton#flat:hover { background: palette(midlight); }
+QPushButton#slot {
+    text-align: left; padding: 6px 10px; border: none; border-left: 3px solid #0a84ff;
+    border-radius: 6px; background: rgba(10, 132, 255, 0.12);
+}
+QPushButton#slot:hover { background: rgba(10, 132, 255, 0.24); }
+QLabel#weekday { font-weight: 600; padding: 4px 0; border-bottom: 1px solid palette(mid); }
+QLabel#slotTime { font-weight: 600; color: #0a84ff; padding: 6px 4px 0 0; }
 
 QListWidget { background: transparent; border: none; outline: none; }
 QListWidget::item { border-radius: 8px; padding: 8px 10px; margin: 1px 6px; }

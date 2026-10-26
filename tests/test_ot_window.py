@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import date
 
 import pytest
@@ -5,10 +6,15 @@ from PySide6.QtCore import QDate, QPoint, Qt
 
 from datafuzzy import __version__
 from datafuzzy.core.pipeline import Pipeline
-from datafuzzy.ot.db import RecordStore, StudentProfile
+from datafuzzy.ot.db import RecordStore, Session, StudentProfile
 from datafuzzy.ot.ui import main_window
 from datafuzzy.ot.ui.date_view import NAME_ROLE, PLACE_ROLE
-from datafuzzy.ot.ui.main_window import DATE_MODE, LOCATION_MODE, STUDENT_MODE, TheraNoteWindow
+from datafuzzy.ot.ui.main_window import (
+    DATE_MODE,
+    LOCATION_MODE,
+    STUDENT_MODE,
+    TheraNoteWindow,
+)
 
 KEY = bytes(range(32))
 OCT_1 = date(2026, 10, 1)
@@ -455,10 +461,16 @@ def test_empty_or_cancelled_rename_keeps_the_name(qtbot, store, monkeypatch):
     assert store.get_student(student_id).name == "王小明"
 
 
-def delete_from_student_list(window, row=0):
+def student_menu_action(window, text, row=0):
     rows = window.student_list
     rows.viewport().resize(300, 400)
-    window.student_menu(rows.visualItemRect(rows.item(row)).center()).actions()[0].trigger()
+    [action] = [a for a in window.student_menu(rows.visualItemRect(rows.item(row)).center()).actions()
+                if a.text() == text]
+    return action
+
+
+def delete_from_student_list(window, row=0):
+    student_menu_action(window, "刪除學生…", row).trigger()
 
 
 def test_student_list_menu_deletes_the_student_and_records_after_warning(qtbot, store, monkeypatch):
@@ -589,3 +601,91 @@ def test_location_mode_clicking_a_student_shows_all_their_records(qtbot, store):
     assert (window.content.currentWidget() is view, view.list.count()) == (True, 3)
     view.back_btn.click()
     assert (view.pages.currentWidget() is view.students, view.title.text()) == (True, "新竹國小")
+
+
+def test_student_menu_makes_a_student_inactive_and_lists_them_last_in_grey(qtbot, store):
+    store.add_student("Amy")
+    store.add_student("王小明")
+    window = make_window(qtbot, store)
+    student_menu_action(window, "停用學生", row=0).trigger()
+    assert student_names(window) == ["王小明", "Amy（停用）"]
+    assert not store.students()[0].active
+
+
+def test_student_menu_makes_an_inactive_student_active_again(qtbot, store):
+    amy = store.add_student("Amy")
+    store.set_active(amy.id, False)
+    window = make_window(qtbot, store)
+    student_menu_action(window, "啟用學生").trigger()
+    assert student_names(window) == ["Amy"]
+
+
+def timetable_names(window):
+    return [b.text().split("\n")[0] for b in window.timetable_view.slot_buttons]
+
+
+def test_timetable_mode_shows_active_students_by_session_time(qtbot, store):
+    amy, ming = store.add_student("Amy"), store.add_student("王小明")
+    store.set_profile(amy.id, StudentProfile(sessions=(Session(4, "10:00", "10:30"),)))
+    store.set_profile(ming.id, StudentProfile(sessions=(Session(0, "09:00", "09:30"),)))
+    window = make_window(qtbot, store)
+    window.set_mode(3)
+    assert window.content.currentWidget() is window.timetable_view
+    assert timetable_names(window) == ["王小明", "Amy"]
+
+
+def test_an_inactive_student_leaves_the_timetable(qtbot, store):
+    amy = store.add_student("Amy")
+    store.set_profile(amy.id, StudentProfile(sessions=(Session(4, "10:00", "10:30"),)))
+    window = make_window(qtbot, store)
+    window.set_mode(3)
+    window.set_active(amy.id, False)
+    assert timetable_names(window) == []
+
+
+def test_clicking_a_student_in_the_timetable_shows_all_their_charts(qtbot, store):
+    amy = store.add_student("Amy")
+    store.set_profile(amy.id, StudentProfile(sessions=(Session(4, "10:00", "10:30"),)))
+    store.add_record(amy.id, OCT_1, "A校", "第一次")
+    store.add_record(amy.id, date(2026, 10, 8), "A校", "第二次")
+    window = make_window(qtbot, store)
+    window.set_mode(3)
+    window.timetable_view.slot_buttons[0].click()
+    assert window.timetable_view.student_id == amy.id
+    assert window.timetable_view.student_view.count.text() == "2 份病歷"
+
+
+def test_a_chart_opened_from_the_timetable_returns_to_the_students_charts(qtbot, store):
+    amy = store.add_student("Amy")
+    store.set_profile(amy.id, StudentProfile(sessions=(Session(4, "10:00", "10:30"),)))
+    record = store.add_record(amy.id, OCT_1, "A校", "第一次")
+    window = make_window(qtbot, store)
+    window.set_mode(3)
+    window.timetable_view.slot_buttons[0].click()
+    window.timetable_view.open_record.emit(record.id)
+    assert window.content.currentWidget() is window.editor
+    window.editor.back_btn.click()
+    assert window.content.currentWidget() is window.timetable_view
+    assert window.timetable_view.student_id == amy.id
+
+
+def test_changing_session_times_from_the_timetable_updates_it(qtbot, store, monkeypatch):
+    amy = store.add_student("Amy")
+    store.set_profile(amy.id, StudentProfile(sessions=(Session(4, "10:00", "10:30"),)))
+    window = make_window(qtbot, store)
+    window.set_mode(3)
+    window.timetable_view.slot_buttons[0].click()
+    monkeypatch.setattr(window, "_ask_profile", lambda name, current: replace(
+        current, sessions=(Session(1, "13:00", "13:30"),)))
+    window.timetable_view.student_view.profile_btn.click()
+    window.timetable_view.back_btn.click()
+    assert [b.text() for b in window.timetable_view.slot_buttons] == ["Amy\n1:00 PM–1:30 PM"]
+
+
+def test_timetable_sidebar_lists_active_students_without_a_session_time(qtbot, store):
+    amy, ming, lin = store.add_student("Amy"), store.add_student("王小明"), store.add_student("林曉華")
+    store.set_profile(amy.id, StudentProfile(sessions=(Session(4, "10:00", "10:30"),)))
+    store.set_active(lin.id, False)
+    window = make_window(qtbot, store)
+    window.set_mode(3)
+    assert [window.unscheduled_list.item(i).text() for i in range(window.unscheduled_list.count())] == ["王小明"]
