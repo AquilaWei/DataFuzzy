@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QAction, QCloseEvent
 from PySide6.QtWidgets import (
     QComboBox,
@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPushButton,
     QStackedWidget,
@@ -174,6 +175,8 @@ class TheraNoteWindow(QMainWindow):
 
         self.mode_switch.changed.connect(self.set_mode)
         self.student_list.currentItemChanged.connect(self._student_selected)
+        self.student_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.student_list.customContextMenuRequested.connect(self._show_student_menu)
         self.calendar.selectionChanged.connect(self._day_selected)
         self.location_list.currentItemChanged.connect(self._location_selected)
         self.location_view.open_record.connect(self.open_record)
@@ -254,6 +257,44 @@ class TheraNoteWindow(QMainWindow):
         self.store.rename_student(student_id, name)
         self.refresh_students(select_id=student_id)
         self.day_view.refresh()
+        return True
+
+    def student_menu(self, pos: QPoint) -> QMenu | None:
+        """The menu for the student at `pos` (list viewport coordinates), None off the rows."""
+        item = self.student_list.itemAt(pos)
+        if item is None:
+            return None
+        student_id = item.data(Qt.ItemDataRole.UserRole)
+        menu = QMenu(self)
+        menu.addAction("刪除學生…").triggered.connect(lambda: self.delete_student(student_id))
+        return menu
+
+    def _show_student_menu(self, pos: QPoint) -> None:
+        if menu := self.student_menu(pos):
+            menu.exec(self.student_list.viewport().mapToGlobal(pos))
+
+    def _confirm_delete_student(self, student_name: str, record_count: int) -> bool:
+        answer = QMessageBox.warning(
+            self, "刪除學生", f"要刪除 {student_name} 嗎？\n"
+            f"這位學生的 {record_count} 份病歷（中英文內容）都會一併刪除，無法復原。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel)
+        return answer == QMessageBox.StandardButton.Yes
+
+    def delete_student(self, student_id: int) -> bool:
+        """Delete a student and all of their records after warning. Returns whether they were
+        deleted."""
+        records = self.store.records_for_student(student_id)
+        if not self._confirm_delete_student(self.store.get_student(student_id).name, len(records)):
+            return False
+        editing_theirs = self.editor is not None and self.editor.record_id in {r.id for r in records}
+        if editing_theirs:
+            self.close_editor()  # its record is about to go; nothing may write to it later
+        self.store.delete_student(student_id)
+        self.refresh_students()
+        self.refresh_after_change()
+        if editing_theirs:
+            self.content.setCurrentIndex(self._mode_page())
         return True
 
     def refresh_locations(self) -> None:

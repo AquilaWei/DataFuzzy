@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.9.0] - 2026-10-26
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 學生名單上按右鍵可「刪除學生…」。刪除前會跳出警告，列出這位學生有幾份病歷，確認後連同所有病歷一併刪除，無法復原。
+- 若正在編輯該學生的病歷，刪除時會先關閉編輯器。
+
 ## [0.7.0.8.0] - 2026-10-25
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。

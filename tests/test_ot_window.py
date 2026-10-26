@@ -420,6 +420,54 @@ def test_empty_or_cancelled_rename_keeps_the_name(qtbot, store, monkeypatch):
     assert store.get_student(student_id).name == "王小明"
 
 
+def delete_from_student_list(window, row=0):
+    rows = window.student_list
+    rows.viewport().resize(300, 400)
+    window.student_menu(rows.visualItemRect(rows.item(row)).center()).actions()[0].trigger()
+
+
+def test_student_list_menu_deletes_the_student_and_records_after_warning(qtbot, store, monkeypatch):
+    wang = store.add_student("王小明")
+    store.add_student("陳美玲")
+    store.add_record(wang.id, OCT_1, "A校", "王")
+    window = make_window(qtbot, store)
+    monkeypatch.setattr(window, "_confirm_delete_student",
+                        lambda name, count: (name, count) == ("王小明", 1))
+    delete_from_student_list(window)
+    assert student_names(window) == ["陳美玲"]
+    assert store.records_on(OCT_1) == []
+    assert window.calendar.marked_dates() == set()
+
+
+def test_declining_the_student_delete_warning_keeps_the_student(qtbot, store, monkeypatch):
+    wang = store.add_student("王小明")
+    store.add_record(wang.id, OCT_1, "A校", "王")
+    window = make_window(qtbot, store)
+    monkeypatch.setattr(window, "_confirm_delete_student", lambda name, count: False)
+    delete_from_student_list(window)
+    assert student_names(window) == ["王小明"]
+    assert len(store.records_for_student(wang.id)) == 1
+
+
+def test_deleting_the_student_being_edited_closes_the_editor(qtbot, store, monkeypatch):
+    wang = store.add_student("王小明")
+    record = store.add_record(wang.id, OCT_1, "A校", "王")
+    window = make_window(qtbot, store)
+    window.open_record(record.id)
+    monkeypatch.setattr(window, "_confirm_delete_student", lambda name, count: True)
+    assert window.delete_student(wang.id)
+    assert window.editor is None
+    assert window.content.currentIndex() == main_window.PLACEHOLDER
+
+
+def test_student_list_has_no_menu_below_the_rows(qtbot, store):
+    store.add_student("王小明")
+    window = make_window(qtbot, store)
+    rows = window.student_list
+    below = rows.visualItemRect(rows.item(0)).bottomLeft() + QPoint(5, 200)
+    assert window.student_menu(below) is None
+
+
 def test_moving_a_record_updates_the_calendar(qtbot, store):
     window = make_window(qtbot, store)
     student_id = window.add_student("王小明")

@@ -218,6 +218,14 @@ class RecordStore:
             raise NotFound(f"student {student_id}")
         return Student(student_id, name)
 
+    def delete_student(self, student_id: int) -> None:
+        """Remove a student and, through ON DELETE CASCADE, all of their records, for good.
+        Raises NotFound for an unknown student."""
+        with self._lock, self._db:
+            cur = self._db.execute("DELETE FROM student WHERE id = ?", (student_id,))
+        if cur.rowcount == 0:
+            raise NotFound(f"student {student_id}")
+
     def students(self) -> list[Student]:
         """Everyone, sorted by name."""
         with self._lock:

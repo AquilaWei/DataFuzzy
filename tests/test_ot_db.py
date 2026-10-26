@@ -55,6 +55,21 @@ def test_renamed_student_keeps_id(store):
     assert store.get_student(student.id).name == "王小明"
 
 
+def test_deleting_a_student_removes_their_records(store):
+    wang = store.add_student("王小明")
+    chen = store.add_student("陳美玲")
+    store.add_record(wang.id, date(2026, 10, 1), "A校", "王")
+    store.add_record(chen.id, date(2026, 10, 1), "A校", "陳")
+    store.delete_student(wang.id)
+    assert [s.name for s in store.students()] == ["陳美玲"]
+    assert [r.student_id for r in store.records_on(date(2026, 10, 1))] == [chen.id]
+
+
+def test_deleting_an_unknown_student_raises_not_found(store):
+    with pytest.raises(NotFound):
+        store.delete_student(99)
+
+
 def test_unknown_student_raises_not_found(store):
     with pytest.raises(NotFound):
         store.get_student(99)
