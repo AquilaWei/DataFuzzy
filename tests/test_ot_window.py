@@ -448,10 +448,31 @@ def test_location_mode_lists_places_and_their_records_newest_first(qtbot, store)
     window.location_list.setCurrentRow(1)
     view = window.location_view
     assert window.content.currentWidget() is view
-    assert (view.title.text(), view.count.text()) == ("新竹國小", "2 份病歷 · 2 位學生")
-    assert [view.list.item(i).text().split("\n")[0] for i in range(view.list.count())] == ["王小明", "Amy"]
+    assert (view.title.text(), view.count.text()) == ("新竹國小", "2 位學生")
+    assert [view.students.item(i).text() for i in range(view.students.count())] == ["王小明", "Amy"]
     window.location_list.setCurrentRow(2)
-    assert view.list.count() == 1
+    assert view.students.count() == 1
+
+
+def test_location_mode_clicking_a_student_shows_their_records_there(qtbot, store):
+    ming = store.add_student("王小明")
+    store.add_record(ming.id, date(2026, 10, 1), "新竹國小", "一")
+    store.add_record(ming.id, date(2026, 10, 8), "新竹國小", "二")
+    store.add_record(ming.id, date(2026, 10, 9), "台北診所", "三")
+    window = make_window(qtbot, store)
+    window.set_mode(LOCATION_MODE)
+    window.location_list.setCurrentRow(1)
+    view = window.location_view
+    assert view.back_btn.isHidden()
+    view.students.itemClicked.emit(view.students.item(0))
+    assert (view.pages.currentWidget() is view.list, view.title.text(), view.count.text()) == (
+        True, "王小明 · 新竹國小", "2 份病歷")
+    assert not view.back_btn.isHidden()
+    view.list.itemClicked.emit(view.list.item(0))
+    window.editor.close_editor()
+    assert (window.content.currentWidget() is view, view.list.count()) == (True, 2)
+    view.back_btn.click()
+    assert (view.pages.currentWidget() is view.students, view.title.text()) == (True, "新竹國小")
 
 
 def test_editing_a_location_moves_the_record_between_places(qtbot, store):
@@ -459,7 +480,9 @@ def test_editing_a_location_moves_the_record_between_places(qtbot, store):
     record = store.add_record(student.id, OCT_1, "新竹國小", "一")
     window = make_window(qtbot, store)
     window.set_mode(LOCATION_MODE)
-    window.location_view.list.itemClicked.emit(window.location_view.list.item(0))
+    view = window.location_view
+    view.students.itemClicked.emit(view.students.item(0))
+    view.list.itemClicked.emit(view.list.item(0))
     window.editor.location_box.setEditText("台北診所")
     window.editor.close_editor()
     assert location_names(window) == ["台北診所"]
