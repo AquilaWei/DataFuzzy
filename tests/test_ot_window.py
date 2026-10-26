@@ -683,7 +683,7 @@ def test_changing_session_times_from_the_timetable_updates_it(qtbot, store, monk
 
 
 def test_timetable_sidebar_lists_active_students_without_a_session_time(qtbot, store):
-    amy, ming, lin = store.add_student("Amy"), store.add_student("王小明"), store.add_student("林曉華")
+    amy, _, lin = store.add_student("Amy"), store.add_student("王小明"), store.add_student("林曉華")
     store.set_profile(amy.id, StudentProfile(sessions=(Session(4, "10:00", "10:30"),)))
     store.set_active(lin.id, False)
     window = make_window(qtbot, store)
