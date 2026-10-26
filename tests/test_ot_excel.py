@@ -11,7 +11,7 @@ from datafuzzy.ot.excel_export import (
     group_by_location,
     header_text,
     sheet_title,
-    write_location,
+    write_workbook,
 )
 from datafuzzy.ot.ui.exchange_dialogs import ExcelExportDialog
 
@@ -37,9 +37,17 @@ def charts(store):
     return store
 
 
-def test_file_name_uses_location_and_day():
-    assert file_name("Lincoln", TODAY) == "Lincoln-2026-10-25.xlsx"
-    assert file_name("A/B: school?", TODAY) == "AB school-2026-10-25.xlsx"
+def test_file_name_is_the_student_and_the_exported_period():
+    assert file_name("王小明", date(2026, 10, 1), date(2026, 10, 31)) == "王小明-2026-10-01至2026-10-31.xlsx"
+
+
+def test_file_name_drops_characters_no_file_system_accepts():
+    assert file_name("Amy/Lee: ?", date(2026, 10, 1), date(2026, 10, 31)) == "AmyLee-2026-10-01至2026-10-31.xlsx"
+
+
+def test_file_name_can_lead_with_the_location():
+    assert (file_name("Amy", date(2026, 10, 1), date(2026, 10, 31), "Lincoln")
+            == "Lincoln-Amy-2026-10-01至2026-10-31.xlsx")
 
 
 def test_sheet_titles_are_valid_and_unique():
@@ -60,7 +68,7 @@ def test_records_are_grouped_by_location(charts):
 def test_workbook_has_a_sheet_per_student_filled_oldest_first(charts, tmp_path):
     groups, _ = group_by_location(charts.records_between(date(2026, 10, 1), date(2026, 10, 31)))
     path = tmp_path / "out.xlsx"
-    write_location(charts, groups["Lincoln"], path)
+    write_workbook(charts, groups["Lincoln"], path)
     wb = load_workbook(path)
     assert wb.sheetnames == ["Amy", "王小明"]
     ws = wb["王小明"]
@@ -100,7 +108,7 @@ def test_more_visits_than_the_template_has_slots(store, tmp_path):
     for i in range(12):
         store.add_record(student.id, date(2026, 10, 1) + timedelta(days=i), "Lincoln", en_text=f"day {i}")
     path = tmp_path / "out.xlsx"
-    write_location(store, store.records_for_student(student.id), path)
+    write_workbook(store, store.records_for_student(student.id), path)
     ws = load_workbook(path)["王小明"]
     assert ws["D34"].value == "day 10"
     assert ws["D37"].value == "day 11"
@@ -110,49 +118,108 @@ def test_more_visits_than_the_template_has_slots(store, tmp_path):
 
 
 def make_dialog(qtbot, store, confirm=lambda path: True, folder=""):
-    dialog = ExcelExportDialog(store, today=TODAY, confirm=confirm, choose=lambda loc, start: folder)
+    dialog = ExcelExportDialog(store, today=TODAY, confirm=confirm, choose=lambda start: folder)
     qtbot.addWidget(dialog)
     dialog.from_edit.setDate(QDate(2026, 10, 1))
     dialog.to_edit.setDate(QDate(2026, 10, 31))
     return dialog
 
 
-def test_dialog_lists_locations_and_needs_a_folder(qtbot, charts):
+def pick(dialog, location, name):
+    dialog.location_box.setCurrentText(location)
+    dialog.student_box.setCurrentIndex(
+        [dialog.student_box.itemText(i).split("（")[0] for i in range(dialog.student_box.count())].index(name))
+    dialog.add_btn.click()
+
+
+def table_rows(dialog):
+    return [tuple(dialog.table.item(r, c).text() for c in range(3)) for r in range(dialog.table.rowCount())]
+
+
+def test_location_drop_down_lists_locations_with_visits_in_the_period(qtbot, charts):
     dialog = make_dialog(qtbot, charts)
     assert dialog.locations() == ["Lincoln", "新竹國小"]
-    assert not dialog.export_btn.isEnabled()
     assert "1 份病歷沒有填地點" in dialog.status.text()
 
 
-def test_dialog_remembers_folder_and_writes_one_file_per_location(qtbot, charts, tmp_path):
-    dialog = make_dialog(qtbot, charts, folder=str(tmp_path / "lincoln"))
-    dialog.choose_folder(0)
-    assert charts.excel_folders() == {"Lincoln": str(tmp_path / "lincoln")}
-    assert dialog.export_btn.isEnabled()
-    dialog.export_btn.click()
-    out = tmp_path / "lincoln" / "Lincoln-2026-10-25.xlsx"
-    assert dialog.written == [out]
-    assert load_workbook(out).sheetnames == ["Amy", "王小明"]
-    assert "略過「新竹國小」" in dialog.status.text()
-    assert dialog.result() != dialog.DialogCode.Accepted  # a skipped location keeps it open
-
-
-def test_dialog_closes_when_every_location_is_written(qtbot, charts, tmp_path):
-    charts.set_excel_folder("Lincoln", str(tmp_path / "a"))
-    charts.set_excel_folder("新竹國小", str(tmp_path / "b"))
+def test_student_drop_down_lists_who_was_seen_at_the_location(qtbot, charts):
     dialog = make_dialog(qtbot, charts)
+    dialog.location_box.setCurrentText("Lincoln")
+    assert [dialog.student_box.itemText(i) for i in range(dialog.student_box.count())] == [
+        "Amy（1 份）", "王小明（2 份）"]
+
+
+def test_picked_students_are_added_to_the_list_once(qtbot, charts):
+    dialog = make_dialog(qtbot, charts)
+    pick(dialog, "Lincoln", "王小明")
+    pick(dialog, "Lincoln", "王小明")
+    pick(dialog, "新竹國小", "Amy")
+    assert table_rows(dialog) == [("Lincoln", "王小明", "2"), ("新竹國小", "Amy", "1")]
+
+
+def test_add_all_adds_everyone_seen_at_the_location(qtbot, charts):
+    dialog = make_dialog(qtbot, charts)
+    dialog.location_box.setCurrentText("Lincoln")
+    dialog.add_all_btn.click()
+    assert table_rows(dialog) == [("Lincoln", "Amy", "1"), ("Lincoln", "王小明", "2")]
+
+
+def test_remove_takes_the_selected_row_off_the_list(qtbot, charts):
+    dialog = make_dialog(qtbot, charts)
+    pick(dialog, "Lincoln", "王小明")
+    pick(dialog, "Lincoln", "Amy")
+    dialog.table.selectRow(0)
+    dialog.remove_btn.click()
+    assert table_rows(dialog) == [("Lincoln", "Amy", "1")]
+
+
+def test_export_needs_a_folder(qtbot, charts):
+    dialog = make_dialog(qtbot, charts)
+    pick(dialog, "Lincoln", "王小明")
+    assert not dialog.export_btn.isEnabled()
+
+
+def test_folder_is_remembered(qtbot, charts, tmp_path):
+    dialog = make_dialog(qtbot, charts, folder=str(tmp_path))
+    dialog.folder_btn.click()
+    assert charts.excel_folder() == str(tmp_path)
+    assert dialog.folder_label.text() == str(tmp_path)
+
+
+def test_each_student_gets_a_file_with_only_that_locations_visits(qtbot, charts, tmp_path):
+    charts.set_excel_folder(str(tmp_path))
+    dialog = make_dialog(qtbot, charts)
+    pick(dialog, "Lincoln", "王小明")
+    pick(dialog, "新竹國小", "Amy")
     dialog.export_btn.click()
-    assert len(dialog.written) == 2
+    ming = tmp_path / "王小明-2026-10-01至2026-10-31.xlsx"
+    amy = tmp_path / "Amy-2026-10-01至2026-10-31.xlsx"
+    assert dialog.written == [ming, amy]
+    assert load_workbook(ming).sheetnames == ["王小明"]
+    assert load_workbook(amy)["Amy"]["D4"].value == "Balance."
+    assert load_workbook(amy)["Amy"]["A7"].value is None
     assert dialog.result() == dialog.DialogCode.Accepted
 
 
+def test_one_student_at_two_locations_gets_the_location_in_front(qtbot, charts, tmp_path):
+    charts.set_excel_folder(str(tmp_path))
+    dialog = make_dialog(qtbot, charts)
+    pick(dialog, "Lincoln", "Amy")
+    pick(dialog, "新竹國小", "Amy")
+    dialog.export_btn.click()
+    assert [p.name for p in dialog.written] == [
+        "Lincoln-Amy-2026-10-01至2026-10-31.xlsx", "新竹國小-Amy-2026-10-01至2026-10-31.xlsx"]
+
+
 def test_dialog_asks_before_replacing_a_file(qtbot, charts, tmp_path):
-    charts.set_excel_folder("Lincoln", str(tmp_path))
-    old = tmp_path / "Lincoln-2026-10-25.xlsx"
+    charts.set_excel_folder(str(tmp_path))
+    old = tmp_path / "王小明-2026-10-01至2026-10-31.xlsx"
     old.write_bytes(b"old")
     asked = []
     dialog = make_dialog(qtbot, charts, confirm=lambda path: asked.append(path) or False)
+    pick(dialog, "Lincoln", "王小明")
     dialog.export_btn.click()
     assert asked == [old]
     assert old.read_bytes() == b"old"
     assert dialog.written == []
+    assert dialog.result() != dialog.DialogCode.Accepted

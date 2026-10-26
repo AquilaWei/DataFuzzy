@@ -1,5 +1,5 @@
-"""Writing charts into the school's Excel form: one workbook per location, one sheet per
-student, each visit's date, activity and English chart in a slot of the template."""
+"""Writing charts into the school's Excel form: one workbook per student and location, each
+visit's date, activity and English chart in a slot of the template."""
 
 from __future__ import annotations
 
@@ -42,10 +42,15 @@ def group_by_location(records: Iterable[Record]) -> tuple[dict[str, list[Record]
     return groups, unassigned
 
 
-def file_name(location: str, today: date) -> str:
-    """`<location>-<today>.xlsx`, with characters no file system accepts removed."""
-    safe = _FILE_UNSAFE.sub("", location).strip(" .") or "location"
-    return f"{safe}-{today.isoformat()}.xlsx"
+def _safe(text: str, fallback: str) -> str:
+    return _FILE_UNSAFE.sub("", text).strip(" .") or fallback
+
+
+def file_name(name: str, date_from: date, date_to: date, location: str | None = None) -> str:
+    """`<name>-<from>至<to>.xlsx`, or `<location>-<name>-…` to tell apart two files of one name,
+    with characters no file system accepts removed."""
+    prefix = f"{_safe(location, 'location')}-" if location is not None else ""
+    return f"{prefix}{_safe(name, 'student')}-{date_from.isoformat()}至{date_to.isoformat()}.xlsx"
 
 
 def sheet_title(name: str, used: set[str]) -> str:
@@ -145,5 +150,5 @@ def build_workbook(store: RecordStore, records: Iterable[Record], today: date | 
     return wb
 
 
-def write_location(store: RecordStore, records: Iterable[Record], path: Path) -> None:
+def write_workbook(store: RecordStore, records: Iterable[Record], path: Path) -> None:
     build_workbook(store, records).save(path)

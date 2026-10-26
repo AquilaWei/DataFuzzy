@@ -10,6 +10,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import (
+    QComboBox,
     QDateEdit,
     QDialog,
     QFileDialog,
@@ -30,7 +31,7 @@ from PySide6.QtWidgets import (
 from ...core.pipeline import Pipeline
 from ...ui.worker import run_task
 from ..db import Record, RecordStore
-from ..excel_export import file_name, group_by_location, write_location
+from ..excel_export import file_name, group_by_location, write_workbook
 from ..exchange import (
     ExportResult,
     ImportMismatch,
@@ -237,40 +238,50 @@ def ask_replace_file(parent: QWidget | None, path: Path) -> bool:
 
 
 class ExcelExportDialog(QDialog):
-    """Pick a date range; each location's visits go into the school's Excel form, one file per
-    location in the folder chosen for it (remembered), one sheet per student."""
+    """Pick a date range and, location by location, the students to export. Each student gets
+    their own file of the school's Excel form with that location's visits, all in one folder
+    (remembered)."""
 
-    LOCATION, COUNT, FOLDER = range(3)
+    LOCATION, STUDENT, COUNT = range(3)
 
     def __init__(self, store: RecordStore, today: date | None = None,
                  confirm: Callable[[Path], bool] | None = None,
-                 choose: Callable[[str, str], str] | None = None,
+                 choose: Callable[[str], str] | None = None,
                  parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.store = store
         self.today = today or date.today()
         self.written: list[Path] = []
+        self.entries: list[tuple[str, int]] = []  # (location, student id), in the order added
         self._confirm = confirm or (lambda path: ask_replace_file(self, path))
-        self._choose = choose or (lambda location, start: QFileDialog.getExistingDirectory(
-            self, f"「{location}」的匯出資料夾", start))
+        self._choose = choose or (lambda start: QFileDialog.getExistingDirectory(
+            self, "Excel 匯出資料夾", start))
         self._groups: dict[str, list[Record]] = {}
         self.setWindowTitle("Excel 匯出")
-        self.resize(680, 460)
+        self.resize(680, 500)
 
         self.from_edit = QDateEdit(to_qdate(self.today.replace(day=1)))
         self.to_edit = QDateEdit(to_qdate(self.today))
         for edit in (self.from_edit, self.to_edit):
             edit.setCalendarPopup(True)
             edit.setDisplayFormat("yyyy-MM-dd")
+        self.location_box = QComboBox()
+        self.student_box = QComboBox()
+        self.student_box.setMinimumContentsLength(10)
+        self.add_btn = QPushButton("加入")
+        self.add_all_btn = QPushButton("加入此地點全部")
         self.table = QTableWidget(0, 3)
-        self.table.setHorizontalHeaderLabels(["地點", "病歷數", "匯出資料夾（點兩下更改）"])
+        self.table.setHorizontalHeaderLabels(["地點", "學生", "病歷數"])
         self.table.verticalHeader().setVisible(False)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(self.LOCATION, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(self.LOCATION, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(self.STUDENT, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(self.COUNT, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(self.FOLDER, QHeaderView.ResizeMode.Stretch)
+        self.remove_btn = QPushButton("移除")
+        self.folder_label = QLabel("")
+        self.folder_label.setWordWrap(True)
         self.folder_btn = QPushButton("選擇資料夾…")
         self.export_btn = QPushButton("匯出")
         self.export_btn.setObjectName("primary")
@@ -280,98 +291,179 @@ class ExcelExportDialog(QDialog):
         self.status.setObjectName("subtle")
         self.status.setWordWrap(True)
 
-        row = QHBoxLayout()
-        row.addWidget(QLabel("從"))
-        row.addWidget(self.from_edit)
-        row.addWidget(QLabel("到"))
-        row.addWidget(self.to_edit)
-        row.addStretch(1)
+        dates = QHBoxLayout()
+        dates.addWidget(QLabel("從"))
+        dates.addWidget(self.from_edit)
+        dates.addWidget(QLabel("到"))
+        dates.addWidget(self.to_edit)
+        dates.addStretch(1)
+        pick = QHBoxLayout()
+        pick.addWidget(QLabel("地點"))
+        pick.addWidget(self.location_box, 1)
+        pick.addWidget(QLabel("學生"))
+        pick.addWidget(self.student_box, 1)
+        pick.addWidget(self.add_btn)
+        pick.addWidget(self.add_all_btn)
+        folder = QHBoxLayout()
+        folder.addWidget(QLabel("匯出資料夾："))
+        folder.addWidget(self.folder_label, 1)
+        folder.addWidget(self.folder_btn)
         buttons = QHBoxLayout()
-        buttons.addWidget(self.folder_btn)
+        buttons.addWidget(self.remove_btn)
         buttons.addStretch(1)
         buttons.addWidget(self.reveal_btn)
         buttons.addWidget(self.export_btn)
         layout = QVBoxLayout(self)
-        layout.addLayout(row)
+        layout.addLayout(dates)
+        layout.addLayout(pick)
         layout.addWidget(self.table, 1)
+        layout.addLayout(folder)
         layout.addWidget(self.status)
         layout.addLayout(buttons)
 
         self.from_edit.dateChanged.connect(lambda _: self.refresh())
         self.to_edit.dateChanged.connect(lambda _: self.refresh())
-        self.table.cellDoubleClicked.connect(lambda r, _: self.choose_folder(r))
-        self.folder_btn.clicked.connect(lambda: self.choose_folder(self.table.currentRow()))
+        self.location_box.currentIndexChanged.connect(lambda _: self._fill_students())
+        self.add_btn.clicked.connect(self.add_selected)
+        self.add_all_btn.clicked.connect(self.add_location)
+        self.remove_btn.clicked.connect(self.remove_selected)
+        self.folder_btn.clicked.connect(self.choose_folder)
         self.export_btn.clicked.connect(self.export)
         self.reveal_btn.clicked.connect(self.reveal)
         self.refresh()
 
+    def _range(self) -> tuple[date, date]:
+        return to_date(self.from_edit.date()), to_date(self.to_edit.date())
+
     def locations(self) -> list[str]:
         return list(self._groups)
 
+    def _records(self, location: str, student_id: int) -> list[Record]:
+        return [r for r in self._groups.get(location, []) if r.student_id == student_id]
+
+    def _students_at(self, location: str) -> list[tuple[int, str]]:
+        """(id, name) of everyone with a visit at `location` in the range, by name."""
+        ids = {r.student_id for r in self._groups.get(location, [])}
+        students = sorted((self.store.get_student(i) for i in ids), key=lambda s: (s.name, s.id))
+        return [(s.id, s.name) for s in students]
+
     def refresh(self) -> None:
-        date_from, date_to = to_date(self.from_edit.date()), to_date(self.to_edit.date())
+        """Re-read the range: the drop-downs, the counts in the list and the note below it."""
+        date_from, date_to = self._range()
         records = self.store.records_between(date_from, date_to) if date_from <= date_to else []
         self._groups, unassigned = group_by_location(records)
-        folders = self.store.excel_folders()
-        self.table.setRowCount(len(self._groups))
-        for i, (location, recs) in enumerate(self._groups.items()):
-            self.table.setItem(i, self.LOCATION, QTableWidgetItem(location))
-            self.table.setItem(i, self.COUNT, QTableWidgetItem(str(len(recs))))
-            self.table.setItem(i, self.FOLDER, QTableWidgetItem(folders.get(location, "（尚未設定）")))
-        if self._groups:
-            self.table.setCurrentCell(0, 0)
+        keep = self.location_box.currentText()
+        self.location_box.blockSignals(True)
+        self.location_box.clear()
+        self.location_box.addItems(self.locations())
+        self.location_box.setCurrentIndex(max(self.location_box.findText(keep), 0))
+        self.location_box.blockSignals(False)
+        self._fill_students()
+        self._fill_table()
         if date_from > date_to:
             note = "開始日期晚於結束日期。"
         elif not records:
             note = "這段期間沒有病歷。"
         else:
-            note = "每個地點一個檔案（地點-今天日期.xlsx），每位學生一個分頁。"
+            note = "每位學生一個檔案（姓名-開始日期至結束日期.xlsx），只含所選地點的病歷。"
             if unassigned:
                 note += f"\n有 {len(unassigned)} 份病歷沒有填地點，不會匯出。"
         self.status.setText(note)
         self._update_buttons()
 
-    def _update_buttons(self) -> None:
-        folders = self.store.excel_folders()
-        self.folder_btn.setEnabled(bool(self._groups))
-        self.export_btn.setEnabled(any(loc in folders for loc in self._groups))
-
-    def choose_folder(self, row: int) -> None:
-        if not 0 <= row < len(self._groups):
-            return
-        location = self.locations()[row]
-        start = self.store.excel_folders().get(location, str(Path.home()))
-        folder = self._choose(location, start)
-        if not folder:
-            return
-        self.store.set_excel_folder(location, folder)
-        self.table.item(row, self.FOLDER).setText(folder)
+    def _fill_students(self) -> None:
+        self.student_box.clear()
+        location = self.location_box.currentText()
+        for student_id, name in self._students_at(location):
+            count = len(self._records(location, student_id))
+            self.student_box.addItem(f"{name}（{count} 份）", student_id)
         self._update_buttons()
 
+    def _fill_table(self) -> None:
+        self.table.setRowCount(len(self.entries))
+        for i, (location, student_id) in enumerate(self.entries):
+            cells = (location, self.store.get_student(student_id).name,
+                     str(len(self._records(location, student_id))))
+            for col, text in enumerate(cells):
+                self.table.setItem(i, col, QTableWidgetItem(text))
+
+    def _add(self, location: str, student_ids: list[int]) -> None:
+        for student_id in student_ids:
+            if (location, student_id) not in self.entries:
+                self.entries.append((location, student_id))
+        self._fill_table()
+        self._update_buttons()
+
+    def add_selected(self) -> None:
+        """Add the student picked in the drop-downs to the list (once)."""
+        if self.student_box.currentIndex() >= 0:
+            self._add(self.location_box.currentText(), [self.student_box.currentData()])
+
+    def add_location(self) -> None:
+        """Add everyone seen at the picked location in the range."""
+        location = self.location_box.currentText()
+        self._add(location, [sid for sid, _ in self._students_at(location)])
+
+    def remove_selected(self) -> None:
+        rows = {index.row() for index in self.table.selectionModel().selectedRows()}
+        self.entries = [e for i, e in enumerate(self.entries) if i not in rows]
+        self._fill_table()
+        self._update_buttons()
+
+    def _update_buttons(self) -> None:
+        folder = self.store.excel_folder()
+        self.folder_label.setText(folder or "（尚未設定）")
+        has_student = self.student_box.count() > 0
+        self.add_btn.setEnabled(has_student)
+        self.add_all_btn.setEnabled(has_student)
+        self.remove_btn.setEnabled(bool(self.entries))
+        self.export_btn.setEnabled(bool(folder) and any(self._records(*e) for e in self.entries))
+
+    def choose_folder(self) -> None:
+        folder = self._choose(self.store.excel_folder() or str(Path.home()))
+        if folder:
+            self.store.set_excel_folder(folder)
+            self._update_buttons()
+
+    def _paths(self, folder: Path) -> list[Path]:
+        """A file per entry; a name that would repeat in this export gets its location in front."""
+        date_from, date_to = self._range()
+        names = [self.store.get_student(sid).name for _, sid in self.entries]
+        paths = []
+        for (location, _), name in zip(self.entries, names):
+            repeated = names.count(name) > 1
+            paths.append(folder / file_name(name, date_from, date_to, location if repeated else None))
+        return paths
+
     def export(self) -> None:
-        folders = self.store.excel_folders()
+        folder = Path(self.store.excel_folder())
         self.written = []
         lines: list[str] = []
-        for location, records in self._groups.items():
-            if location not in folders:
-                lines.append(f"略過「{location}」：尚未設定匯出資料夾。")
+        used: set[Path] = set()
+        for (location, student_id), path in zip(self.entries, self._paths(folder)):
+            label = f"「{location}／{self.store.get_student(student_id).name}」"
+            records = self._records(location, student_id)
+            if not records:
+                lines.append(f"略過{label}：這段期間沒有病歷。")
                 continue
-            path = Path(folders[location]) / file_name(location, self.today)
+            if path in used:  # two students of one name at one location
+                path = path.with_stem(f"{path.stem} ({student_id})")
+            used.add(path)
             if path.exists() and not self._confirm(path):
-                lines.append(f"略過「{location}」：沒有取代既有檔案。")
+                lines.append(f"略過{label}：沒有取代既有檔案。")
                 continue
             try:
                 path.parent.mkdir(parents=True, exist_ok=True)
-                write_location(self.store, records, path)
+                write_workbook(self.store, records, path)
             except OSError as e:
-                lines.append(f"「{location}」寫入失敗：{e.strerror or e}")
+                lines.append(f"{label}寫入失敗：{e.strerror or e}")
                 continue
             self.written.append(path)
             lines.insert(len(self.written) - 1, f"已匯出：{path}")
         if self.written and len(lines) == len(self.written):
-            self.accept()  # every location written: nothing left to read here
+            self.accept()  # every student written: nothing left to read here
             return
-        self.status.setText("\n".join(lines) or "沒有可匯出的地點。")
+        self.status.setText("\n".join(lines) or "沒有可匯出的學生。")
         self.reveal_btn.setEnabled(bool(self.written))
 
     def reveal(self) -> None:

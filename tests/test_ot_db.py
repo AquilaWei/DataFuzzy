@@ -409,16 +409,15 @@ def test_chart_book_from_before_activities_opens_with_empty_activity(tmp_path):
         assert again.get_record(record.id).activity == "新活動"
 
 
-def test_excel_folders_are_kept_encrypted_and_survive_reopen(tmp_path):
+def test_excel_folder_is_kept_encrypted_and_survives_reopen(tmp_path):
     path = tmp_path / "t.db"
     with RecordStore(path, KEY) as store:
-        assert store.excel_folders() == {}
-        store.set_excel_folder("新竹國小", "/Users/ot/新竹")
-        store.set_excel_folder("Lincoln", "/Users/ot/lincoln")
-        store.set_excel_folder("新竹國小", "/Users/ot/hsinchu")
-    assert "新竹國小".encode() not in path.read_bytes()
+        assert store.excel_folder() == ""
+        store.set_excel_folder("/Users/ot/新竹")
+        store.set_excel_folder("/Users/ot/hsinchu")
+    assert b"hsinchu" not in path.read_bytes()
     with RecordStore(path, KEY) as again:
-        assert again.excel_folders() == {"新竹國小": "/Users/ot/hsinchu", "Lincoln": "/Users/ot/lincoln"}
+        assert again.excel_folder() == "/Users/ot/hsinchu"
 
 
 def test_moved_record_keeps_its_texts_on_the_new_day(store):

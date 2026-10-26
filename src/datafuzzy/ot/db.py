@@ -446,23 +446,20 @@ class RecordStore:
                 seen.setdefault(location)
         return list(seen)
 
-    # --- Excel export folders ---------------------------------------------------------
+    # --- Excel export folder ----------------------------------------------------------
 
-    def excel_folders(self) -> dict[str, str]:
-        """The Excel export folder chosen for each location. Kept encrypted, since the
-        location names are."""
+    def excel_folder(self) -> str:
+        """The folder the last Excel export went to, "" before the first. Kept encrypted, since
+        a path can name a school or a student."""
         with self._lock:
-            row = self._db.execute("SELECT value FROM meta WHERE key = 'excel_folders'").fetchone()
-        return json.loads(self._dec(row[0], "meta.excel_folders")) if row else {}
+            row = self._db.execute("SELECT value FROM meta WHERE key = 'excel_folder'").fetchone()
+        return self._dec(row[0], "meta.excel_folder") if row else ""
 
-    def set_excel_folder(self, location: str, folder: str) -> None:
-        with self._lock:
-            folders = self.excel_folders()
-            folders[location] = folder
-            blob = self._enc(json.dumps(folders, ensure_ascii=False), "meta.excel_folders")
-            with self._db:
-                self._db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('excel_folders', ?)",
-                                 (blob,))
+    def set_excel_folder(self, folder: str) -> None:
+        blob = self._enc(folder, "meta.excel_folder")
+        with self._lock, self._db:
+            self._db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('excel_folder', ?)",
+                             (blob,))
 
     # --- export batches -------------------------------------------------------------
 
