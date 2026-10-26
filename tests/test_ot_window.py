@@ -141,9 +141,57 @@ def test_declining_the_duplicate_prompt_opens_nothing(qtbot, store, monkeypatch)
 def test_new_record_button_asks_which_student_and_day(qtbot, store, monkeypatch):
     student = store.add_student("王小明")
     window = make_window(qtbot, store)
-    monkeypatch.setattr(window, "_pick_new_record", lambda: (student.id, OCT_1))
+    monkeypatch.setattr(window, "_pick_new_record", lambda: (student.id, OCT_1, None))
     window.add_record_btn.click()
     assert window.editor.title.text() == "王小明 · 2026-10-01"
+
+
+def _dialog_setup(store):
+    a, b, c = (store.add_student(n) for n in ("甲", "乙", "丙"))
+    store.add_record(a.id, OCT_1, "A校")
+    store.add_record(b.id, OCT_1, "B校")
+    store.add_record(c.id, date(2026, 10, 2), "B校")
+    return a, b, c
+
+
+def _names(box):
+    return {box.itemText(i) for i in range(box.count())}
+
+
+def test_new_record_dialog_by_location_lists_students_seen_there(qtbot, store):
+    _dialog_setup(store)
+    dialog = main_window.NewRecordDialog(store, None, date(2026, 10, 2), by_location=True)
+    qtbot.addWidget(dialog)
+    assert (dialog.location_box.currentText(), _names(dialog.student_box)) == ("B校", {"乙", "丙"})
+    dialog.location_box.setCurrentIndex(dialog.location_box.findData("A校"))
+    assert _names(dialog.student_box) == {"甲"}
+    dialog.location_box.setCurrentIndex(dialog.location_box.findData(None))
+    assert (_names(dialog.student_box), dialog.choice()[2]) == ({"甲", "乙", "丙"}, None)
+
+
+def test_new_record_dialog_starts_at_the_days_location(qtbot, store):
+    _dialog_setup(store)
+    dialog = main_window.NewRecordDialog(store, None, OCT_1, by_location=True)
+    qtbot.addWidget(dialog)
+    assert dialog.location_box.currentText() in ("A校", "B校")
+    dialog = main_window.NewRecordDialog(store, None, OCT_1, by_location=True, location="A校")
+    qtbot.addWidget(dialog)
+    assert (dialog.choice()[2], _names(dialog.student_box)) == ("A校", {"甲"})
+
+
+def test_new_record_dialog_by_student_has_no_location(qtbot, store):
+    _dialog_setup(store)
+    dialog = main_window.NewRecordDialog(store, None, OCT_1)
+    qtbot.addWidget(dialog)
+    assert (dialog.location_box, len(_names(dialog.student_box)), dialog.choice()[2]) == (None, 3, None)
+
+
+def test_new_record_uses_the_picked_location(qtbot, store, monkeypatch):
+    a, _, _ = _dialog_setup(store)
+    window = make_window(qtbot, store)
+    monkeypatch.setattr(window, "_pick_new_record", lambda: (a.id, date(2026, 10, 9), "B校"))
+    window.add_record_btn.click()
+    assert window.editor.location_box.currentText() == "B校"
 
 
 def test_cancelled_new_record_dialog_creates_nothing(qtbot, store, monkeypatch):

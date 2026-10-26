@@ -50,30 +50,63 @@ PLACEHOLDER, STUDENT_PAGE, DAY_PAGE, EDITOR_PAGE, LOCATION_PAGE = range(5)
 
 
 class NewRecordDialog(QDialog):
-    """Choose the student and the day of a new chart."""
+    """Choose the student and the day of a new chart. With `by_location`, a location is
+    picked first and the student list narrows to those seen there. It starts at `location`
+    if given, else at where that day's sessions were, else at the latest location."""
+
+    ALL_LOCATIONS = "（所有學生）"
 
     def __init__(self, store: RecordStore, student_id: int | None, day: date,
-                 parent: QWidget | None = None) -> None:
+                 parent: QWidget | None = None, by_location: bool = False,
+                 location: str | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("新增病歷")
+        self.store = store
+        self.location_box: QComboBox | None = None
         self.student_box = QComboBox()
-        for student in store.students():
-            self.student_box.addItem(student.name, student.id)
-        index = self.student_box.findData(student_id)
-        self.student_box.setCurrentIndex(max(index, 0))
         self.date_edit = QDateEdit(to_qdate(day))
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDisplayFormat("yyyy-MM-dd")
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
+        self.ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
         form = QFormLayout(self)
+        locations = store.all_locations() if by_location else []
+        if locations:
+            self.location_box = QComboBox()
+            for place in locations:
+                self.location_box.addItem(place, place)
+            self.location_box.addItem(self.ALL_LOCATIONS, None)
+            if not location:
+                today = [r.location for r in store.records_on(day) if r.location]
+                location = today[-1] if today else None
+            self.location_box.setCurrentIndex(max(self.location_box.findData(location), 0))
+            self.location_box.currentIndexChanged.connect(lambda: self._fill_students(None))
+            form.addRow("地點", self.location_box)
         form.addRow("學生", self.student_box)
         form.addRow("日期", self.date_edit)
         form.addRow(buttons)
+        self._fill_students(student_id)
 
-    def choice(self) -> tuple[int, date]:
-        return self.student_box.currentData(), to_date(self.date_edit.date())
+    def location(self) -> str | None:
+        """The chosen location, or None when no location was picked."""
+        return self.location_box.currentData() if self.location_box else None
+
+    def _fill_students(self, keep: int | None) -> None:
+        location = self.location()
+        students = self.store.students()
+        if location is not None:
+            seen = {r.student_id for r in self.store.records_at(location)}
+            students = [s for s in students if s.id in seen]
+        self.student_box.clear()
+        for student in students:
+            self.student_box.addItem(student.name, student.id)
+        self.student_box.setCurrentIndex(max(self.student_box.findData(keep), 0))
+        self.ok_button.setEnabled(bool(students))
+
+    def choice(self) -> tuple[int, date, str | None]:
+        return self.student_box.currentData(), to_date(self.date_edit.date()), self.location()
 
 
 class TheraNoteWindow(QMainWindow):
@@ -288,9 +321,12 @@ class TheraNoteWindow(QMainWindow):
 
     # --- records --------------------------------------------------------------------
 
-    def _pick_new_record(self) -> tuple[int, date] | None:
-        dialog = NewRecordDialog(self.store, self.current_student_id(), self.calendar.selected()
-                                 if self.mode_switch.index() == DATE_MODE else date.today(), self)
+    def _pick_new_record(self) -> tuple[int, date, str | None] | None:
+        mode = self.mode_switch.index()
+        dialog = NewRecordDialog(self.store, self.current_student_id(),
+                                 self.calendar.selected() if mode == DATE_MODE else date.today(), self,
+                                 by_location=mode != STUDENT_MODE,
+                                 location=self.current_location() if mode == LOCATION_MODE else None)
         return dialog.choice() if dialog.exec() == QDialog.DialogCode.Accepted else None
 
     def _confirm_open_existing(self, student_name: str, day: date) -> bool:
@@ -298,16 +334,17 @@ class TheraNoteWindow(QMainWindow):
             self, "已有病歷", f"{student_name} 在 {day.isoformat()} 已經有一份病歷。要開啟它嗎？")
         return answer == QMessageBox.StandardButton.Yes
 
-    def new_record(self, student_id: int | None = None, day: date | None = None) -> int | None:
+    def new_record(self, student_id: int | None = None, day: date | None = None,
+                   location: str | None = None) -> int | None:
         """Start a chart for a student on a day (asking which, unless given) and open it.
-        The location and start time start as the student's last ones; a first chart starts
-        empty. If the student already has a chart that day, offers to open it instead.
+        The location (unless given) and start time start as the student's last ones; a first
+        chart starts empty. If the student already has a chart that day, offers to open it instead.
         Returns the record id."""
         if student_id is None or day is None:
             picked = self._pick_new_record()
             if picked is None:
                 return None
-            student_id, day = picked
+            student_id, day, location = picked
         existing = self.store.find_record(student_id, day)
         if existing:
             if self._confirm_open_existing(self.store.get_student(student_id).name, day):
@@ -316,7 +353,8 @@ class TheraNoteWindow(QMainWindow):
             return None
         try:
             record = self.store.add_record(
-                student_id, day, self.store.student_default_location(student_id),
+                student_id, day,
+                self.store.student_default_location(student_id) if location is None else location,
                 start_time=self.store.student_default_start_time(student_id))
         except DuplicateRecord as e:  # created elsewhere between the check and now
             self.open_record(e.record_id)

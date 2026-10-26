@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.6.0] - 2026-10-25
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 日期模式與地點模式的「新增病歷」小視窗，改成先選地點，再從在該地點看過的學生中選人，最後確認日期；也可以選「（所有學生）」列出全部學生。
+- 日期模式預設為月曆上選的日期，地點則預設為當天已有病歷的地點；地點模式預設為側欄目前選的地點。
+- 新病歷的地點使用小視窗選的地點。
+
 ## [0.7.0.5.4] - 2026-10-25
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
