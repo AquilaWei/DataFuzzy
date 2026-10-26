@@ -300,8 +300,9 @@ class TheraNoteWindow(QMainWindow):
 
     def new_record(self, student_id: int | None = None, day: date | None = None) -> int | None:
         """Start a chart for a student on a day (asking which, unless given) and open it.
-        The location starts as the student's last one; a first chart starts empty. If the
-        student already has a chart that day, offers to open it instead. Returns the record id."""
+        The location and start time start as the student's last ones; a first chart starts
+        empty. If the student already has a chart that day, offers to open it instead.
+        Returns the record id."""
         if student_id is None or day is None:
             picked = self._pick_new_record()
             if picked is None:
@@ -314,7 +315,9 @@ class TheraNoteWindow(QMainWindow):
                 return existing.id
             return None
         try:
-            record = self.store.add_record(student_id, day, self.store.student_default_location(student_id))
+            record = self.store.add_record(
+                student_id, day, self.store.student_default_location(student_id),
+                start_time=self.store.student_default_start_time(student_id))
         except DuplicateRecord as e:  # created elsewhere between the check and now
             self.open_record(e.record_id)
             return e.record_id

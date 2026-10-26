@@ -230,7 +230,8 @@ class RecordStore:
     # --- records --------------------------------------------------------------------
 
     def add_record(self, student_id: int, visit_date: date, location: str = "",
-                   zh_text: str = "", en_text: str = "", activity: str = "") -> Record:
+                   zh_text: str = "", en_text: str = "", activity: str = "",
+                   start_time: str = "") -> Record:
         """Raises DuplicateRecord if the student already has a record that day, NotFound
         for an unknown student."""
         self.get_student(student_id)
@@ -242,12 +243,13 @@ class RecordStore:
             with self._db:
                 cur = self._db.execute(
                     "INSERT INTO record(student_id, visit_date, location, zh_text, en_text,"
-                    " updated_at, activity) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    " updated_at, activity, start_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     (student_id, visit_date.isoformat(), self._enc(location, "record.location"),
                      self._enc(zh_text, "record.zh_text"), self._enc(en_text, "record.en_text"),
-                     updated_at.isoformat(), self._enc(activity, "record.activity")))
+                     updated_at.isoformat(), self._enc(activity, "record.activity"),
+                     start_time or None))
         return Record(cur.lastrowid, student_id, visit_date, location, zh_text, en_text, updated_at,
-                      activity)
+                      activity, start_time)
 
     def update_record(self, record_id: int, *, location: str | None = None,
                       zh_text: str | None = None, en_text: str | None = None,
@@ -372,6 +374,13 @@ class RecordStore:
         for record in self.records_for_student(student_id, newest_first=True):
             if record.location:
                 return record.location
+        return ""
+
+    def student_default_start_time(self, student_id: int) -> str:
+        """The start time of the student's latest visit that has one, "" if none does."""
+        for record in self.records_for_student(student_id, newest_first=True):
+            if record.start_time:
+                return record.start_time
         return ""
 
     def records_at(self, location: str) -> list[Record]:

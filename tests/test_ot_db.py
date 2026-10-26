@@ -215,6 +215,22 @@ def test_default_location_is_per_student(store):
     assert store.student_default_location(b.id) == ""
 
 
+def test_default_start_time_is_latest_visit_that_has_one(store):
+    a = store.add_student("甲")
+    b = store.add_student("乙")
+    first = store.add_record(a.id, date(2026, 10, 1))
+    store.update_record(first.id, start_time="09:30")
+    store.add_record(a.id, date(2026, 10, 8))
+    assert (store.student_default_start_time(a.id), store.student_default_start_time(b.id)) == (
+        "09:30", "")
+
+
+def test_add_record_keeps_the_start_time(store):
+    a = store.add_student("甲")
+    record = store.add_record(a.id, date(2026, 10, 1), start_time="14:00")
+    assert (record.start_time, store.get_record(record.id).start_time) == ("14:00", "14:00")
+
+
 def test_all_locations_are_distinct_most_recent_first(store):
     a = store.add_student("甲")
     store.add_record(a.id, date(2026, 10, 1), "A校")
