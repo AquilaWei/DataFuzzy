@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.8.0] - 2026-10-25
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 日期模式的當天病歷清單，右上角可切換「依時間」或「依名字」排序。預設依時間，沒填時間的排最後，同時間再依名字排。
+
 ## [0.7.0.7.0] - 2026-10-25
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。

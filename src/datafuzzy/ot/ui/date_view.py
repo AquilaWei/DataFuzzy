@@ -8,6 +8,7 @@ from PySide6.QtCore import QDate, QModelIndex, QPoint, QRect, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPalette, QTextCharFormat
 from PySide6.QtWidgets import (
     QCalendarWidget,
+    QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
@@ -22,7 +23,7 @@ from PySide6.QtWidgets import (
 from ..db import RecordStore
 from .cards import date_label, preview_text, time_label
 from .theme import ACCENT
-from .widgets import record_menu
+from .widgets import SegmentedControl, record_menu
 
 
 def to_qdate(day: date) -> QDate:
@@ -146,8 +147,12 @@ class DayRecordDelegate(QStyledItemDelegate):
         painter.restore()
 
 
+BY_TIME, BY_NAME = range(2)
+
+
 class DayRecordsView(QWidget):
-    """The children with a record on one day; clicking one opens the record."""
+    """The children with a record on one day, by start time (those without one last) or by
+    name; clicking one opens the record."""
 
     open_record = Signal(int)  # record id
     delete_record = Signal(int)  # record id chosen from a row's right-click menu
@@ -160,6 +165,7 @@ class DayRecordsView(QWidget):
         self.title.setObjectName("title")
         self.count = QLabel("")
         self.count.setObjectName("subtle")
+        self.sort = SegmentedControl(["依時間", "依名字"])
         self.empty = QLabel("這天沒有病歷。")
         self.empty.setObjectName("subtle")
         self.list = QListWidget()
@@ -168,8 +174,14 @@ class DayRecordsView(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 12)
         layout.setSpacing(0)
-        layout.addWidget(self.title)
-        layout.addWidget(self.count)
+        titles = QVBoxLayout()
+        titles.setSpacing(0)
+        titles.addWidget(self.title)
+        titles.addWidget(self.count)
+        header = QHBoxLayout()
+        header.addLayout(titles, 1)
+        header.addWidget(self.sort)
+        layout.addLayout(header)
         layout.addSpacing(10)
         layout.addWidget(self.empty)
         layout.addWidget(self.list, 1)
@@ -177,6 +189,7 @@ class DayRecordsView(QWidget):
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.list.customContextMenuRequested.connect(self._show_menu)
         self.empty.setVisible(False)
+        self.sort.changed.connect(lambda _: self.refresh())
 
     def context_menu(self, pos: QPoint) -> QMenu | None:
         """The menu for the row at `pos` (list viewport coordinates), None off the rows."""
@@ -200,6 +213,8 @@ class DayRecordsView(QWidget):
         names = {s.id: s.name for s in self.store.students_on(self.day)}  # sorted by name
         order = {student_id: i for i, student_id in enumerate(names)}
         records = sorted(self.store.records_on(self.day), key=lambda r: order[r.student_id])
+        if self.sort.index() == BY_TIME:  # stable, so equal times stay in name order
+            records.sort(key=lambda r: r.start_time or "99:99")
         self.title.setText(date_label(self.day))
         self.count.setText(f"{len(records)} 位學生有病歷")
         self.list.clear()

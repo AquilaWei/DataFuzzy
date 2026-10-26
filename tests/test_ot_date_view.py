@@ -81,6 +81,18 @@ def test_day_view_lists_children_with_a_record_sorted_by_name(qtbot, seen):
     assert item_texts(view) == ["王小明\n新竹國小 · 王的第一次", "陳美玲\n台北診所 · 陳的第一次"]
 
 
+def test_day_view_sorts_by_time_or_by_name(qtbot, store):
+    names = ["陳美玲", "王小明", "Amy"]
+    for name, start in zip(names, ["14:00", "", "09:30"]):
+        record = store.add_record(store.add_student(name).id, date(2026, 10, 1))
+        store.update_record(record.id, start_time=start)
+    view = make_day_view(qtbot, store, date(2026, 10, 1))
+    first_names = lambda: [t.split("\n")[0] for t in item_texts(view)]
+    assert first_names() == ["Amy", "陳美玲", "王小明"]
+    view.sort.button(1).click()
+    assert first_names() == sorted(names, key=[s.name for s in store.students()].index)
+
+
 def test_day_view_rows_keep_name_place_and_preview_apart(qtbot, seen):
     view = make_day_view(qtbot, seen, date(2026, 10, 1))
     item = view.list.item(0)
