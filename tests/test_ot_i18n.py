@@ -141,3 +141,42 @@ def test_a_chart_opens_on_the_chinese_tab_in_chinese(qtbot, store):
     student_id = window.add_student("王小明")
     window.new_record(student_id, date(2026, 10, 1))
     assert window.editor.tabs.currentIndex() == 0
+
+
+def model_manager_texts():
+    """Every text the shared model manager passes to translate, and its language names."""
+    from datafuzzy.ui import model_manager
+
+    tree = ast.parse(Path(model_manager.__file__).read_text())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and node.args and isinstance(node.args[0], ast.Constant) and (
+                getattr(node.func, "attr", None) == "translate" or getattr(node.func, "id", None) in ("t", "translate")):
+            yield node.args[0].value
+    yield from model_manager.LANG_NAMES.values()
+
+
+def test_every_model_manager_text_has_an_english_version():
+    texts = list(model_manager_texts())
+    assert "模型管理" in texts
+    assert [text for text in texts if text not in ENGLISH] == []
+
+
+def test_model_manager_follows_the_interface_language(qtbot, tmp_path, file_server):
+    from datafuzzy.ui.model_manager import ModelManager
+
+    set_language("en")
+    spec = file_server.spec(lang="en")
+    dialog = ModelManager([spec], tmp_path, translate=tr)
+    qtbot.addWidget(dialog)
+    assert (dialog.windowTitle(), dialog.rows[0].button.text(), dialog.rows[0].status.text()) == (
+        "Models", "Download", "Not installed")
+
+
+def test_model_manager_stays_chinese_without_a_translation(qtbot, tmp_path, file_server):
+    from datafuzzy.ui.model_manager import ModelManager
+
+    set_language("en")
+    spec = file_server.spec(lang="en")
+    dialog = ModelManager([spec], tmp_path)
+    qtbot.addWidget(dialog)
+    assert dialog.rows[0].button.text() == "下載"

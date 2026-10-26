@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.19.0] - 2026-10-26
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 變更
+- 「模型管理」視窗也跟著介面語言切換中英文（標題、說明、下載／刪除按鈕、狀態與錯誤訊息）。原 DataFuzzy 介面的模型管理維持中文。
+
 ## [0.7.0.18.0] - 2026-10-26
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
@@ -13,7 +20,7 @@ TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈
 - English 介面的日期顯示 Mon、Tue… 等星期縮寫。
 
 ### 已知限制
-- 「模型管理」視窗與 DataFuzzy 共用，目前仍只有中文。
+- 「模型管理」視窗與 DataFuzzy 共用，目前仍只有中文（0.7.0.19.0 已改為跟著切換）。
 - Excel 匯出的檔名格式不變（`姓名-開始日期至結束日期.xlsx`）。
 
 ## [0.7.0.17.0] - 2026-10-26

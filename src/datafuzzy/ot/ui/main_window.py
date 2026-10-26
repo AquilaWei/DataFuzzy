@@ -520,7 +520,7 @@ class TheraNoteWindow(QMainWindow):
     def open_model_manager(self) -> None:
         if self.models_root is None:
             return
-        dialog = ModelManager(self.specs, self.models_root, self)
+        dialog = ModelManager(self.specs, self.models_root, self, translate=tr)
         dialog.models_changed.connect(self.reload_models)
         dialog.exec()
 

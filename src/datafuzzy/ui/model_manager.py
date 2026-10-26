@@ -1,8 +1,12 @@
-"""Dialog to download / delete the optional NER models."""
+"""Dialog to download / delete the optional NER models.
+
+Its texts are Chinese. An app with another interface language passes `translate`, which gets
+each Chinese text plus the values for its {fields} (TheraNote passes its i18n.tr)."""
 
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
@@ -27,26 +31,34 @@ from ..core.models import (
 
 LANG_NAMES = {"en": "英文", "zh": "中文", "mixed": "中英夾雜", "any": "所有語言"}
 
+Translate = Callable[..., str]
+
+
+def as_written(text: str, **values: object) -> str:
+    """The default Translate: the Chinese as it is, with the values filled in."""
+    return text.format(**values) if values else text
+
 
 class DownloadThread(QThread):
     progress = Signal(int, int)
     finished_with = Signal(str)  # "" on success, otherwise an error message
 
-    def __init__(self, spec: ModelSpec, root: Path) -> None:
+    def __init__(self, spec: ModelSpec, root: Path, translate: Translate = as_written) -> None:
         super().__init__()
         self.spec = spec
         self.root = root
+        self.translate = translate
         self.cancel = threading.Event()
 
     def run(self) -> None:
         try:
             download_model(self.spec, self.root, self.progress.emit, self.cancel)
         except DownloadCancelled:
-            self.finished_with.emit("已取消（下次會從中斷處繼續）")
+            self.finished_with.emit(self.translate("已取消（下次會從中斷處繼續）"))
         except ChecksumError:
-            self.finished_with.emit("檔案驗證失敗，已刪除，請重新下載")
+            self.finished_with.emit(self.translate("檔案驗證失敗，已刪除，請重新下載"))
         except Exception as exc:
-            self.finished_with.emit(f"下載失敗：{exc}")
+            self.finished_with.emit(self.translate("下載失敗：{error}", error=exc))
         else:
             self.finished_with.emit("")
 
@@ -56,11 +68,11 @@ class _Row:
         self.dialog = dialog
         self.spec = spec
         self.thread: DownloadThread | None = None
-        info = QLabel(
-            f"<b>{spec.name}</b><br>"
-            f"<span style='color:gray;'>{LANG_NAMES.get(spec.lang, spec.lang)} · "
-            f"{spec.size / 1e6:.0f} MB · 授權 {spec.license} · 來源 {spec.source}</span>"
-        )
+        t = dialog.translate
+        lang = t(LANG_NAMES[spec.lang]) if spec.lang in LANG_NAMES else spec.lang
+        details = t("{lang} · {size} MB · 授權 {license} · 來源 {source}", lang=lang,
+                    size=f"{spec.size / 1e6:.0f}", license=spec.license, source=spec.source)
+        info = QLabel(f"<b>{spec.name}</b><br><span style='color:gray;'>{details}</span>")
         self.status = QLabel()
         self.bar = QProgressBar()
         self.bar.setVisible(False)
@@ -77,17 +89,18 @@ class _Row:
         return is_installed(self.spec, self.dialog.root)
 
     def refresh(self, message: str = "") -> None:
+        t = self.dialog.translate
         downloading = self.thread is not None
         self.bar.setVisible(downloading)
         if downloading:
-            self.button.setText("取消")
-            self.status.setText("下載中…")
+            self.button.setText(t("取消"))
+            self.status.setText(t("下載中…"))
         elif self.installed:
-            self.button.setText("刪除")
-            self.status.setText(message or "✅ 已安裝")
+            self.button.setText(t("刪除"))
+            self.status.setText(message or t("✅ 已安裝"))
         else:
-            self.button.setText("下載")
-            self.status.setText(message or "未安裝")
+            self.button.setText(t("下載"))
+            self.status.setText(message or t("未安裝"))
 
     def on_click(self) -> None:
         if self.thread is not None:
@@ -100,7 +113,7 @@ class _Row:
             self.start()
 
     def start(self) -> None:
-        self.thread = DownloadThread(self.spec, self.dialog.root)
+        self.thread = DownloadThread(self.spec, self.dialog.root, self.dialog.translate)
         self.thread.progress.connect(self.on_progress)
         self.thread.finished_with.connect(self.on_finished)
         self.bar.setValue(0)
@@ -123,23 +136,25 @@ class _Row:
 class ModelManager(QDialog):
     models_changed = Signal()
 
-    def __init__(self, specs: list[ModelSpec], root: Path, parent=None) -> None:
+    def __init__(self, specs: list[ModelSpec], root: Path, parent=None,
+                 translate: Translate = as_written) -> None:
         super().__init__(parent)
-        self.setWindowTitle("模型管理")
+        self.translate = translate
+        self.setWindowTitle(translate("模型管理"))
         self.setMinimumWidth(620)
         self.root = root
         layout = QVBoxLayout(self)
-        intro = QLabel(
+        intro = QLabel(translate(
             "模型用來辨識<b>人名、地址、生日、帳號</b>等個人資料，下載後完全在本機執行。<br>"
             "未安裝模型時仍可使用，但只會以規則偵測 Email、電話、IP 等格式化資料。<br>"
             "<span style='color:gray;'>下載模型是本軟體唯一會連網的時機。</span>"
-        )
+        ))
         intro.setWordWrap(True)
         layout.addWidget(intro)
         grid = QGridLayout()
         self.rows = [_Row(self, spec, grid, i * 2) for i, spec in enumerate(specs)]
         layout.addLayout(grid)
-        location = QLabel(f"<span style='color:gray;'>存放位置：{root}</span>")
+        location = QLabel(f"<span style='color:gray;'>{translate('存放位置：{root}', root=root)}</span>")
         location.setWordWrap(True)
         layout.addWidget(location)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)

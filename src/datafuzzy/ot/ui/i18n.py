@@ -170,6 +170,31 @@ ENGLISH = {
         "<p>Built on DataFuzzy. NER models are downloaded by the user under “Models”, each under "
         "its own license.</p>",
     "<p><b>第三方授權</b></p>": "<p><b>Third-party licenses</b></p>",
+    # model manager (shared with DataFuzzy, which keeps it in Chinese)
+    "模型管理": "Models",
+    "英文": "English",
+    "中英夾雜": "Mixed Chinese and English",
+    "所有語言": "All languages",
+    "{lang} · {size} MB · 授權 {license} · 來源 {source}":
+        "{lang} · {size} MB · License {license} · Source {source}",
+    "取消": "Cancel",
+    "下載中…": "Downloading…",
+    "刪除": "Delete",
+    "✅ 已安裝": "✅ Installed",
+    "下載": "Download",
+    "未安裝": "Not installed",
+    "已取消（下次會從中斷處繼續）": "Cancelled (the next download resumes where it stopped)",
+    "檔案驗證失敗，已刪除，請重新下載": "The file failed verification and was deleted. Download it again.",
+    "下載失敗：{error}": "Download failed: {error}",
+    "模型用來辨識<b>人名、地址、生日、帳號</b>等個人資料，下載後完全在本機執行。<br>"
+    "未安裝模型時仍可使用，但只會以規則偵測 Email、電話、IP 等格式化資料。<br>"
+    "<span style='color:gray;'>下載模型是本軟體唯一會連網的時機。</span>":
+        "Models find personal details such as <b>names, addresses, birthdays and account numbers</b>, "
+        "and run entirely on this computer once downloaded.<br>"
+        "Without a model the app still works, but only rules catch formatted data such as email "
+        "addresses, phone numbers and IPs.<br>"
+        "<span style='color:gray;'>Downloading a model is the only time this app goes online.</span>",
+    "存放位置：{root}": "Stored in: {root}",
     # export and paste back
     "標頭格式不正確": "malformed header",
     "這份匯出沒有這筆病歷": "not in this export",
