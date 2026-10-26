@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from ..db import Record
 from .cards import date_label, preview_text, time_label
+from .i18n import language, tr
 
 
 def compare_candidates(records: list[Record], current_id: int, current_day: date) -> list[Record]:
@@ -32,7 +33,7 @@ def compare_candidates(records: list[Record], current_id: int, current_day: date
 def candidate_label(record: Record) -> str:
     """One line of the pick list: date, location and the start of the chart."""
     first_line = preview_text(record.zh_text, record.en_text).splitlines()[0]
-    return f"{date_label(record.visit_date)} · {record.location or '未填地點'} · {first_line}"
+    return f"{date_label(record.visit_date)} · {record.location or tr('未填地點')} · {first_line}"
 
 
 class ComparePanel(QWidget):
@@ -44,23 +45,24 @@ class ComparePanel(QWidget):
         # Laid out row for row like the editor's chart, which then matches the row heights.
         self.title = QLabel(date_label(record.visit_date))
         self.title.setStyleSheet("font-size: 16px; font-weight: 600;")
-        self.location = QLabel(f"地點：{record.location or '未填'}")
+        self.location = QLabel(tr("地點：{place}", place=record.location or tr("未填")))
         self.location.setObjectName("subtle")
         self.close_btn = QPushButton("✕")
         self.close_btn.setObjectName("flat")
-        self.close_btn.setToolTip("關閉對照")
+        self.close_btn.setToolTip(tr("關閉對照"))
         self.start = QLabel(time_label(record.start_time) or "—")
         self.end = QLabel(time_label(record.end_time) or "—")
-        self.activity = self._read_only(record.activity, "（沒有記錄活動）")
+        self.activity = self._read_only(record.activity, tr("（沒有記錄活動）"))
         self.tabs = QTabWidget()
-        self.tabs.addTab(self._read_only(record.zh_text, "（沒有中文病歷）"), "中文")
-        self.tabs.addTab(self._read_only(record.en_text, "（沒有英文病歷）"), "English")
+        self.tabs.addTab(self._read_only(record.zh_text, tr("（沒有中文病歷）")), tr("中文"))
+        self.tabs.addTab(self._read_only(record.en_text, tr("（沒有英文病歷）")), "English")
+        self.tabs.setCurrentIndex(1 if language() == "en" else 0)  # as in the editor
 
         self.heading_row = QWidget()
         heading = QHBoxLayout(self.heading_row)
         heading.setContentsMargins(0, 0, 0, 0)
         heading.setSpacing(4)
-        tag = QLabel("對照")
+        tag = QLabel(tr("對照"))
         tag.setObjectName("subtle")
         heading.addWidget(tag)
         heading.addSpacing(4)
@@ -72,10 +74,10 @@ class ComparePanel(QWidget):
         self.times_row = QWidget()
         times = QHBoxLayout(self.times_row)
         times.setContentsMargins(0, 0, 0, 0)
-        times.addWidget(QLabel("開始時間"))
+        times.addWidget(QLabel(tr("開始時間")))
         times.addWidget(self.start)
         times.addSpacing(12)
-        times.addWidget(QLabel("結束時間"))
+        times.addWidget(QLabel(tr("結束時間")))
         times.addWidget(self.end)
         times.addStretch(1)
         layout = QVBoxLayout(self)
@@ -83,7 +85,7 @@ class ComparePanel(QWidget):
         layout.setSpacing(10)  # the editor's chart spacing
         layout.addWidget(self.heading_row)
         layout.addWidget(self.times_row)
-        layout.addWidget(QLabel("活動"))
+        layout.addWidget(QLabel(tr("活動")))
         layout.addWidget(self.activity)
         layout.addWidget(self.tabs, 1)
         self.close_btn.clicked.connect(self.closed)

@@ -14,8 +14,8 @@ from PySide6.QtWidgets import (
     QDateEdit,
     QDialog,
     QFileDialog,
-    QHeaderView,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QListWidget,
     QListWidgetItem,
@@ -41,6 +41,7 @@ from ..exchange import (
     preview_import,
 )
 from .date_view import to_date, to_qdate
+from .i18n import tr
 
 REASONS = {
     "malformed": "標頭格式不正確",
@@ -64,7 +65,7 @@ class ExportDialog(QDialog):
         self.result: ExportResult | None = None
         self._task = None
         today = today or date.today()
-        self.setWindowTitle("匯出病歷")
+        self.setWindowTitle(tr("匯出病歷"))
         self.resize(640, 520)
 
         self.from_edit = QDateEdit(to_qdate(today - timedelta(days=6)))
@@ -72,20 +73,20 @@ class ExportDialog(QDialog):
         for edit in (self.from_edit, self.to_edit):
             edit.setCalendarPopup(True)
             edit.setDisplayFormat("yyyy-MM-dd")
-        self.export_btn = QPushButton("匯出")
+        self.export_btn = QPushButton(tr("匯出"))
         self.export_btn.setObjectName("primary")
-        self.status = QLabel("選擇日期範圍後按「匯出」。學生與文中的人名會換成代號。")
+        self.status = QLabel(tr("選擇日期範圍後按「匯出」。學生與文中的人名會換成代號。"))
         self.status.setObjectName("subtle")
         self.status.setWordWrap(True)
         self.text = QPlainTextEdit()
         self.text.setReadOnly(True)
-        self.copy_btn = QPushButton("一鍵複製")
+        self.copy_btn = QPushButton(tr("一鍵複製"))
         self.copy_btn.setEnabled(False)
 
         row = QHBoxLayout()
-        row.addWidget(QLabel("從"))
+        row.addWidget(QLabel(tr("從")))
         row.addWidget(self.from_edit)
-        row.addWidget(QLabel("到"))
+        row.addWidget(QLabel(tr("到")))
         row.addWidget(self.to_edit)
         row.addStretch(1)
         row.addWidget(self.export_btn)
@@ -101,11 +102,11 @@ class ExportDialog(QDialog):
     def start_export(self) -> None:
         date_from, date_to = to_date(self.from_edit.date()), to_date(self.to_edit.date())
         if date_from > date_to:
-            self.status.setText("開始日期晚於結束日期。")
+            self.status.setText(tr("開始日期晚於結束日期。"))
             return
         self.export_btn.setEnabled(False)
         self.copy_btn.setEnabled(False)
-        self.status.setText("匯出中…")
+        self.status.setText(tr("匯出中…"))
         # Off the GUI thread: the first run loads the detection models.
         self._task = run_task(lambda: export_range(self.store, date_from, date_to, self.pipeline),
                               self._done, self._failed)
@@ -114,29 +115,30 @@ class ExportDialog(QDialog):
         self.result = result
         self.export_btn.setEnabled(True)
         self.text.setPlainText(result.text)
-        self.copy_btn.setText("一鍵複製")
+        self.copy_btn.setText(tr("一鍵複製"))
         self.copy_btn.setEnabled(bool(result.text))
         if not result.record_count:
-            self.status.setText("這段期間沒有病歷。")
+            self.status.setText(tr("這段期間沒有病歷。"))
         else:
-            note = f"已匯出 {result.record_count} 份病歷，人名已換成代號。"
+            note = tr("已匯出 {count} 份病歷，人名已換成代號。", count=result.record_count)
             if self.pipeline.pii is None:
-                note += "（偵測模型未安裝：只有學生姓名保證被替換，其他人名可能漏掉，請先到「模型管理」下載。）"
+                note += tr("（偵測模型未安裝：只有學生姓名保證被替換，其他人名可能漏掉，請先到「模型管理」下載。）")
             self.status.setText(note)
         self.exported.emit(result)
 
     def _failed(self, message: str) -> None:
         self.export_btn.setEnabled(True)
-        self.status.setText(f"匯出失敗：{message}")
+        self.status.setText(tr("匯出失敗：{message}", message=message))
 
     def copy(self) -> None:
         QGuiApplication.clipboard().setText(self.text.toPlainText())
-        self.copy_btn.setText("已複製 ✓")
+        self.copy_btn.setText(tr("已複製 ✓"))
 
 
 def ask_overwrite(parent: QWidget | None, count: int) -> bool:
     answer = QMessageBox.question(
-        parent, "覆蓋英文版", f"有 {count} 份病歷已有英文版，貼回後會被取代（只保留最新一版）。要覆蓋嗎？")
+        parent, tr("覆蓋英文版"),
+        tr("有 {count} 份病歷已有英文版，貼回後會被取代（只保留最新一版）。要覆蓋嗎？", count=count))
     return answer == QMessageBox.StandardButton.Yes
 
 
@@ -151,19 +153,19 @@ class ImportDialog(QDialog):
         self.store = store
         self.preview: ImportPreview | None = None
         self._confirm = confirm or (lambda count: ask_overwrite(self, count))
-        self.setWindowTitle("貼回英文版")
+        self.setWindowTitle(tr("貼回英文版"))
         self.resize(640, 600)
 
         self.paste = QPlainTextEdit()
-        self.paste.setPlaceholderText("把翻譯／修正後、含「=== REC-… ===」標頭的文字貼在這裡")
-        self.preview_btn = QPushButton("檢查")
+        self.paste.setPlaceholderText(tr("把翻譯／修正後、含「=== REC-… ===」標頭的文字貼在這裡"))
+        self.preview_btn = QPushButton(tr("檢查"))
         self.status = QLabel("")
         self.status.setObjectName("subtle")
         self.status.setWordWrap(True)
         self.items = QListWidget()
         self.notes = QLabel("")
         self.notes.setWordWrap(True)
-        self.apply_btn = QPushButton("套用")
+        self.apply_btn = QPushButton(tr("套用"))
         self.apply_btn.setObjectName("primary")
         self.apply_btn.setEnabled(False)
 
@@ -188,26 +190,29 @@ class ImportDialog(QDialog):
         try:
             preview = preview_import(self.store, self.paste.toPlainText())
         except ImportMismatch as e:
-            self.status.setText(f"無法對應到匯出：{e}")
+            self.status.setText(tr("無法對應到匯出：{error}", error=e))
             self._update_apply()
             return
         self.preview = preview
         for item in preview.items:
-            warning = "　⚠ 會覆蓋既有英文版" if item.overwrites else ""
+            warning = tr("　⚠ 會覆蓋既有英文版") if item.overwrites else ""
             row = QListWidgetItem(f"{item.student_name} · {item.visit_date.isoformat()}{warning}")
             row.setData(Qt.ItemDataRole.UserRole, item.record_id)
             row.setFlags(row.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             row.setCheckState(Qt.CheckState.Checked)
             self.items.addItem(row)
         self.notes.setText(self._notes(preview))
-        self.status.setText(f"可套用 {len(preview.items)} 份病歷。")
+        self.status.setText(tr("可套用 {count} 份病歷。", count=len(preview.items)))
         self._update_apply()
 
     @staticmethod
     def _notes(preview: ImportPreview) -> str:
-        lines = [f"沒貼回：{m.student_name} · {m.visit_date.isoformat()}" for m in preview.missing]
-        lines += [f"不認得的標頭（{REASONS[u.reason]}）：{u.header}" for u in preview.unrecognized]
-        lines += [f"不認得的代號 {', '.join(i.unknown_codes)}：{i.student_name} · {i.visit_date.isoformat()}"
+        lines = [tr("沒貼回：{name} · {day}", name=m.student_name, day=m.visit_date.isoformat())
+                 for m in preview.missing]
+        lines += [tr("不認得的標頭（{reason}）：{header}", reason=tr(REASONS[u.reason]), header=u.header)
+                  for u in preview.unrecognized]
+        lines += [tr("不認得的代號 {codes}：{name} · {day}", codes=", ".join(i.unknown_codes),
+                     name=i.student_name, day=i.visit_date.isoformat())
                   for i in preview.items if i.unknown_codes]
         return "\n".join(lines)
 
@@ -224,16 +229,16 @@ class ImportDialog(QDialog):
         ids = self.checked_ids()
         overwriting = [i for i in self.preview.overwriting if i.record_id in ids]
         if overwriting and not self._confirm(len(overwriting)):
-            self.status.setText("已取消，沒有寫入。")
+            self.status.setText(tr("已取消，沒有寫入。"))
             return
         written = apply_import(self.store, self.preview, ids)
         self.apply_btn.setEnabled(False)
-        self.status.setText(f"已寫入 {written} 份英文版。")
+        self.status.setText(tr("已寫入 {count} 份英文版。", count=written))
         self.applied.emit(written)
 
 
 def ask_replace_file(parent: QWidget | None, path: Path) -> bool:
-    answer = QMessageBox.question(parent, "取代檔案", f"「{path.name}」已經存在，要取代嗎？")
+    answer = QMessageBox.question(parent, tr("取代檔案"), tr("「{name}」已經存在，要取代嗎？", name=path.name))
     return answer == QMessageBox.StandardButton.Yes
 
 
@@ -255,9 +260,9 @@ class ExcelExportDialog(QDialog):
         self.entries: list[tuple[str, int]] = []  # (location, student id), in the order added
         self._confirm = confirm or (lambda path: ask_replace_file(self, path))
         self._choose = choose or (lambda start: QFileDialog.getExistingDirectory(
-            self, "Excel 匯出資料夾", start))
+            self, tr("Excel 匯出資料夾"), start))
         self._groups: dict[str, list[Record]] = {}
-        self.setWindowTitle("Excel 匯出")
+        self.setWindowTitle(tr("Excel 匯出"))
         self.resize(680, 500)
 
         self.from_edit = QDateEdit(to_qdate(self.today.replace(day=1)))
@@ -268,10 +273,10 @@ class ExcelExportDialog(QDialog):
         self.location_box = QComboBox()
         self.student_box = QComboBox()
         self.student_box.setMinimumContentsLength(10)
-        self.add_btn = QPushButton("加入")
-        self.add_all_btn = QPushButton("加入此地點全部")
+        self.add_btn = QPushButton(tr("加入"))
+        self.add_all_btn = QPushButton(tr("加入此地點全部"))
         self.table = QTableWidget(0, 3)
-        self.table.setHorizontalHeaderLabels(["地點", "學生", "病歷數"])
+        self.table.setHorizontalHeaderLabels([tr("地點"), tr("學生"), tr("病歷數")])
         self.table.verticalHeader().setVisible(False)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -279,33 +284,33 @@ class ExcelExportDialog(QDialog):
         header.setSectionResizeMode(self.LOCATION, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(self.STUDENT, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(self.COUNT, QHeaderView.ResizeMode.ResizeToContents)
-        self.remove_btn = QPushButton("移除")
+        self.remove_btn = QPushButton(tr("移除"))
         self.folder_label = QLabel("")
         self.folder_label.setWordWrap(True)
-        self.folder_btn = QPushButton("選擇資料夾…")
-        self.export_btn = QPushButton("匯出")
+        self.folder_btn = QPushButton(tr("選擇資料夾…"))
+        self.export_btn = QPushButton(tr("匯出"))
         self.export_btn.setObjectName("primary")
-        self.reveal_btn = QPushButton("在 Finder 中顯示")
+        self.reveal_btn = QPushButton(tr("在 Finder 中顯示"))
         self.reveal_btn.setEnabled(False)
         self.status = QLabel("")
         self.status.setObjectName("subtle")
         self.status.setWordWrap(True)
 
         dates = QHBoxLayout()
-        dates.addWidget(QLabel("從"))
+        dates.addWidget(QLabel(tr("從")))
         dates.addWidget(self.from_edit)
-        dates.addWidget(QLabel("到"))
+        dates.addWidget(QLabel(tr("到")))
         dates.addWidget(self.to_edit)
         dates.addStretch(1)
         pick = QHBoxLayout()
-        pick.addWidget(QLabel("地點"))
+        pick.addWidget(QLabel(tr("地點")))
         pick.addWidget(self.location_box, 1)
-        pick.addWidget(QLabel("學生"))
+        pick.addWidget(QLabel(tr("學生")))
         pick.addWidget(self.student_box, 1)
         pick.addWidget(self.add_btn)
         pick.addWidget(self.add_all_btn)
         folder = QHBoxLayout()
-        folder.addWidget(QLabel("匯出資料夾："))
+        folder.addWidget(QLabel(tr("匯出資料夾：")))
         folder.addWidget(self.folder_label, 1)
         folder.addWidget(self.folder_btn)
         buttons = QHBoxLayout()
@@ -361,13 +366,13 @@ class ExcelExportDialog(QDialog):
         self._fill_students()
         self._fill_table()
         if date_from > date_to:
-            note = "開始日期晚於結束日期。"
+            note = tr("開始日期晚於結束日期。")
         elif not records:
-            note = "這段期間沒有病歷。"
+            note = tr("這段期間沒有病歷。")
         else:
-            note = "每位學生一個檔案（姓名-開始日期至結束日期.xlsx），只含所選地點的病歷。"
+            note = tr("每位學生一個檔案（姓名-開始日期至結束日期.xlsx），只含所選地點的病歷。")
             if unassigned:
-                note += f"\n有 {len(unassigned)} 份病歷沒有填地點，不會匯出。"
+                note += tr("\n有 {count} 份病歷沒有填地點，不會匯出。", count=len(unassigned))
         self.status.setText(note)
         self._update_buttons()
 
@@ -376,7 +381,7 @@ class ExcelExportDialog(QDialog):
         location = self.location_box.currentText()
         for student_id, name in self._students_at(location):
             count = len(self._records(location, student_id))
-            self.student_box.addItem(f"{name}（{count} 份）", student_id)
+            self.student_box.addItem(tr("{name}（{count} 份）", name=name, count=count), student_id)
         self._update_buttons()
 
     def _fill_table(self) -> None:
@@ -412,7 +417,7 @@ class ExcelExportDialog(QDialog):
 
     def _update_buttons(self) -> None:
         folder = self.store.excel_folder()
-        self.folder_label.setText(folder or "（尚未設定）")
+        self.folder_label.setText(folder or tr("（尚未設定）"))
         has_student = self.student_box.count() > 0
         self.add_btn.setEnabled(has_student)
         self.add_all_btn.setEnabled(has_student)
@@ -444,26 +449,26 @@ class ExcelExportDialog(QDialog):
             label = f"「{location}／{self.store.get_student(student_id).name}」"
             records = self._records(location, student_id)
             if not records:
-                lines.append(f"略過{label}：這段期間沒有病歷。")
+                lines.append(tr("略過{label}：這段期間沒有病歷。", label=label))
                 continue
             if path in used:  # two students of one name at one location
                 path = path.with_stem(f"{path.stem} ({student_id})")
             used.add(path)
             if path.exists() and not self._confirm(path):
-                lines.append(f"略過{label}：沒有取代既有檔案。")
+                lines.append(tr("略過{label}：沒有取代既有檔案。", label=label))
                 continue
             try:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 write_workbook(self.store, records, path)
             except OSError as e:
-                lines.append(f"{label}寫入失敗：{e.strerror or e}")
+                lines.append(tr("{label}寫入失敗：{error}", label=label, error=e.strerror or e))
                 continue
             self.written.append(path)
-            lines.insert(len(self.written) - 1, f"已匯出：{path}")
+            lines.insert(len(self.written) - 1, tr("已匯出：{path}", path=path))
         if self.written and len(lines) == len(self.written):
             self.accept()  # every student written: nothing left to read here
             return
-        self.status.setText("\n".join(lines) or "沒有可匯出的學生。")
+        self.status.setText("\n".join(lines) or tr("沒有可匯出的學生。"))
         self.reveal_btn.setEnabled(bool(self.written))
 
     def reveal(self) -> None:

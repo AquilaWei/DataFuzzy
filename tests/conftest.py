@@ -117,3 +117,18 @@ def real_pipeline():
         else:
             p.models[spec.lang] = NerDetector(path, spec.labels, name=spec.id)
     return p
+
+
+@pytest.fixture(autouse=True)
+def interface_language(monkeypatch, tmp_path):
+    """Every test starts in Chinese, and a saved language goes to a file of the test's own,
+    not this computer's settings."""
+    from PySide6.QtCore import QSettings
+
+    from datafuzzy.ot.ui import i18n
+
+    monkeypatch.setattr(i18n, "_settings",
+                        lambda: QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat))
+    i18n.set_language("zh")
+    yield
+    i18n.set_language("zh")

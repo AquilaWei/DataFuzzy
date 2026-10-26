@@ -29,6 +29,7 @@ from .. import APP_NAME
 from ..crypto import DecryptionError
 from ..db import RecordStore, default_db_path
 from ..keys import KeyProvider, UnlockCancelled, UnlockError, default_provider
+from .i18n import load_language, tr
 from .main_window import TheraNoteWindow
 from .theme import apply_theme
 from .unlock import PasswordPrompter
@@ -37,7 +38,7 @@ ProviderFactory = Callable[[Path, Callable[[bool, bool], str | None]], KeyProvid
 
 CANCELLED_TEXT = f"已取消解鎖。資料沒有被讀取，{APP_NAME} 將關閉。"
 FAILED_TEXT = "無法解鎖：{reason}\n資料沒有被讀取，" + APP_NAME + " 將關閉。"
-MISMATCH_TEXT = (f"取得的金鑰打不開這個資料庫（{{path}}）。\n可能是鑰匙圈被重設，或密碼不是當初設定的那組。"
+MISMATCH_TEXT = ("取得的金鑰打不開這個資料庫（{path}）。\n可能是鑰匙圈被重設，或密碼不是當初設定的那組。"
                  f"資料沒有被改動，{APP_NAME} 將關閉。")
 
 
@@ -85,14 +86,14 @@ class Launcher(QObject):
         # Off the GUI thread: the system may ask the user to authenticate, and may block.
         self._task = run_task(
             lambda: unlock_key(self.db_path, self.provider_factory, self.prompter.ask),
-            self._unlocked, lambda message: self._stop("failed", FAILED_TEXT.format(reason=message)))
+            self._unlocked, lambda message: self._stop("failed", tr(FAILED_TEXT, reason=message)))
 
     def _unlocked(self, result: tuple[str, object]) -> None:
         kind, value = result
         if kind == "cancelled":
-            self._stop("cancelled", CANCELLED_TEXT)
+            self._stop("cancelled", tr(CANCELLED_TEXT))
         elif kind == "failed":
-            self._stop("failed", FAILED_TEXT.format(reason=value))
+            self._stop("failed", tr(FAILED_TEXT, reason=value))
         else:
             self._open(value)
 
@@ -100,13 +101,23 @@ class Launcher(QObject):
         try:
             self.store = RecordStore(self.db_path, key)
         except DecryptionError:
-            self._stop("mismatch", MISMATCH_TEXT.format(path=self.db_path))
+            self._stop("mismatch", tr(MISMATCH_TEXT, path=self.db_path))
             return
-        self.window = TheraNoteWindow(self.store, self.pipeline, self.specs, self.models_root)
-        self.window.show()
+        self._make_window()
         self.outcome = "ok"
         if self.offer_models:
             self._offer_models()
+
+    def _make_window(self) -> None:
+        old = self.window
+        self.window = TheraNoteWindow(self.store, self.pipeline, self.specs, self.models_root)
+        self.window.language_changed.connect(self._make_window)
+        if old is not None:  # a new language: same place and size, the old one's edits are saved
+            self.window.setGeometry(old.geometry())
+        self.window.show()
+        if old is not None:
+            old.close()
+            old.deleteLater()
 
     def _offer_models(self) -> None:
         """First launch without any model: offer the download once."""
@@ -178,6 +189,7 @@ def main() -> int:
     app.setApplicationName(APP_NAME)
     app.setWindowIcon(QIcon(str(files("datafuzzy.ot").joinpath("icon.png"))))
     apply_theme(app)
+    load_language()
 
     # Qt's event loop blocks Python signal handlers; a periodic no-op timer lets them run,
     # so SIGINT/SIGTERM go through a normal quit (and save pending edits) instead of killing us.

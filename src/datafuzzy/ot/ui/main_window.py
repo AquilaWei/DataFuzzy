@@ -6,7 +6,7 @@ from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
-from PySide6.QtCore import QPoint, Qt
+from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtGui import QAction, QCloseEvent
 from PySide6.QtWidgets import (
     QComboBox,
@@ -39,8 +39,10 @@ from .about import AboutDialog
 from .date_view import DayRecordsView, MarkedCalendar, to_date, to_qdate
 from .editor import RecordEditor
 from .exchange_dialogs import ExcelExportDialog, ExportDialog, ImportDialog
+from .i18n import language, save_language, tr
 from .location_view import NO_LOCATION, LocationRecordsView
 from .profile_dialog import StudentProfileDialog
+from .settings_dialog import SettingsDialog
 from .student_view import StudentRecordsView
 from .widgets import SegmentedControl
 
@@ -63,7 +65,7 @@ class NewRecordDialog(QDialog):
                  parent: QWidget | None = None, by_location: bool = False,
                  location: str | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("新增病歷")
+        self.setWindowTitle(tr("新增病歷"))
         self.store = store
         self.location_box: QComboBox | None = None
         self.student_box = QComboBox()
@@ -80,15 +82,15 @@ class NewRecordDialog(QDialog):
             self.location_box = QComboBox()
             for place in locations:
                 self.location_box.addItem(place, place)
-            self.location_box.addItem(self.ALL_LOCATIONS, None)
+            self.location_box.addItem(tr(self.ALL_LOCATIONS), None)
             if not location:
                 today = [r.location for r in store.records_on(day) if r.location]
                 location = today[-1] if today else None
             self.location_box.setCurrentIndex(max(self.location_box.findData(location), 0))
             self.location_box.currentIndexChanged.connect(lambda: self._fill_students(None))
-            form.addRow("地點", self.location_box)
-        form.addRow("學生", self.student_box)
-        form.addRow("日期", self.date_edit)
+            form.addRow(tr("地點"), self.location_box)
+        form.addRow(tr("學生"), self.student_box)
+        form.addRow(tr("日期"), self.date_edit)
         form.addRow(buttons)
         self._fill_students(student_id)
 
@@ -112,6 +114,10 @@ class NewRecordDialog(QDialog):
 
 
 class TheraNoteWindow(QMainWindow):
+    # The interface language was changed; its widgets keep their text, so the app makes a new
+    # window (see app.Launcher).
+    language_changed = Signal()
+
     def __init__(self, store: RecordStore, pipeline: Pipeline, specs: list[ModelSpec] | None = None,
                  models_root: Path | None = None, debounce_ms: int | None = None) -> None:
         super().__init__()
@@ -125,12 +131,14 @@ class TheraNoteWindow(QMainWindow):
         self.resize(1100, 720)
 
         self._build_menus()
-        self.mode_switch = SegmentedControl(["學生", "日期", "地點"])
-        self.add_student_btn = QPushButton("新增學生")
-        self.add_record_btn = QPushButton("新增病歷")
-        self.export_btn = QPushButton("匯出")
-        self.import_btn = QPushButton("貼回")
-        self.excel_btn = QPushButton("Excel 匯出")
+        self.mode_switch = SegmentedControl([tr("學生"), tr("日期"), tr("地點")])
+        self.add_student_btn = QPushButton(tr("新增學生"))
+        self.add_record_btn = QPushButton(tr("新增病歷"))
+        self.export_btn = QPushButton(tr("匯出"))
+        self.import_btn = QPushButton(tr("貼回"))
+        self.excel_btn = QPushButton(tr("Excel 匯出"))
+        self.settings_btn = QPushButton(tr("設定"))
+        self.settings_btn.setObjectName("flat")
         self.student_list = QListWidget()
         self.calendar = MarkedCalendar(store)
         self.location_list = QListWidget()
@@ -142,7 +150,7 @@ class TheraNoteWindow(QMainWindow):
         self.student_view = StudentRecordsView(store)
         self.day_view = DayRecordsView(store)
         self.location_view = LocationRecordsView(store)
-        self.placeholder = QLabel("選擇一位學生，或新增學生開始記錄。")
+        self.placeholder = QLabel(tr("選擇一位學生，或新增學生開始記錄。"))
         self.placeholder.setObjectName("subtle")
         self.placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.content = QStackedWidget()
@@ -166,6 +174,7 @@ class TheraNoteWindow(QMainWindow):
         side.addWidget(self.mode_switch)
         side.addLayout(actions)
         side.addWidget(self.sidebar_stack, 1)
+        side.addWidget(self.settings_btn, 0, Qt.AlignmentFlag.AlignLeft)
         root = QWidget()
         layout = QHBoxLayout(root)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -193,19 +202,25 @@ class TheraNoteWindow(QMainWindow):
         self.export_btn.clicked.connect(self.open_export)
         self.import_btn.clicked.connect(self.open_import)
         self.excel_btn.clicked.connect(self.open_excel_export)
+        self.settings_btn.clicked.connect(lambda: self.open_settings())
 
         self.refresh_students()
         self.refresh_locations()
         self.day_view.show_day(self.calendar.selected())
 
     def _build_menus(self) -> None:
-        models_action = QAction("模型管理…", self)
+        models_action = QAction(tr("模型管理…"), self)
         models_action.triggered.connect(self.open_model_manager)
-        self.menuBar().addMenu(APP_NAME).addAction(models_action)
-        about_action = QAction(f"關於 {APP_NAME}", self)
+        settings_action = QAction(tr("設定…"), self)
+        settings_action.setMenuRole(QAction.MenuRole.PreferencesRole)  # macOS: app menu, ⌘,
+        settings_action.triggered.connect(lambda: self.open_settings())
+        app_menu = self.menuBar().addMenu(APP_NAME)
+        app_menu.addAction(models_action)
+        app_menu.addAction(settings_action)
+        about_action = QAction(tr("關於 {app}", app=APP_NAME), self)
         about_action.setMenuRole(QAction.MenuRole.AboutRole)  # macOS: app menu
         about_action.triggered.connect(lambda: AboutDialog(self).exec())
-        self.menuBar().addMenu("說明").addAction(about_action)
+        self.menuBar().addMenu(tr("說明")).addAction(about_action)
 
     # --- students and navigation ----------------------------------------------------
 
@@ -231,7 +246,7 @@ class TheraNoteWindow(QMainWindow):
         return item.data(Qt.ItemDataRole.UserRole) if item else None
 
     def _ask_student_name(self) -> str:
-        name, ok = QInputDialog.getText(self, "新增學生", "學生姓名")
+        name, ok = QInputDialog.getText(self, tr("新增學生"), tr("學生姓名"))
         return name.strip() if ok else ""
 
     def add_student(self, name: str | None = None) -> int | None:
@@ -246,7 +261,7 @@ class TheraNoteWindow(QMainWindow):
         return student.id
 
     def _ask_new_name(self, current: str) -> str:
-        name, ok = QInputDialog.getText(self, "修改姓名", "學生姓名", text=current)
+        name, ok = QInputDialog.getText(self, tr("修改姓名"), tr("學生姓名"), text=current)
         return name.strip() if ok else ""
 
     def rename_student(self, student_id: int, name: str | None = None) -> bool:
@@ -286,7 +301,7 @@ class TheraNoteWindow(QMainWindow):
             return None
         student_id = item.data(Qt.ItemDataRole.UserRole)
         menu = QMenu(self)
-        menu.addAction("刪除學生…").triggered.connect(lambda: self.delete_student(student_id))
+        menu.addAction(tr("刪除學生…")).triggered.connect(lambda: self.delete_student(student_id))
         return menu
 
     def _show_student_menu(self, pos: QPoint) -> None:
@@ -295,8 +310,8 @@ class TheraNoteWindow(QMainWindow):
 
     def _confirm_delete_student(self, student_name: str, record_count: int) -> bool:
         answer = QMessageBox.warning(
-            self, "刪除學生", f"要刪除 {student_name} 嗎？\n"
-            f"這位學生的 {record_count} 份病歷（中英文內容）都會一併刪除，無法復原。",
+            self, tr("刪除學生"), tr("要刪除 {name} 嗎？\n這位學生的 {count} 份病歷（中英文內容）都會一併刪除，無法復原。",
+                                    name=student_name, count=record_count),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel)
         return answer == QMessageBox.StandardButton.Yes
@@ -327,7 +342,7 @@ class TheraNoteWindow(QMainWindow):
         self.location_list.blockSignals(True)
         self.location_list.clear()
         for location in locations:
-            item = QListWidgetItem(location or NO_LOCATION)
+            item = QListWidgetItem(location or tr(NO_LOCATION))
             item.setData(Qt.ItemDataRole.UserRole, location)
             self.location_list.addItem(item)
             if location == keep:
@@ -392,7 +407,8 @@ class TheraNoteWindow(QMainWindow):
 
     def _confirm_open_existing(self, student_name: str, day: date) -> bool:
         answer = QMessageBox.question(
-            self, "已有病歷", f"{student_name} 在 {day.isoformat()} 已經有一份病歷。要開啟它嗎？")
+            self, tr("已有病歷"),
+            tr("{name} 在 {day} 已經有一份病歷。要開啟它嗎？", name=student_name, day=day.isoformat()))
         return answer == QMessageBox.StandardButton.Yes
 
     def new_record(self, student_id: int | None = None, day: date | None = None) -> int | None:
@@ -426,8 +442,8 @@ class TheraNoteWindow(QMainWindow):
 
     def _confirm_delete(self, student_name: str, day: date) -> bool:
         answer = QMessageBox.warning(
-            self, "刪除病歷", f"要刪除 {student_name} 在 {day.isoformat()} 的病歷嗎？\n"
-            "中英文內容都會一併刪除，無法復原。",
+            self, tr("刪除病歷"), tr("要刪除 {name} 在 {day} 的病歷嗎？\n中英文內容都會一併刪除，無法復原。",
+                                    name=student_name, day=day.isoformat()),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel)
         return answer == QMessageBox.StandardButton.Yes
@@ -507,6 +523,21 @@ class TheraNoteWindow(QMainWindow):
         dialog = ModelManager(self.specs, self.models_root, self)
         dialog.models_changed.connect(self.reload_models)
         dialog.exec()
+
+    def _ask_language(self) -> str | None:
+        dialog = SettingsDialog(self)
+        return dialog.chosen_language() if dialog.exec() == QDialog.DialogCode.Accepted else None
+
+    def open_settings(self, chosen: str | None = None) -> bool:
+        """Ask for the settings (or take `chosen`); saves a new language and says so with
+        language_changed. Returns whether the language changed."""
+        chosen = chosen or self._ask_language()
+        if chosen is None or chosen == language():
+            return False
+        self.flush()  # the window is about to be replaced
+        save_language(chosen)
+        self.language_changed.emit()
+        return True
 
     def reload_models(self) -> None:
         if self.models_root is not None:

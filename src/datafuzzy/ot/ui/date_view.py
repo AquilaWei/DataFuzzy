@@ -5,7 +5,14 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from PySide6.QtCore import QDate, QModelIndex, QPoint, QRect, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPalette, QTextCharFormat
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QFontMetrics,
+    QPainter,
+    QPalette,
+    QTextCharFormat,
+)
 from PySide6.QtWidgets import (
     QCalendarWidget,
     QHBoxLayout,
@@ -22,6 +29,7 @@ from PySide6.QtWidgets import (
 
 from ..db import RecordStore
 from .cards import date_label, preview_text, session_label
+from .i18n import tr
 from .theme import ACCENT
 from .widgets import SegmentedControl, record_menu
 
@@ -165,8 +173,8 @@ class DayRecordsView(QWidget):
         self.title.setObjectName("title")
         self.count = QLabel("")
         self.count.setObjectName("subtle")
-        self.sort = SegmentedControl(["依時間", "依名字"])
-        self.empty = QLabel("這天沒有病歷。")
+        self.sort = SegmentedControl([tr("依時間"), tr("依名字")])
+        self.empty = QLabel(tr("這天沒有病歷。"))
         self.empty.setObjectName("subtle")
         self.list = QListWidget()
         self.list.setSpacing(4)
@@ -216,10 +224,10 @@ class DayRecordsView(QWidget):
         if self.sort.index() == BY_TIME:  # stable, so equal times stay in name order
             records.sort(key=lambda r: r.start_time or "99:99")
         self.title.setText(date_label(self.day))
-        self.count.setText(f"{len(records)} 位學生有病歷")
+        self.count.setText(tr("{count} 位學生有病歷", count=len(records)))
         self.list.clear()
         for record in records:
-            place = record.location or "未填地點"
+            place = record.location or tr("未填地點")
             first_line = preview_text(record.zh_text, record.en_text).splitlines()[0]
             item = QListWidgetItem(f"{names[record.student_id]}\n{place} · {first_line}")
             item.setData(Qt.ItemDataRole.UserRole, record.id)

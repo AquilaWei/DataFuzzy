@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import APP_NAME
+from .i18n import tr
 
 CREATE_HINT = (f"這台電腦沒有可用的系統鑰匙圈。請設定一組密碼來保護 {APP_NAME} 的病歷。\n"
                "忘記密碼就無法讀回資料，請自行妥善保存。")
@@ -36,10 +37,10 @@ class PasswordDialog(QDialog):
     def __init__(self, creating: bool, retry: bool = False, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.creating = creating
-        self.setWindowTitle(f"解鎖 {APP_NAME}")
-        self.hint = QLabel(CREATE_HINT if creating else ENTER_HINT)
+        self.setWindowTitle(tr("解鎖 {app}", app=APP_NAME))
+        self.hint = QLabel(tr(CREATE_HINT if creating else ENTER_HINT))
         self.hint.setWordWrap(True)
-        self.problem = QLabel(WRONG_PASSWORD if retry and not creating else "")
+        self.problem = QLabel(tr(WRONG_PASSWORD) if retry and not creating else "")
         self.problem.setStyleSheet("color: #ff453a;")
         self.password_edit = QLineEdit()
         self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
@@ -50,9 +51,9 @@ class PasswordDialog(QDialog):
         self.ok_btn.setObjectName("primary")
         form = QFormLayout(self)
         form.addRow(self.hint)
-        form.addRow("密碼", self.password_edit)
+        form.addRow(tr("密碼"), self.password_edit)
         if creating:
-            form.addRow("確認密碼", self.confirm_edit)
+            form.addRow(tr("確認密碼"), self.confirm_edit)
         form.addRow(self.problem)
         form.addRow(self.buttons)
         self.buttons.accepted.connect(self.accept)
@@ -66,7 +67,7 @@ class PasswordDialog(QDialog):
         matches = not self.creating or password == self.confirm_edit.text()
         self.ok_btn.setEnabled(bool(password) and matches)
         if self.creating:
-            self.problem.setText("" if matches or not self.confirm_edit.text() else MISMATCH)
+            self.problem.setText("" if matches or not self.confirm_edit.text() else tr(MISMATCH))
 
     def password(self) -> str:
         return self.password_edit.text()

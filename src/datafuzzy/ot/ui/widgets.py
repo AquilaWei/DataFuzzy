@@ -7,13 +7,15 @@ from collections.abc import Callable
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QMenu, QPushButton, QWidget
 
+from .i18n import tr
+
 DELETE_RECORD = "刪除病歷…"
 
 
 def record_menu(parent: QWidget, on_delete: Callable[[], None]) -> QMenu:
     """The right-click menu of a record (a card or a row of the day list)."""
     menu = QMenu(parent)
-    menu.addAction(DELETE_RECORD).triggered.connect(on_delete)
+    menu.addAction(tr(DELETE_RECORD)).triggered.connect(on_delete)
     return menu
 
 

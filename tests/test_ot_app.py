@@ -220,3 +220,15 @@ def test_ot_module_launches_theranote_main(monkeypatch):
     with pytest.raises(SystemExit) as result:
         runpy.run_module("datafuzzy.ot", run_name="__main__")
     assert result.value.code == 37
+
+
+def test_changing_the_language_replaces_the_window_in_place(qtbot, tmp_path):
+    launcher = run_unlock(qtbot, make_launcher(qtbot, tmp_path))
+    old = launcher.window
+    old.setGeometry(100, 100, 900, 600)
+    old.open_settings("en")
+    qtbot.addWidget(launcher.window)
+    assert launcher.window is not old
+    assert (launcher.window.add_student_btn.text(), launcher.window.geometry()) == ("Add student", old.geometry())
+    assert launcher.window.isVisible() and not old.isVisible()
+    launcher.shutdown()

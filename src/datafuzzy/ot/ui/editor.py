@@ -30,8 +30,9 @@ from PySide6.QtWidgets import (
 from ..db import DuplicateRecord, RecordStore, default_end_time
 from .cards import date_label, time_label
 from .compare_panel import ComparePanel, candidate_label, compare_candidates
-from .profile_dialog import ProfileSummary
 from .date_view import to_date, to_qdate
+from .i18n import language, tr
+from .profile_dialog import ProfileSummary
 
 AUTOSAVE_MS = 800
 TIME_CHOICES = [time_label(f"{h:02d}:{m:02d}") for h in range(7, 20) for m in (0, 15, 30, 45)]
@@ -82,30 +83,30 @@ class RecordEditor(QWidget):
         self.visit_date = record.visit_date
         self._dirty: set[str] = set()
 
-        self.back_btn = QPushButton("‹ 返回")
+        self.back_btn = QPushButton(tr("‹ 返回"))
         self.back_btn.setObjectName("flat")
         self.title = QLabel("")  # this visit's day; the student's name heads the profile above
         self.title.setStyleSheet("font-size: 16px; font-weight: 600;")
         self.date_btn = QPushButton("✎")
         self.date_btn.setObjectName("flat")
-        self.date_btn.setToolTip("修改日期")
+        self.date_btn.setToolTip(tr("修改日期"))
         self._show_title()
-        self.compare_btn = QPushButton("對照其他病歷")
-        self.compare_btn.setToolTip("在右邊並排顯示這位學生的另一份病歷")
+        self.compare_btn = QPushButton(tr("對照其他病歷"))
+        self.compare_btn.setToolTip(tr("在右邊並排顯示這位學生的另一份病歷"))
         self.status = QLabel("")
         self.status.setObjectName("subtle")
 
         self.profile = ProfileSummary()
         self.show_profile()
         # The record keeps the place it was seen at; the profile's location is for new ones.
-        self.record_place = QLabel(f"地點：{record.location or '未填'}")
+        self.record_place = QLabel(tr("地點：{place}", place=record.location or tr("未填")))
         self.record_place.setObjectName("subtle")
 
         self.time_box = QComboBox()
         self.time_box.setObjectName("time")  # the stylesheet gives it a clock icon
         self.time_box.setEditable(True)
         self.time_box.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        self.time_box.lineEdit().setPlaceholderText("例如 9:30 AM")
+        self.time_box.lineEdit().setPlaceholderText(tr("例如 9:30 AM"))
         self.time_box.addItems(TIME_CHOICES)
         self.time_box.setEditText(time_label(record.start_time))
         self.time_box.setMinimumContentsLength(8)
@@ -113,7 +114,7 @@ class RecordEditor(QWidget):
         self.end_box.setObjectName("time")
         self.end_box.setEditable(True)
         self.end_box.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        self.end_box.lineEdit().setPlaceholderText("例如 10:00 AM")
+        self.end_box.lineEdit().setPlaceholderText(tr("例如 10:00 AM"))
         self.end_box.addItems(TIME_CHOICES)
         self.end_box.setEditText(time_label(record.end_time))
         self.end_box.setMinimumContentsLength(8)
@@ -121,18 +122,19 @@ class RecordEditor(QWidget):
         self._end_follows = not record.end_time or record.end_time == default_end_time(record.start_time)
 
         self.activity_edit = QPlainTextEdit(record.activity)
-        self.activity_edit.setPlaceholderText("今天的治療活動與手段（只留在本機，不會匯出）")
+        self.activity_edit.setPlaceholderText(tr("今天的治療活動與手段（只留在本機，不會匯出）"))
         lines = self.activity_edit.fontMetrics().lineSpacing() * ACTIVITY_LINES
         self.activity_edit.setFixedHeight(lines + 2 * self.activity_edit.frameWidth() + 12)
 
         self.zh_edit = QPlainTextEdit(record.zh_text)
-        self.zh_edit.setPlaceholderText("中文病歷（可中英夾雜）")
+        self.zh_edit.setPlaceholderText(tr("中文病歷（可中英夾雜）"))
         self.en_edit = QPlainTextEdit(record.en_text)
         self.en_edit.setPlaceholderText("English version (only the latest is kept)")
         self.tabs = QTabWidget()
-        self.tabs.addTab(self.zh_edit, "中文")
+        self.tabs.addTab(self.zh_edit, tr("中文"))
         self.tabs.addTab(self.en_edit, "English")
-        self.tabs.setToolTip("點兩下「中文」或「English」複製整份病歷")
+        self.tabs.setCurrentIndex(1 if language() == "en" else 0)  # the interface language first
+        self.tabs.setToolTip(tr("點兩下「中文」或「English」複製整份病歷"))
 
         top = QHBoxLayout()
         top.addWidget(self.back_btn)
@@ -152,10 +154,10 @@ class RecordEditor(QWidget):
         self.times_row = QWidget()
         times = QHBoxLayout(self.times_row)
         times.setContentsMargins(0, 0, 0, 0)
-        times.addWidget(QLabel("開始時間"))
+        times.addWidget(QLabel(tr("開始時間")))
         times.addWidget(self.time_box)
         times.addSpacing(12)
-        times.addWidget(QLabel("結束時間"))
+        times.addWidget(QLabel(tr("結束時間")))
         times.addWidget(self.end_box)
         times.addStretch(1)
         line = QFrame()
@@ -168,7 +170,7 @@ class RecordEditor(QWidget):
         body.setSpacing(10)
         body.addWidget(self.heading_row)
         body.addWidget(self.times_row)
-        body.addWidget(QLabel("活動"))
+        body.addWidget(QLabel(tr("活動")))
         body.addWidget(self.activity_edit)
         body.addWidget(self.tabs, 1)
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -212,7 +214,7 @@ class RecordEditor(QWidget):
         candidates = compare_candidates(self.store.records_for_student(self.student_id),
                                         self.record_id, self.visit_date)
         if not candidates:
-            menu.addAction("這位學生沒有其他病歷").setEnabled(False)
+            menu.addAction(tr("這位學生沒有其他病歷")).setEnabled(False)
         for record in candidates:
             menu.addAction(candidate_label(record)).triggered.connect(
                 lambda _=False, rid=record.id: self.show_compare(rid))
@@ -252,14 +254,14 @@ class RecordEditor(QWidget):
             return
         edit = (self.zh_edit, self.en_edit)[index]
         QGuiApplication.clipboard().setText(edit.toPlainText())
-        self.status.setText(f"已複製{('中文', '英文')[index]}病歷")
+        self.status.setText(tr(("已複製中文病歷", "已複製英文病歷")[index]))
 
     def _show_title(self) -> None:
         self.title.setText(date_label(self.visit_date))
 
     def _ask_date(self) -> date | None:
         dialog = QDialog(self)
-        dialog.setWindowTitle("修改日期")
+        dialog.setWindowTitle(tr("修改日期"))
         edit = QDateEdit(to_qdate(self.visit_date))
         edit.setCalendarPopup(True)
         edit.setDisplayFormat("yyyy-MM-dd")
@@ -267,13 +269,13 @@ class RecordEditor(QWidget):
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         form = QFormLayout(dialog)
-        form.addRow("日期", edit)
+        form.addRow(tr("日期"), edit)
         form.addRow(buttons)
         return to_date(edit.date()) if dialog.exec() == QDialog.DialogCode.Accepted else None
 
     def _warn_taken(self, day: date) -> None:
-        QMessageBox.warning(self, "修改日期", f"{self.student_name} 在 {day.isoformat()} 已經有一份病歷，"
-                            "日期沒有更改。")
+        QMessageBox.warning(self, tr("修改日期"), tr("{name} 在 {day} 已經有一份病歷，日期沒有更改。",
+                                                 name=self.student_name, day=day.isoformat()))
 
     def change_date(self, day: date | None = None) -> bool:
         """Move the record to another day, asking which unless given. Refused (with a
@@ -306,7 +308,7 @@ class RecordEditor(QWidget):
 
     def _changed(self, field: str) -> None:
         self._dirty.add(field)
-        self.status.setText("編輯中…")
+        self.status.setText(tr("編輯中…"))
         self._timer.start()
 
     def flush(self) -> None:
@@ -323,10 +325,10 @@ class RecordEditor(QWidget):
         changed = {field: values[field] for field in self._dirty if values[field] is not None}
         self._dirty.clear()
         if not changed:
-            self.status.setText("時間請填成 9:30 AM 這樣的格式")
+            self.status.setText(tr("時間請填成 9:30 AM 這樣的格式"))
             return
         self.store.update_record(self.record_id, **changed)
-        self.status.setText(f"已儲存 {datetime.now():%H:%M:%S}")
+        self.status.setText(tr("已儲存 {time}", time=f"{datetime.now():%H:%M:%S}"))
         self.saved.emit(self.record_id)
 
     def reload(self) -> None:

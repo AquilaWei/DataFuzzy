@@ -27,6 +27,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QLabel, QMenu, QVBoxLayout, QWidget
 
 from ..db import Record
+from .i18n import WEEKDAYS_EN, language, tr
 from .widgets import record_menu
 
 MARGIN = 16
@@ -45,6 +46,8 @@ WEEKDAYS = "一二三四五六日"
 
 
 def date_label(day: date) -> str:
+    if language() == "en":
+        return f"{day.isoformat()}  {WEEKDAYS_EN[day.weekday()]}"
     return f"{day.isoformat()}  週{WEEKDAYS[day.weekday()]}"
 
 
@@ -67,10 +70,12 @@ def session_label(start_time: str, end_time: str) -> str:
 
 
 def preview_text(zh_text: str, en_text: str) -> str:
-    """The first lines of the chart (Chinese, else English) for a card."""
-    text = zh_text.strip() or en_text.strip()
+    """The first lines of the chart for a card: in the interface language when there is that
+    version, else the other one."""
+    first, second = (en_text, zh_text) if language() == "en" else (zh_text, en_text)
+    text = first.strip() or second.strip()
     if not text:
-        return "（尚無內容）"
+        return tr("（尚無內容）")
     lines = [line.strip() for line in text.splitlines() if line.strip()][:PREVIEW_LINES]
     joined = "\n".join(lines)
     return joined if len(joined) <= PREVIEW_CHARS else joined[:PREVIEW_CHARS].rstrip() + "…"
@@ -132,7 +137,7 @@ class RecordCard(QWidget):
         when = date_label(record.visit_date) + (f"  {session_label(record.start_time, record.end_time)}" if record.start_time else "")
         self.date_label = QLabel(when)
         self.date_label.setStyleSheet("font-size: 15px; font-weight: 600;")
-        self.location_label = QLabel(record.location or "未填地點")
+        self.location_label = QLabel(record.location or tr("未填地點"))
         self.location_label.setObjectName("subtle")
         self.preview_label = QLabel(preview_text(record.zh_text, record.en_text))
         self.preview_label.setWordWrap(True)

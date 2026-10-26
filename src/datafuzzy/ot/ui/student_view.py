@@ -3,10 +3,18 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ..db import RecordStore
 from .cards import CardStack
+from .i18n import tr
 from .widgets import SegmentedControl
 
 NEWEST_FIRST = 0
@@ -28,13 +36,13 @@ class StudentRecordsView(QWidget):
         self.title.setObjectName("title")
         self.rename_btn = QPushButton("✎")
         self.rename_btn.setObjectName("flat")
-        self.rename_btn.setToolTip("修改姓名")
-        self.profile_btn = QPushButton("基本資訊")
-        self.profile_btn.setToolTip("Diagnosis、Grade、Goals 等，Excel 匯出時填入表頭")
+        self.rename_btn.setToolTip(tr("修改姓名"))
+        self.profile_btn = QPushButton(tr("基本資訊"))
+        self.profile_btn.setToolTip(tr("Diagnosis、Grade、Goals 等，Excel 匯出時填入表頭"))
         self.count = QLabel("")
         self.count.setObjectName("subtle")
-        self.sort = SegmentedControl(["最新在前", "最舊在前"])
-        self.empty = QLabel("這位學生還沒有病歷。按「新增病歷」開始記錄。")
+        self.sort = SegmentedControl([tr("最新在前"), tr("最舊在前")])
+        self.empty = QLabel(tr("這位學生還沒有病歷。按「新增病歷」開始記錄。"))
         self.empty.setObjectName("subtle")
         self.stack = CardStack()
         self.scroll = QScrollArea()
@@ -85,6 +93,6 @@ class StudentRecordsView(QWidget):
         self.title.setText(self.store.get_student(self.student_id).name)
         self.rename_btn.setVisible(True)
         self.profile_btn.setVisible(True)
-        self.count.setText(f"{len(records)} 份病歷")
+        self.count.setText(tr("{count} 份病歷", count=len(records)))
         self.stack.set_records(records)
         self.empty.setVisible(not records)

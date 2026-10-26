@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.18.0] - 2026-10-26
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 「設定」：側邊欄左下角的「設定」按鈕，或 macOS 選單 TheraNote → 設定…（⌘,）。可切換介面語言（中文／English），按確定後視窗立即換成新語言，未存的編輯會先存好；下次開啟沿用這個語言，解鎖畫面也會跟著換。
+- 病歷預覽跟著介面語言：中文介面優先顯示中文病歷，English 介面優先顯示英文病歷；該語言沒有內容時顯示另一種。開啟病歷與對照病歷時，也先停在該語言的分頁。
+- English 介面的日期顯示 Mon、Tue… 等星期縮寫。
+
+### 已知限制
+- 「模型管理」視窗與 DataFuzzy 共用，目前仍只有中文。
+- Excel 匯出的檔名格式不變（`姓名-開始日期至結束日期.xlsx`）。
+
 ## [0.7.0.17.0] - 2026-10-26
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。

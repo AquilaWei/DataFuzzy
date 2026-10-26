@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from ..db import RecordStore
 from .cards import date_label, preview_text, session_label
 from .date_view import NAME_ROLE, PLACE_ROLE, PREVIEW_ROLE, TIME_ROLE, DayRecordDelegate
+from .i18n import tr
 from .widgets import record_menu
 
 NO_LOCATION = "未填地點"
@@ -36,9 +37,9 @@ class LocationRecordsView(QWidget):
         self.store = store
         self.location: str | None = None
         self.student_id: int | None = None  # the student whose records are shown, if any
-        self.back_btn = QPushButton("‹ 學生")
+        self.back_btn = QPushButton(tr("‹ 學生"))
         self.back_btn.setObjectName("flat")
-        self.back_btn.setToolTip("回到這個地點的學生清單")
+        self.back_btn.setToolTip(tr("回到這個地點的學生清單"))
         self.back_btn.clicked.connect(lambda: self.show_student(None))
         self.title = QLabel("")
         self.title.setObjectName("title")
@@ -107,12 +108,12 @@ class LocationRecordsView(QWidget):
         seen = self.store.students_at(self.location)
         if self.student_id not in seen:
             self.student_id = None  # deleted, or no longer seen here
-        place = self.location or NO_LOCATION
+        place = self.location or tr(NO_LOCATION)
         self.back_btn.setVisible(self.student_id is not None)
         if self.student_id is None:
             self.pages.setCurrentWidget(self.students)
             self.title.setText(place)
-            self.count.setText(f"{len(seen)} 位學生")
+            self.count.setText(tr("{count} 位學生", count=len(seen)))
             for student_id in seen:
                 item = QListWidgetItem(names[student_id])
                 item.setData(Qt.ItemDataRole.UserRole, student_id)
@@ -121,13 +122,13 @@ class LocationRecordsView(QWidget):
         self.pages.setCurrentWidget(self.list)
         records = self.store.records_for_student(self.student_id)
         self.title.setText(names[self.student_id])
-        self.count.setText(f"{len(records)} 份病歷（所有地點）")
+        self.count.setText(tr("{count} 份病歷（所有地點）", count=len(records)))
         for record in records:
             first_line = preview_text(record.zh_text, record.en_text).splitlines()[0]
             item = QListWidgetItem(f"{record.visit_date.isoformat()}\n{record.location} · {first_line}")
             item.setData(Qt.ItemDataRole.UserRole, record.id)
             item.setData(NAME_ROLE, date_label(record.visit_date))
-            item.setData(PLACE_ROLE, record.location or NO_LOCATION)
+            item.setData(PLACE_ROLE, record.location or tr(NO_LOCATION))
             item.setData(PREVIEW_ROLE, first_line)
             item.setData(TIME_ROLE, session_label(record.start_time, record.end_time))
             self.list.addItem(item)

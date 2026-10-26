@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 
 from ..db import StudentProfile
 from ..school_year import default_school_year, format_school_year, parse_school_year
+from .i18n import tr
 
 MONTH_FORMAT = "MM/yyyy"
 
@@ -36,13 +37,13 @@ class StudentProfileDialog(QDialog):
     def __init__(self, name: str, profile: StudentProfile, today: date | None = None,
                  parent: QWidget | None = None, locations: list[str] | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle(f"{name} 的基本資訊")
+        self.setWindowTitle(tr("{name} 的基本資訊", name=name))
         self.resize(460, 440)
         self.location = QComboBox()
         self.location.setObjectName("place")
         self.location.setEditable(True)
         self.location.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        self.location.lineEdit().setPlaceholderText("學校或診所；新病歷會帶入")
+        self.location.lineEdit().setPlaceholderText(tr("學校或診所；新病歷會帶入"))
         self.location.addItems(locations or [])
         self.location.setEditText(profile.location)
         self.diagnosis = QLineEdit(profile.diagnosis)
@@ -58,12 +59,12 @@ class StudentProfileDialog(QDialog):
 
         school_year = QHBoxLayout()
         school_year.addWidget(self.year_from)
-        school_year.addWidget(QLabel("到"))
+        school_year.addWidget(QLabel(tr("到")))
         school_year.addWidget(self.year_to)
         school_year.addStretch(1)
         form = QFormLayout()
         form.addRow("Name", QLabel(name))
-        form.addRow("地點", self.location)
+        form.addRow(tr("地點"), self.location)
         form.addRow("Diagnosis", self.diagnosis)
         form.addRow("Age", self.age)
         form.addRow("Grade", self.grade)
@@ -108,7 +109,7 @@ class ProfileSummary(QFrame):
         self.setObjectName("profile")
         self.name = QLabel("")
         self.name.setObjectName("title")
-        self.edit_btn = QPushButton("編輯基本資訊")
+        self.edit_btn = QPushButton(tr("編輯基本資訊"))
         self.edit_btn.setObjectName("flat")
         self.values: dict[str, QLabel] = {}
         grid = QGridLayout()
@@ -116,7 +117,7 @@ class ProfileSummary(QFrame):
         grid.setVerticalSpacing(4)
         for i, (label, field) in enumerate(self.FIELDS + (("School year", "school_year"), ("Goals", "goals"))):
             row, col = divmod(i, self.PER_ROW) if i < len(self.FIELDS) else (i - len(self.FIELDS) + 2, 0)
-            caption = QLabel(label)
+            caption = QLabel(tr(label))
             caption.setObjectName("subtle")
             caption.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
             value = QLabel("")
