@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime
 
-from PySide6.QtCore import QTimer, Signal
+from PySide6.QtCore import QPoint, Qt, QTimer, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QComboBox,
@@ -15,9 +15,11 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QSplitter,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -25,6 +27,7 @@ from PySide6.QtWidgets import (
 
 from ..db import DuplicateRecord, RecordStore, default_end_time
 from .cards import time_label
+from .compare_panel import ComparePanel, candidate_label, compare_candidates
 from .date_view import to_date, to_qdate
 
 AUTOSAVE_MS = 800
@@ -69,7 +72,9 @@ class RecordEditor(QWidget):
         record = store.get_record(record_id)
         student = store.get_student(record.student_id)
         self.record_id = record_id
+        self.student_id = record.student_id
         self.student_name = student.name
+        self.compare: ComparePanel | None = None
         self.visit_date = record.visit_date
         self._dirty: set[str] = set()
 
@@ -81,6 +86,8 @@ class RecordEditor(QWidget):
         self.date_btn.setObjectName("flat")
         self.date_btn.setToolTip("修改日期")
         self._show_title()
+        self.compare_btn = QPushButton("對照其他病歷")
+        self.compare_btn.setToolTip("在右邊並排顯示這位學生的另一份病歷")
         self.status = QLabel("")
         self.status.setObjectName("subtle")
 
@@ -129,6 +136,7 @@ class RecordEditor(QWidget):
         top.addWidget(self.back_btn)
         top.addStretch(1)
         top.addWidget(self.status)
+        top.addWidget(self.compare_btn)
         place = QHBoxLayout()
         place.addWidget(QLabel("地點"))
         place.addWidget(self.location_box, 1)
@@ -137,20 +145,28 @@ class RecordEditor(QWidget):
         place.addWidget(self.time_box)
         place.addWidget(QLabel("結束時間"))
         place.addWidget(self.end_box)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 16, 24, 20)
-        layout.setSpacing(10)
-        layout.addLayout(top)
         heading = QHBoxLayout()
         heading.setSpacing(4)
         heading.addWidget(self.title)
         heading.addWidget(self.date_btn)
         heading.addStretch(1)
-        layout.addLayout(heading)
-        layout.addLayout(place)
-        layout.addWidget(QLabel("活動"))
-        layout.addWidget(self.activity_edit)
-        layout.addWidget(self.tabs, 1)
+        chart = QWidget()
+        body = QVBoxLayout(chart)
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(10)
+        body.addLayout(heading)
+        body.addLayout(place)
+        body.addWidget(QLabel("活動"))
+        body.addWidget(self.activity_edit)
+        body.addWidget(self.tabs, 1)
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.splitter.setChildrenCollapsible(False)
+        self.splitter.addWidget(chart)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 16, 24, 20)
+        layout.setSpacing(10)
+        layout.addLayout(top)
+        layout.addWidget(self.splitter, 1)
 
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
@@ -166,6 +182,38 @@ class RecordEditor(QWidget):
         self.back_btn.clicked.connect(self.close_editor)
         self.date_btn.clicked.connect(lambda: self.change_date())
         self.tabs.tabBarDoubleClicked.connect(self.copy_tab)
+        self.compare_btn.clicked.connect(self._show_compare_menu)
+
+    def compare_menu(self) -> QMenu:
+        """The student's other charts, nearest earlier visit first (see compare_candidates)."""
+        menu = QMenu(self)
+        candidates = compare_candidates(self.store.records_for_student(self.student_id),
+                                        self.record_id, self.visit_date)
+        if not candidates:
+            menu.addAction("這位學生沒有其他病歷").setEnabled(False)
+        for record in candidates:
+            menu.addAction(candidate_label(record)).triggered.connect(
+                lambda _=False, rid=record.id: self.show_compare(rid))
+        return menu
+
+    def _show_compare_menu(self) -> None:
+        self.compare_menu().exec(self.compare_btn.mapToGlobal(QPoint(0, self.compare_btn.height())))
+
+    def show_compare(self, record_id: int) -> None:
+        """Show another chart read-only on the right, in place of any shown before."""
+        self.close_compare()
+        self.compare = ComparePanel(self.store.get_record(record_id))
+        self.compare.closed.connect(self.close_compare)
+        self.splitter.addWidget(self.compare)
+        half = max(self.splitter.width() // 2, 1)
+        self.splitter.setSizes([half, half])
+
+    def close_compare(self) -> None:
+        if self.compare is None:
+            return
+        self.compare.setParent(None)  # out of the splitter now, not when deleteLater runs
+        self.compare.deleteLater()
+        self.compare = None
 
     def copy_tab(self, index: int) -> None:
         """Put the whole Chinese (0) or English (1) chart on the clipboard."""

@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.13.0] - 2026-10-26
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 病歷編輯畫面右上角新增「對照其他病歷」。清單從目前這份往前排，最接近的上一次在最上面，越往下越舊；比目前還新的病歷排在最後。
+- 選好後，那份病歷會以唯讀方式並排顯示在右邊（日期、時間、地點、活動、中英文），中間可拖曳調整寬度，按 ✕ 關閉。各種模式開啟的病歷都能使用。
+
 ## [0.7.0.12.0] - 2026-10-26
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。

@@ -233,3 +233,52 @@ def test_half_typed_start_time_is_not_saved(qtbot, store, record):
     editor.flush()
     assert store.get_record(record.id).start_time == "08:00"
     assert "9:30 AM" in editor.status.text()
+
+
+def compare_setup(store, record):
+    student_id = record.student_id
+    older = store.add_record(student_id, date(2026, 9, 10), "新竹國小", "最早一次")
+    nearer = store.add_record(student_id, date(2026, 9, 24), "新竹國小", "上一次", activity="串珠")
+    later = store.add_record(student_id, date(2026, 10, 8), "新竹國小", "下一次")
+    return older, nearer, later
+
+
+def test_compare_list_starts_at_the_nearest_earlier_visit_and_goes_back(qtbot, store, record):
+    compare_setup(store, record)
+    editor = make_editor(qtbot, store, record)
+    assert [a.text()[:10] for a in editor.compare_menu().actions()] == [
+        "2026-09-24", "2026-09-10", "2026-10-08"]
+
+
+def test_compare_list_says_when_there_is_nothing_else(qtbot, store, record):
+    editor = make_editor(qtbot, store, record)
+    [only] = editor.compare_menu().actions()
+    assert (only.text(), only.isEnabled()) == ("這位學生沒有其他病歷", False)
+
+
+def test_picking_a_visit_shows_it_beside_the_chart(qtbot, store, record):
+    _, nearer, _ = compare_setup(store, record)
+    editor = make_editor(qtbot, store, record)
+    editor.compare_menu().actions()[0].trigger()
+    panel = editor.compare
+    assert panel.record_id == nearer.id
+    assert (panel.activity.toPlainText(), panel.tabs.widget(0).toPlainText()) == ("串珠", "上一次")
+    assert panel.tabs.widget(0).isReadOnly()
+    assert editor.splitter.indexOf(panel) == 1
+
+
+def test_picking_another_visit_replaces_the_shown_one(qtbot, store, record):
+    older, _, _ = compare_setup(store, record)
+    editor = make_editor(qtbot, store, record)
+    editor.compare_menu().actions()[0].trigger()
+    editor.compare_menu().actions()[1].trigger()
+    assert editor.compare.record_id == older.id
+    assert editor.splitter.count() == 2
+
+
+def test_closing_the_comparison_leaves_the_chart_alone(qtbot, store, record):
+    compare_setup(store, record)
+    editor = make_editor(qtbot, store, record)
+    editor.compare_menu().actions()[0].trigger()
+    editor.compare.close_btn.click()
+    assert editor.compare is None
