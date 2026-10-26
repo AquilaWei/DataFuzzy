@@ -103,15 +103,14 @@ class LocationRecordsView(QWidget):
             self.count.setText("")
             self.back_btn.hide()
             return
-        records = self.store.records_at(self.location)
         names = {s.id: s.name for s in self.store.students()}
-        if self.student_id not in {r.student_id for r in records}:
-            self.student_id = None  # their last record here was moved or deleted
+        seen = self.store.students_at(self.location)
+        if self.student_id not in seen:
+            self.student_id = None  # deleted, or no longer seen here
         place = self.location or NO_LOCATION
         self.back_btn.setVisible(self.student_id is not None)
         if self.student_id is None:
             self.pages.setCurrentWidget(self.students)
-            seen = list(dict.fromkeys(r.student_id for r in records))
             self.title.setText(place)
             self.count.setText(f"{len(seen)} 位學生")
             for student_id in seen:

@@ -294,6 +294,34 @@ def test_add_record_keeps_the_start_time(store):
     assert (record.start_time, store.get_record(record.id).start_time) == ("14:00", "14:00")
 
 
+def test_student_location_is_the_profiles(store):
+    a = store.add_student("甲")
+    store.add_record(a.id, date(2026, 10, 1), "舊校")
+    store.set_profile(a.id, StudentProfile(location="新校"))
+    assert store.student_location(a.id) == "新校"
+
+
+def test_student_location_without_one_in_the_profile_is_the_latest_visits(store):
+    a = store.add_student("甲")
+    store.add_record(a.id, date(2026, 10, 1), "舊校")
+    assert store.student_location(a.id) == "舊校"
+
+
+def test_all_locations_include_ones_only_set_in_a_profile(store):
+    a = store.add_student("甲")
+    store.add_record(a.id, date(2026, 10, 1), "A校")
+    store.set_profile(store.add_student("乙").id, StudentProfile(location="C校"))
+    assert store.all_locations() == ["A校", "C校"]
+
+
+def test_students_at_a_location_are_those_seen_there_then_those_located_there(store):
+    a, b, c = (store.add_student(n) for n in ("甲", "乙", "丙"))
+    store.add_record(a.id, date(2026, 10, 1), "A校")
+    store.add_record(b.id, date(2026, 10, 2), "A校")
+    store.set_profile(c.id, StudentProfile(location="A校"))
+    assert store.students_at("A校") == [b.id, a.id, c.id]
+
+
 def test_all_locations_are_distinct_most_recent_first(store):
     a = store.add_student("甲")
     store.add_record(a.id, date(2026, 10, 1), "A校")

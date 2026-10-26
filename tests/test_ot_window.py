@@ -77,20 +77,41 @@ def test_selecting_a_student_shows_their_cards_newest_first(qtbot, store):
     assert [c.date_label.text()[:10] for c in window.student_view.stack.cards] == ["2026-10-08", "2026-10-01"]
 
 
-def test_first_record_of_a_student_starts_with_empty_location(qtbot, store):
+def test_first_record_of_a_student_without_a_location_has_none(qtbot, store):
     window = make_window(qtbot, store)
     student_id = window.add_student("王小明")
-    window.new_record(student_id, OCT_1)
-    assert window.editor.location_box.currentText() == ""
+    record_id = window.new_record(student_id, OCT_1)
+    assert store.get_record(record_id).location == ""
 
 
-def test_next_record_starts_with_the_students_last_location(qtbot, store):
+def test_new_record_takes_the_location_from_the_profile(qtbot, store):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小明")
+    store.set_profile(student_id, StudentProfile(location="新竹國小"))
+    record_id = window.new_record(student_id, OCT_1)
+    assert store.get_record(record_id).location == "新竹國小"
+
+
+def test_without_a_profile_location_a_new_record_takes_the_last_visits(qtbot, store):
     window = make_window(qtbot, store)
     student_id = window.add_student("王小明")
     first = window.new_record(student_id, OCT_1)
     store.update_record(first, location="新竹國小")
-    window.new_record(student_id, date(2026, 10, 8))
-    assert window.editor.location_box.currentText() == "新竹國小"
+    second = window.new_record(student_id, date(2026, 10, 8))
+    assert store.get_record(second).location == "新竹國小"
+
+
+def test_changing_the_profile_location_keeps_old_records_where_they_were(qtbot, store, monkeypatch):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小明")
+    store.set_profile(student_id, StudentProfile(location="A校"))
+    old = window.new_record(student_id, OCT_1)
+    monkeypatch.setattr(window, "_ask_profile", lambda name, current: StudentProfile(location="B校"))
+    window.edit_profile(student_id)
+    new = window.new_record(student_id, date(2026, 10, 8))
+    assert (store.get_record(old).location, store.get_record(new).location) == ("A校", "B校")
+    assert window.editor.profile.values["location"].text() == "B校"
+    assert location_names(window) == ["B校", "A校"]
 
 
 def test_new_record_ends_thirty_minutes_after_its_start(qtbot, store):
@@ -116,8 +137,8 @@ def test_new_record_opens_the_editor(qtbot, store):
     window = make_window(qtbot, store)
     student_id = window.add_student("王小明")
     window.new_record(student_id, OCT_1)
-    assert (window.content.currentWidget() is window.editor, window.editor.title.text()) == (
-        True, "王小明 · 2026-10-01")
+    assert (window.content.currentWidget() is window.editor, window.editor.profile.name.text(),
+            window.editor.title.text()) == (True, "王小明", "2026-10-01  週四")
 
 
 def test_new_record_appears_as_a_card(qtbot, store):
@@ -152,16 +173,17 @@ def test_declining_the_duplicate_prompt_opens_nothing(qtbot, store, monkeypatch)
 def test_new_record_button_asks_which_student_and_day(qtbot, store, monkeypatch):
     student = store.add_student("王小明")
     window = make_window(qtbot, store)
-    monkeypatch.setattr(window, "_pick_new_record", lambda: (student.id, OCT_1, None))
+    monkeypatch.setattr(window, "_pick_new_record", lambda: (student.id, OCT_1))
     window.add_record_btn.click()
-    assert window.editor.title.text() == "王小明 · 2026-10-01"
+    assert window.editor.record_id == store.find_record(student.id, OCT_1).id
 
 
 def _dialog_setup(store):
     a, b, c = (store.add_student(n) for n in ("甲", "乙", "丙"))
     store.add_record(a.id, OCT_1, "A校")
     store.add_record(b.id, OCT_1, "B校")
-    store.add_record(c.id, date(2026, 10, 2), "B校")
+    store.add_record(c.id, date(2026, 10, 2), "A校")
+    store.set_profile(c.id, StudentProfile(location="B校"))  # moved from A校 to B校
     return a, b, c
 
 
@@ -169,15 +191,15 @@ def _names(box):
     return {box.itemText(i) for i in range(box.count())}
 
 
-def test_new_record_dialog_by_location_lists_students_seen_there(qtbot, store):
+def test_new_record_dialog_by_location_lists_the_students_located_there(qtbot, store):
     _dialog_setup(store)
-    dialog = main_window.NewRecordDialog(store, None, date(2026, 10, 2), by_location=True)
+    dialog = main_window.NewRecordDialog(store, None, OCT_1, by_location=True, location="B校")
     qtbot.addWidget(dialog)
-    assert (dialog.location_box.currentText(), _names(dialog.student_box)) == ("B校", {"乙", "丙"})
+    assert _names(dialog.student_box) == {"乙", "丙"}
     dialog.location_box.setCurrentIndex(dialog.location_box.findData("A校"))
     assert _names(dialog.student_box) == {"甲"}
     dialog.location_box.setCurrentIndex(dialog.location_box.findData(None))
-    assert (_names(dialog.student_box), dialog.choice()[2]) == ({"甲", "乙", "丙"}, None)
+    assert _names(dialog.student_box) == {"甲", "乙", "丙"}
 
 
 def test_new_record_dialog_starts_at_the_days_location(qtbot, store):
@@ -187,22 +209,14 @@ def test_new_record_dialog_starts_at_the_days_location(qtbot, store):
     assert dialog.location_box.currentText() in ("A校", "B校")
     dialog = main_window.NewRecordDialog(store, None, OCT_1, by_location=True, location="A校")
     qtbot.addWidget(dialog)
-    assert (dialog.choice()[2], _names(dialog.student_box)) == ("A校", {"甲"})
+    assert (dialog.location(), _names(dialog.student_box)) == ("A校", {"甲"})
 
 
 def test_new_record_dialog_by_student_has_no_location(qtbot, store):
     _dialog_setup(store)
     dialog = main_window.NewRecordDialog(store, None, OCT_1)
     qtbot.addWidget(dialog)
-    assert (dialog.location_box, len(_names(dialog.student_box)), dialog.choice()[2]) == (None, 3, None)
-
-
-def test_new_record_uses_the_picked_location(qtbot, store, monkeypatch):
-    a, _, _ = _dialog_setup(store)
-    window = make_window(qtbot, store)
-    monkeypatch.setattr(window, "_pick_new_record", lambda: (a.id, date(2026, 10, 9), "B校"))
-    window.add_record_btn.click()
-    assert window.editor.location_box.currentText() == "B校"
+    assert (dialog.location_box, len(_names(dialog.student_box)), dialog.location()) == (None, 3, None)
 
 
 def test_cancelled_new_record_dialog_creates_nothing(qtbot, store, monkeypatch):
@@ -533,6 +547,16 @@ def test_location_mode_lists_places_and_their_records_newest_first(qtbot, store)
     assert view.students.count() == 1
 
 
+def test_location_mode_lists_a_student_located_there_before_their_first_visit(qtbot, store):
+    student = store.add_student("王小明")
+    store.set_profile(student.id, StudentProfile(location="新竹國小"))
+    window = make_window(qtbot, store)
+    window.set_mode(LOCATION_MODE)
+    view = window.location_view
+    assert location_names(window) == ["新竹國小"]
+    assert [view.students.item(i).text() for i in range(view.students.count())] == ["王小明"]
+
+
 def test_location_mode_clicking_a_student_shows_all_their_records(qtbot, store):
     ming = store.add_student("王小明")
     store.add_record(ming.id, date(2026, 10, 1), "新竹國小", "一")
@@ -555,18 +579,3 @@ def test_location_mode_clicking_a_student_shows_all_their_records(qtbot, store):
     assert (window.content.currentWidget() is view, view.list.count()) == (True, 3)
     view.back_btn.click()
     assert (view.pages.currentWidget() is view.students, view.title.text()) == (True, "新竹國小")
-
-
-def test_editing_a_location_moves_the_record_between_places(qtbot, store):
-    student = store.add_student("王小明")
-    record = store.add_record(student.id, OCT_1, "新竹國小", "一")
-    window = make_window(qtbot, store)
-    window.set_mode(LOCATION_MODE)
-    view = window.location_view
-    view.students.itemClicked.emit(view.students.item(0))
-    view.list.itemClicked.emit(view.list.item(0))
-    window.editor.location_box.setEditText("台北診所")
-    window.editor.close_editor()
-    assert location_names(window) == ["台北診所"]
-    assert window.content.currentWidget() is window.location_view
-    assert store.get_record(record.id).location == "台北診所"

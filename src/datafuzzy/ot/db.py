@@ -115,8 +115,9 @@ class Student:
 
 @dataclass(frozen=True)
 class StudentProfile:
-    """What the school form's header asks about a student, besides the name. All free text;
-    `school_year` reads like "09/2026-06/2027"."""
+    """What the school form's header asks about a student, besides the name, and where they
+    are seen (one place per student; new records take it). All free text; `school_year` reads
+    like "09/2026-06/2027"."""
     diagnosis: str = ""
     age: str = ""
     grade: str = ""
@@ -124,6 +125,7 @@ class StudentProfile:
     case_manager: str = ""
     school_year: str = ""
     goals: str = ""
+    location: str = ""
 
 
 SESSION_MINUTES = 30  # a new session's default length
@@ -440,6 +442,11 @@ class RecordStore:
                 return record.location
         return ""
 
+    def student_location(self, student_id: int) -> str:
+        """Where the student is seen now: the profile's location, or for a student whose
+        profile has none yet (one from before profiles had it), their latest visit's."""
+        return self.get_profile(student_id).location or self.student_default_location(student_id)
+
     def student_default_start_time(self, student_id: int) -> str:
         """The start time of the student's latest visit that has one, "" if none does."""
         for record in self.records_for_student(student_id, newest_first=True):
@@ -454,7 +461,8 @@ class RecordStore:
         return [r for r in records if r.location.strip() == location]
 
     def all_locations(self) -> list[str]:
-        """Every location used so far, most recently visited first, for a drop-down."""
+        """Every location used so far, most recently visited first, then those only set in a
+        profile (by name), for a drop-down."""
         with self._lock:
             rows = self._db.execute(
                 "SELECT location FROM record ORDER BY visit_date DESC, id DESC").fetchall()
@@ -463,7 +471,16 @@ class RecordStore:
             location = self._dec(blob, "record.location")
             if location:
                 seen.setdefault(location)
-        return list(seen)
+        profiled = {self.get_profile(s.id).location for s in self.students()} - set(seen) - {""}
+        return list(seen) + sorted(profiled)
+
+    def students_at(self, location: str) -> list[int]:
+        """Ids of the students seen at `location` ("" for none), most recently first, then
+        those whose location it is now but who have no record there yet, by name."""
+        seen = list(dict.fromkeys(r.student_id for r in self.records_at(location)))
+        current = [s.id for s in self.students()
+                   if s.id not in seen and location and self.student_location(s.id) == location]
+        return seen + current
 
     # --- Excel export folder ----------------------------------------------------------
 

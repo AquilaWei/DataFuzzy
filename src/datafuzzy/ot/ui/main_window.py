@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -53,7 +54,7 @@ PLACEHOLDER, STUDENT_PAGE, DAY_PAGE, EDITOR_PAGE, LOCATION_PAGE = range(5)
 
 class NewRecordDialog(QDialog):
     """Choose the student and the day of a new chart. With `by_location`, a location is
-    picked first and the student list narrows to those seen there. It starts at `location`
+    picked first and the student list narrows to those whose location it is. It starts at `location`
     if given, else at where that day's sessions were, else at the latest location."""
 
     ALL_LOCATIONS = "（所有學生）"
@@ -99,16 +100,15 @@ class NewRecordDialog(QDialog):
         location = self.location()
         students = self.store.students()
         if location is not None:
-            seen = {r.student_id for r in self.store.records_at(location)}
-            students = [s for s in students if s.id in seen]
+            students = [s for s in students if self.store.student_location(s.id) == location]
         self.student_box.clear()
         for student in students:
             self.student_box.addItem(student.name, student.id)
         self.student_box.setCurrentIndex(max(self.student_box.findData(keep), 0))
         self.ok_button.setEnabled(bool(students))
 
-    def choice(self) -> tuple[int, date, str | None]:
-        return self.student_box.currentData(), to_date(self.date_edit.date()), self.location()
+    def choice(self) -> tuple[int, date]:
+        return self.student_box.currentData(), to_date(self.date_edit.date())
 
 
 class TheraNoteWindow(QMainWindow):
@@ -262,16 +262,21 @@ class TheraNoteWindow(QMainWindow):
         return True
 
     def _ask_profile(self, name: str, current: StudentProfile) -> StudentProfile | None:
-        dialog = StudentProfileDialog(name, current, parent=self)
+        dialog = StudentProfileDialog(name, current, parent=self, locations=self.store.all_locations())
         return dialog.profile() if dialog.exec() == QDialog.DialogCode.Accepted else None
 
     def edit_profile(self, student_id: int) -> bool:
-        """Edit a student's profile in a dialog. False if it was cancelled."""
-        profile = self._ask_profile(self.store.get_student(student_id).name,
-                                    self.store.get_profile(student_id))
+        """Edit a student's profile in a dialog. False if it was cancelled. A new location
+        applies to the student's new records; the ones already written keep theirs."""
+        current = replace(self.store.get_profile(student_id),
+                          location=self.store.student_location(student_id))
+        profile = self._ask_profile(self.store.get_student(student_id).name, current)
         if profile is None:
             return False
         self.store.set_profile(student_id, profile)
+        if self.editor is not None and self.editor.student_id == student_id:
+            self.editor.show_profile()
+        self.refresh_locations()  # a location may be new
         return True
 
     def student_menu(self, pos: QPoint) -> QMenu | None:
@@ -377,7 +382,7 @@ class TheraNoteWindow(QMainWindow):
 
     # --- records --------------------------------------------------------------------
 
-    def _pick_new_record(self) -> tuple[int, date, str | None] | None:
+    def _pick_new_record(self) -> tuple[int, date] | None:
         mode = self.mode_switch.index()
         dialog = NewRecordDialog(self.store, self.current_student_id(),
                                  self.calendar.selected() if mode == DATE_MODE else date.today(), self,
@@ -390,17 +395,16 @@ class TheraNoteWindow(QMainWindow):
             self, "已有病歷", f"{student_name} 在 {day.isoformat()} 已經有一份病歷。要開啟它嗎？")
         return answer == QMessageBox.StandardButton.Yes
 
-    def new_record(self, student_id: int | None = None, day: date | None = None,
-                   location: str | None = None) -> int | None:
+    def new_record(self, student_id: int | None = None, day: date | None = None) -> int | None:
         """Start a chart for a student on a day (asking which, unless given) and open it.
-        The location (unless given) and start time start as the student's last ones; a first
-        chart starts empty. If the student already has a chart that day, offers to open it instead.
-        Returns the record id."""
+        It is at the student's location (from the profile) and starts at their last start
+        time; a first chart starts without one. If the student already has a chart that day,
+        offers to open it instead. Returns the record id."""
         if student_id is None or day is None:
             picked = self._pick_new_record()
             if picked is None:
                 return None
-            student_id, day, location = picked
+            student_id, day = picked
         existing = self.store.find_record(student_id, day)
         if existing:
             if self._confirm_open_existing(self.store.get_student(student_id).name, day):
@@ -410,8 +414,7 @@ class TheraNoteWindow(QMainWindow):
         start_time = self.store.student_default_start_time(student_id)
         try:
             record = self.store.add_record(
-                student_id, day,
-                self.store.student_default_location(student_id) if location is None else location,
+                student_id, day, self.store.student_location(student_id),
                 start_time=start_time, end_time=default_end_time(start_time))
         except DuplicateRecord as e:  # created elsewhere between the check and now
             self.open_record(e.record_id)
@@ -442,6 +445,7 @@ class TheraNoteWindow(QMainWindow):
         self.close_editor()
         editor = RecordEditor(self.store, record_id, parent=self, **self._editor_kwargs)
         editor.saved.connect(lambda _: self.refresh_after_change())
+        editor.edit_profile.connect(lambda sid: self.edit_profile(sid))
         editor.closed.connect(self._editor_closed)
         self.editor = editor
         old = self.content.widget(EDITOR_PAGE)

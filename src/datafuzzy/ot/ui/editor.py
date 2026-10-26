@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from datetime import date, datetime
 
 from PySide6.QtCore import QPoint, Qt, QTimer, Signal
@@ -13,6 +14,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QMenu,
@@ -26,8 +28,9 @@ from PySide6.QtWidgets import (
 )
 
 from ..db import DuplicateRecord, RecordStore, default_end_time
-from .cards import time_label
+from .cards import date_label, time_label
 from .compare_panel import ComparePanel, candidate_label, compare_candidates
+from .profile_dialog import ProfileSummary
 from .date_view import to_date, to_qdate
 
 AUTOSAVE_MS = 800
@@ -64,6 +67,7 @@ class RecordEditor(QWidget):
 
     closed = Signal()    # the back button was pressed, after everything was saved
     saved = Signal(int)  # a record id, after a write; views showing it can refresh
+    edit_profile = Signal(int)  # student id, from the profile's edit button
 
     def __init__(self, store: RecordStore, record_id: int, debounce_ms: int = AUTOSAVE_MS,
                  parent: QWidget | None = None) -> None:
@@ -80,8 +84,8 @@ class RecordEditor(QWidget):
 
         self.back_btn = QPushButton("‹ 返回")
         self.back_btn.setObjectName("flat")
-        self.title = QLabel("")
-        self.title.setObjectName("title")
+        self.title = QLabel("")  # this visit's day; the student's name heads the profile above
+        self.title.setStyleSheet("font-size: 16px; font-weight: 600;")
         self.date_btn = QPushButton("✎")
         self.date_btn.setObjectName("flat")
         self.date_btn.setToolTip("修改日期")
@@ -91,13 +95,11 @@ class RecordEditor(QWidget):
         self.status = QLabel("")
         self.status.setObjectName("subtle")
 
-        self.location_box = QComboBox()
-        self.location_box.setObjectName("place")
-        self.location_box.setEditable(True)
-        self.location_box.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)  # Enter must not add a row
-        self.location_box.lineEdit().setPlaceholderText("地點（例如學校、診所）")
-        self.location_box.addItems(store.all_locations())
-        self.location_box.setEditText(record.location)
+        self.profile = ProfileSummary()
+        self.show_profile()
+        # The record keeps the place it was seen at; the profile's location is for new ones.
+        self.record_place = QLabel(f"地點：{record.location or '未填'}")
+        self.record_place.setObjectName("subtle")
 
         self.time_box = QComboBox()
         self.time_box.setObjectName("time")  # the stylesheet gives it a clock icon
@@ -137,25 +139,32 @@ class RecordEditor(QWidget):
         top.addStretch(1)
         top.addWidget(self.status)
         top.addWidget(self.compare_btn)
-        place = QHBoxLayout()
-        place.addWidget(QLabel("地點"))
-        place.addWidget(self.location_box, 1)
-        place.addSpacing(12)
-        place.addWidget(QLabel("開始時間"))
-        place.addWidget(self.time_box)
-        place.addWidget(QLabel("結束時間"))
-        place.addWidget(self.end_box)
         heading = QHBoxLayout()
         heading.setSpacing(4)
         heading.addWidget(self.title)
         heading.addWidget(self.date_btn)
+        heading.addSpacing(8)
+        heading.addWidget(self.record_place)
         heading.addStretch(1)
+        times = QHBoxLayout()
+        times.addWidget(QLabel("開始時間"))
+        times.addWidget(self.time_box)
+        times.addSpacing(12)
+        times.addWidget(QLabel("結束時間"))
+        times.addWidget(self.end_box)
+        times.addStretch(1)
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFrameShadow(QFrame.Shadow.Plain)
+        line.setStyleSheet("color: palette(mid);")
         chart = QWidget()
         body = QVBoxLayout(chart)
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(10)
+        body.addWidget(self.profile)  # who the student is first, then this visit
+        body.addWidget(line)
         body.addLayout(heading)
-        body.addLayout(place)
+        body.addLayout(times)
         body.addWidget(QLabel("活動"))
         body.addWidget(self.activity_edit)
         body.addWidget(self.tabs, 1)
@@ -173,7 +182,6 @@ class RecordEditor(QWidget):
         self._timer.setInterval(debounce_ms)
         self._timer.timeout.connect(self.flush)
         # Connected after the texts are filled in, so showing a record is not an edit.
-        self.location_box.editTextChanged.connect(lambda: self._changed("location"))
         self.activity_edit.textChanged.connect(lambda: self._changed("activity"))
         self.time_box.editTextChanged.connect(self._start_changed)
         self.end_box.editTextChanged.connect(self._end_changed)
@@ -183,6 +191,14 @@ class RecordEditor(QWidget):
         self.date_btn.clicked.connect(lambda: self.change_date())
         self.tabs.tabBarDoubleClicked.connect(self.copy_tab)
         self.compare_btn.clicked.connect(self._show_compare_menu)
+        self.profile.edit_requested.connect(lambda: self.edit_profile.emit(self.student_id))
+
+    def show_profile(self) -> None:
+        """Re-read the student's name and profile, e.g. after they were edited."""
+        self.student_name = self.store.get_student(self.student_id).name
+        profile = self.store.get_profile(self.student_id)
+        self.profile.show_profile(self.student_name,
+                                  replace(profile, location=self.store.student_location(self.student_id)))
 
     def compare_menu(self) -> QMenu:
         """The student's other charts, nearest earlier visit first (see compare_candidates)."""
@@ -224,7 +240,7 @@ class RecordEditor(QWidget):
         self.status.setText(f"已複製{('中文', '英文')[index]}病歷")
 
     def _show_title(self) -> None:
-        self.title.setText(f"{self.student_name} · {self.visit_date.isoformat()}")
+        self.title.setText(date_label(self.visit_date))
 
     def _ask_date(self) -> date | None:
         dialog = QDialog(self)
@@ -283,8 +299,7 @@ class RecordEditor(QWidget):
         self._timer.stop()
         if not self._dirty:
             return
-        values = {"location": self.location_box.currentText().strip(),
-                  "activity": self.activity_edit.toPlainText(),
+        values = {"activity": self.activity_edit.toPlainText(),
                   "zh_text": self.zh_edit.toPlainText(),
                   "en_text": self.en_edit.toPlainText(),
                   "start_time": normal_time(self.time_box.currentText()),

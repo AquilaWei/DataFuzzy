@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.15.0] - 2026-10-26
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 變更
+- 地點改為學生基本資訊的一部分，每位學生一個地點。病歷編輯畫面不再有地點欄；新增病歷時自動帶入學生的地點。還沒在基本資訊填地點的學生，沿用最近一次病歷的地點。
+- 開啟病歷時，最上方顯示學生的基本資訊（姓名、地點、Diagnosis、Age、Grade、Classroom、Case manager、School year、Goals），右上角可「編輯基本資訊」；下方才是這次的日期、時間、活動與中英文病歷，日期旁標示這份病歷記錄的地點。
+- 修改學生的地點只影響之後新增的病歷，舊病歷保留原本的地點（地點模式與 Excel 匯出也照舊）。
+- 新增病歷視窗選地點後，只列出地點是這裡的學生；地點模式也會列出地點已設在這裡、但還沒有病歷的學生。
+
 ## [0.7.0.14.0] - 2026-10-26
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。

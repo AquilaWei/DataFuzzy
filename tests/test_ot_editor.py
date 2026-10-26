@@ -2,7 +2,7 @@ from datetime import date, datetime
 
 import pytest
 
-from datafuzzy.ot.db import RecordStore
+from datafuzzy.ot.db import RecordStore, StudentProfile
 from datafuzzy.ot.ui.editor import RecordEditor
 
 KEY = bytes(range(32))
@@ -30,20 +30,36 @@ def make_editor(qtbot, store, record, debounce_ms=10):
 
 def test_editor_shows_student_date_and_both_texts(qtbot, store, record):
     editor = make_editor(qtbot, store, record)
-    assert editor.title.text() == "王小明 · 2026-10-01"
+    assert (editor.profile.name.text(), editor.title.text()) == ("王小明", "2026-10-01  週四")
     assert (editor.zh_edit.toPlainText(), editor.en_edit.toPlainText()) == ("今天練習剪紙", "Cutting practice")
 
 
-def test_editor_shows_record_location(qtbot, store, record):
+def test_profile_is_shown_above_the_chart(qtbot, store, record):
+    store.set_profile(record.student_id, StudentProfile(diagnosis="ADHD, ODD", grade="3", location="新竹國小"))
     editor = make_editor(qtbot, store, record)
-    assert editor.location_box.currentText() == "新竹國小"
+    values = editor.profile.values
+    assert (values["diagnosis"].text(), values["grade"].text(), values["location"].text(), values["age"].text()) == (
+        "ADHD, ODD", "3", "新竹國小", "—")
+    chart = editor.splitter.widget(0).layout()
+    assert chart.indexOf(editor.profile) < chart.indexOf(editor.tabs)
 
 
-def test_location_drop_down_lists_locations_used_so_far(qtbot, store, record):
-    other = store.add_student("陳美玲")
-    store.add_record(other.id, date(2026, 10, 2), "台北診所")
+def test_profile_without_a_location_shows_the_latest_visits(qtbot, store, record):
     editor = make_editor(qtbot, store, record)
-    assert [editor.location_box.itemText(i) for i in range(editor.location_box.count())] == ["台北診所", "新竹國小"]
+    assert editor.profile.values["location"].text() == "新竹國小"
+
+
+def test_editor_has_no_location_field_and_shows_the_records_place(qtbot, store, record):
+    editor = make_editor(qtbot, store, record)
+    assert not hasattr(editor, "location_box")
+    assert editor.record_place.text() == "地點：新竹國小"
+
+
+def test_profile_edit_button_asks_for_the_students_profile(qtbot, store, record):
+    editor = make_editor(qtbot, store, record)
+    with qtbot.waitSignal(editor.edit_profile) as signal:
+        editor.profile.edit_btn.click()
+    assert signal.args == [record.student_id]
 
 
 def test_typing_chinese_text_is_saved_after_the_pause(qtbot, store, record):
@@ -57,12 +73,6 @@ def test_typing_english_text_is_saved_and_chinese_stays(qtbot, store, record):
     editor.en_edit.setPlainText("New English")
     qtbot.waitUntil(lambda: store.get_record(record.id).en_text == "New English", timeout=2000)
     assert store.get_record(record.id).zh_text == "今天練習剪紙"
-
-
-def test_changing_location_is_saved(qtbot, store, record):
-    editor = make_editor(qtbot, store, record)
-    editor.location_box.setEditText("台北診所")
-    qtbot.waitUntil(lambda: store.get_record(record.id).location == "台北診所", timeout=2000)
 
 
 def test_nothing_is_written_before_the_pause_has_passed(qtbot, store, record):
@@ -140,7 +150,7 @@ def test_changing_the_date_moves_the_record_and_updates_the_title(qtbot, store, 
     editor = make_editor(qtbot, store, record)
     with qtbot.waitSignal(editor.saved):
         assert editor.change_date(date(2026, 10, 2))
-    assert editor.title.text() == "王小明 · 2026-10-02"
+    assert editor.title.text() == "2026-10-02  週五"
     assert store.get_record(record.id).visit_date == date(2026, 10, 2)
 
 
@@ -151,7 +161,7 @@ def test_date_already_taken_is_refused(qtbot, store, record, monkeypatch):
     monkeypatch.setattr(editor, "_warn_taken", warned.append)
     assert not editor.change_date(date(2026, 10, 2))
     assert warned == [date(2026, 10, 2)]
-    assert editor.title.text() == "王小明 · 2026-10-01"
+    assert editor.title.text() == "2026-10-01  週四"
 
 
 def test_cancelled_date_prompt_changes_nothing(qtbot, store, record, monkeypatch):
