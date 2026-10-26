@@ -24,20 +24,31 @@ from PySide6.QtWidgets import (
 )
 
 from ..db import DuplicateRecord, RecordStore
+from .cards import time_label
 from .date_view import to_date, to_qdate
 
 AUTOSAVE_MS = 800
-TIME_CHOICES = [f"{h:02d}:{m:02d}" for h in range(7, 20) for m in (0, 15, 30, 45)]
-_TIME = re.compile(r"([01]?\d|2[0-3]):([0-5]\d)")
+TIME_CHOICES = [time_label(f"{h:02d}:{m:02d}") for h in range(7, 20) for m in (0, 15, 30, 45)]
+_TIME = re.compile(r"(\d{1,2}):([0-5]\d)\s*([AaPp])?\.?\s*[Mm]?\.?")
 
 
 def normal_time(text: str) -> str | None:
-    """`text` as "HH:MM" ("" for blank), or None if it is not a time."""
+    """`text` ("9:30 AM", "2:05pm", or 24-hour "14:05") as "HH:MM" ("" for blank), or None
+    if it is not a time."""
     text = text.strip().replace("：", ":")
     if not text:
         return ""
     match = _TIME.fullmatch(text)
-    return f"{int(match[1]):02d}:{match[2]}" if match else None
+    if not match:
+        return None
+    hour, minute, half = int(match[1]), match[2], (match[3] or "").upper()
+    if half:
+        if not 1 <= hour <= 12:
+            return None
+        hour = hour % 12 + (12 if half == "P" else 0)
+    elif hour > 23:
+        return None
+    return f"{hour:02d}:{minute}"
 
 
 ACTIVITY_LINES = 3  # height of the activity box, in lines
@@ -85,10 +96,10 @@ class RecordEditor(QWidget):
         self.time_box.setObjectName("time")  # the stylesheet gives it a clock icon
         self.time_box.setEditable(True)
         self.time_box.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        self.time_box.lineEdit().setPlaceholderText("例如 09:30")
+        self.time_box.lineEdit().setPlaceholderText("例如 9:30 AM")
         self.time_box.addItems(TIME_CHOICES)
-        self.time_box.setEditText(record.start_time)
-        self.time_box.setMinimumContentsLength(6)
+        self.time_box.setEditText(time_label(record.start_time))
+        self.time_box.setMinimumContentsLength(8)
 
         self.activity_edit = QPlainTextEdit(record.activity)
         self.activity_edit.setPlaceholderText("今天的治療活動與手段（只留在本機，不會匯出）")
@@ -207,7 +218,7 @@ class RecordEditor(QWidget):
         changed = {field: values[field] for field in self._dirty if values[field] is not None}
         self._dirty.clear()
         if not changed:
-            self.status.setText("時間請填成 09:30 這樣的格式")
+            self.status.setText("時間請填成 9:30 AM 這樣的格式")
             return
         self.store.update_record(self.record_id, **changed)
         self.status.setText(f"已儲存 {datetime.now():%H:%M:%S}")

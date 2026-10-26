@@ -98,7 +98,7 @@ def test_next_record_starts_with_the_students_last_start_time(qtbot, store):
     first = window.new_record(student_id, OCT_1)
     store.update_record(first, start_time="10:30")
     window.new_record(student_id, date(2026, 10, 8))
-    assert window.editor.time_box.currentText() == "10:30"
+    assert window.editor.time_box.currentText() == "10:30 AM"
 
 
 def test_new_record_opens_the_editor(qtbot, store):

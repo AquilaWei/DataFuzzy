@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..db import RecordStore
-from .cards import date_label, preview_text
+from .cards import date_label, preview_text, time_label
 from .theme import ACCENT
 from .widgets import record_menu
 
@@ -211,7 +211,7 @@ class DayRecordsView(QWidget):
             item.setData(NAME_ROLE, names[record.student_id])
             item.setData(PLACE_ROLE, place)
             item.setData(PREVIEW_ROLE, first_line)
-            item.setData(TIME_ROLE, record.start_time)
+            item.setData(TIME_ROLE, time_label(record.start_time))
             self.list.addItem(item)
         self.empty.setVisible(not records)
         self.list.setVisible(bool(records))

@@ -29,6 +29,15 @@ def date_label(day: date) -> str:
     return f"{day.isoformat()}  週{WEEKDAYS[day.weekday()]}"
 
 
+def time_label(start_time: str) -> str:
+    """A stored "HH:MM" start time as "9:30 AM" ("" stays ""). Only the display changes; the
+    database keeps 24-hour times."""
+    if not start_time:
+        return ""
+    hour, minute = (int(part) for part in start_time.split(":"))
+    return f"{(hour - 1) % 12 + 1}:{minute:02d} {'AM' if hour < 12 else 'PM'}"
+
+
 def preview_text(zh_text: str, en_text: str) -> str:
     """The first lines of the chart (Chinese, else English) for a card."""
     text = zh_text.strip() or en_text.strip()
@@ -51,7 +60,7 @@ class RecordCard(QWidget):
         self.index = index
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFixedHeight(CARD_H)
-        when = date_label(record.visit_date) + (f"  {record.start_time}" if record.start_time else "")
+        when = date_label(record.visit_date) + (f"  {time_label(record.start_time)}" if record.start_time else "")
         self.date_label = QLabel(when)
         self.date_label.setStyleSheet("font-size: 15px; font-weight: 600;")
         self.location_label = QLabel(record.location or "未填地點")

@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.7.0] - 2026-10-25
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 地點模式改成先列出在該地點看過的學生名字；點學生後，才顯示他在這個地點的病歷與份數，左上角「‹ 學生」可返回。
+- 開始時間改用 AM／PM 顯示（編輯器、卡片、日期與地點清單）。輸入可寫 `9:30 AM`、`2:05pm`，也接受 `14:05` 這種 24 小時制。
+- 資料庫仍以 24 小時制 `HH:MM` 儲存，既有病歷的時間不受影響。
+
 ## [0.7.0.6.0] - 2026-10-25
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
