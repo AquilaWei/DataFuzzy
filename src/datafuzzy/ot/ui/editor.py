@@ -139,14 +139,19 @@ class RecordEditor(QWidget):
         top.addStretch(1)
         top.addWidget(self.status)
         top.addWidget(self.compare_btn)
-        heading = QHBoxLayout()
+        # Rows are widgets so a comparison beside them can be lined up with them (see show_compare).
+        self.heading_row = QWidget()
+        heading = QHBoxLayout(self.heading_row)
+        heading.setContentsMargins(0, 0, 0, 0)
         heading.setSpacing(4)
         heading.addWidget(self.title)
         heading.addWidget(self.date_btn)
         heading.addSpacing(8)
         heading.addWidget(self.record_place)
         heading.addStretch(1)
-        times = QHBoxLayout()
+        self.times_row = QWidget()
+        times = QHBoxLayout(self.times_row)
+        times.setContentsMargins(0, 0, 0, 0)
         times.addWidget(QLabel("開始時間"))
         times.addWidget(self.time_box)
         times.addSpacing(12)
@@ -161,10 +166,8 @@ class RecordEditor(QWidget):
         body = QVBoxLayout(chart)
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(10)
-        body.addWidget(self.profile)  # who the student is first, then this visit
-        body.addWidget(line)
-        body.addLayout(heading)
-        body.addLayout(times)
+        body.addWidget(self.heading_row)
+        body.addWidget(self.times_row)
         body.addWidget(QLabel("活動"))
         body.addWidget(self.activity_edit)
         body.addWidget(self.tabs, 1)
@@ -175,6 +178,9 @@ class RecordEditor(QWidget):
         layout.setContentsMargins(24, 16, 24, 20)
         layout.setSpacing(10)
         layout.addLayout(top)
+        # Who the student is first and across the full width, so it stays on top while comparing.
+        layout.addWidget(self.profile)
+        layout.addWidget(line)
         layout.addWidget(self.splitter, 1)
 
         self._timer = QTimer(self)
@@ -221,8 +227,17 @@ class RecordEditor(QWidget):
         self.compare = ComparePanel(self.store.get_record(record_id))
         self.compare.closed.connect(self.close_compare)
         self.splitter.addWidget(self.compare)
+        self._line_up(self.compare)
         half = max(self.splitter.width() // 2, 1)
         self.splitter.setSizes([half, half])
+
+    def _line_up(self, panel: ComparePanel) -> None:
+        """Give the comparison's rows the heights of this chart's rows, so the two read across."""
+        for mine, theirs in ((self.heading_row, panel.heading_row), (self.times_row, panel.times_row)):
+            height = max(mine.sizeHint().height(), theirs.sizeHint().height())
+            mine.setFixedHeight(height)
+            theirs.setFixedHeight(height)
+        panel.activity.setFixedHeight(self.activity_edit.maximumHeight())
 
     def close_compare(self) -> None:
         if self.compare is None:

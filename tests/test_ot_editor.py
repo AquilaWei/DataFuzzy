@@ -40,8 +40,8 @@ def test_profile_is_shown_above_the_chart(qtbot, store, record):
     values = editor.profile.values
     assert (values["diagnosis"].text(), values["grade"].text(), values["location"].text(), values["age"].text()) == (
         "ADHD, ODD", "3", "新竹國小", "—")
-    chart = editor.splitter.widget(0).layout()
-    assert chart.indexOf(editor.profile) < chart.indexOf(editor.tabs)
+    page = editor.layout()
+    assert page.indexOf(editor.profile) < page.indexOf(editor.splitter)
 
 
 def test_profile_without_a_location_shows_the_latest_visits(qtbot, store, record):
@@ -275,6 +275,32 @@ def test_picking_a_visit_shows_it_beside_the_chart(qtbot, store, record):
     assert (panel.activity.toPlainText(), panel.tabs.widget(0).toPlainText()) == ("串珠", "上一次")
     assert panel.tabs.widget(0).isReadOnly()
     assert editor.splitter.indexOf(panel) == 1
+
+
+def test_the_profile_stays_above_both_charts_while_comparing(qtbot, store, record):
+    compare_setup(store, record)
+    editor = make_editor(qtbot, store, record)
+    editor.compare_menu().actions()[0].trigger()
+    assert editor.profile.parent() is editor
+    assert editor.splitter.count() == 2
+
+
+def test_the_comparisons_rows_line_up_with_the_charts(qtbot, store, record):
+    compare_setup(store, record)
+    editor = make_editor(qtbot, store, record)
+    editor.compare_menu().actions()[0].trigger()
+    panel = editor.compare
+    assert panel.heading_row.height() == editor.heading_row.height()
+    assert panel.times_row.height() == editor.times_row.height()
+    assert panel.activity.height() == editor.activity_edit.height()
+
+
+def test_the_comparison_shows_its_own_times(qtbot, store, record):
+    older, _, _ = compare_setup(store, record)
+    store.update_record(older.id, start_time="14:00", end_time="14:30")
+    editor = make_editor(qtbot, store, record)
+    editor.compare_menu().actions()[1].trigger()
+    assert (editor.compare.start.text(), editor.compare.end.text()) == ("2:00 PM", "2:30 PM")
 
 
 def test_picking_another_visit_replaces_the_shown_one(qtbot, store, record):

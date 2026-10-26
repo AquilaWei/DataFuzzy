@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.16.1] - 2026-10-26
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 修正
+- 「對照其他病歷」時，學生基本資訊改為橫跨整個畫面、固定在最上方，不再只出現在左邊那份病歷上。
+- 右邊對照的病歷改成跟左邊一樣的排法：日期與地點、開始與結束時間、活動、中英文病歷逐列對齊，方便左右比對。
+
 ## [0.7.0.16.0] - 2026-10-26
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。

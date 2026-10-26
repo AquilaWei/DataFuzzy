@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..db import Record
-from .cards import date_label, preview_text, session_label
+from .cards import date_label, preview_text, time_label
 
 
 def compare_candidates(records: list[Record], current_id: int, current_day: date) -> list[Record]:
@@ -41,31 +41,48 @@ class ComparePanel(QWidget):
     def __init__(self, record: Record, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.record_id = record.id
-        when = date_label(record.visit_date)
-        if record.start_time:
-            when += f"  {session_label(record.start_time, record.end_time)}"
-        self.title = QLabel(when)
-        self.title.setStyleSheet("font-size: 15px; font-weight: 600;")
-        self.location = QLabel(record.location or "未填地點")
+        # Laid out row for row like the editor's chart, which then matches the row heights.
+        self.title = QLabel(date_label(record.visit_date))
+        self.title.setStyleSheet("font-size: 16px; font-weight: 600;")
+        self.location = QLabel(f"地點：{record.location or '未填'}")
         self.location.setObjectName("subtle")
         self.close_btn = QPushButton("✕")
         self.close_btn.setObjectName("flat")
         self.close_btn.setToolTip("關閉對照")
+        self.start = QLabel(time_label(record.start_time) or "—")
+        self.end = QLabel(time_label(record.end_time) or "—")
         self.activity = self._read_only(record.activity, "（沒有記錄活動）")
-        self.activity.setMaximumHeight(self.activity.fontMetrics().lineSpacing() * 4 + 16)
         self.tabs = QTabWidget()
         self.tabs.addTab(self._read_only(record.zh_text, "（沒有中文病歷）"), "中文")
         self.tabs.addTab(self._read_only(record.en_text, "（沒有英文病歷）"), "English")
 
-        head = QHBoxLayout()
-        head.addWidget(QLabel("對照"))
-        head.addWidget(self.title, 1)
-        head.addWidget(self.close_btn)
+        self.heading_row = QWidget()
+        heading = QHBoxLayout(self.heading_row)
+        heading.setContentsMargins(0, 0, 0, 0)
+        heading.setSpacing(4)
+        tag = QLabel("對照")
+        tag.setObjectName("subtle")
+        heading.addWidget(tag)
+        heading.addSpacing(4)
+        heading.addWidget(self.title)
+        heading.addSpacing(8)
+        heading.addWidget(self.location)
+        heading.addStretch(1)
+        heading.addWidget(self.close_btn)
+        self.times_row = QWidget()
+        times = QHBoxLayout(self.times_row)
+        times.setContentsMargins(0, 0, 0, 0)
+        times.addWidget(QLabel("開始時間"))
+        times.addWidget(self.start)
+        times.addSpacing(12)
+        times.addWidget(QLabel("結束時間"))
+        times.addWidget(self.end)
+        times.addStretch(1)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 0, 0, 0)
-        layout.setSpacing(8)
-        layout.addLayout(head)
-        layout.addWidget(self.location)
+        layout.setSpacing(10)  # the editor's chart spacing
+        layout.addWidget(self.heading_row)
+        layout.addWidget(self.times_row)
         layout.addWidget(QLabel("活動"))
         layout.addWidget(self.activity)
         layout.addWidget(self.tabs, 1)
