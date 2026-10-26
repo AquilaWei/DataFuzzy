@@ -288,6 +288,45 @@ def test_default_start_time_is_latest_visit_that_has_one(store):
         "09:30", "")
 
 
+def test_default_slot_is_the_latest_same_weekday_visits(store):
+    a = store.add_student("甲")
+    store.add_record(a.id, date(2026, 10, 2), start_time="14:00", end_time="14:45")  # Friday
+    store.add_record(a.id, date(2026, 10, 5), start_time="09:00", end_time="09:30")  # Monday
+    assert store.student_default_slot(a.id, date(2026, 10, 9)) == ("14:00", "14:45")
+
+
+def test_default_slot_takes_the_most_recent_of_several_same_weekday_visits(store):
+    a = store.add_student("甲")
+    store.add_record(a.id, date(2026, 10, 2), start_time="14:00", end_time="14:45")
+    store.add_record(a.id, date(2026, 10, 9), start_time="15:00", end_time="15:40")
+    assert store.student_default_slot(a.id, date(2026, 10, 16)) == ("15:00", "15:40")
+
+
+def test_default_slot_skips_same_weekday_visits_without_a_time(store):
+    a = store.add_student("甲")
+    store.add_record(a.id, date(2026, 10, 2), start_time="14:00", end_time="14:45")
+    store.add_record(a.id, date(2026, 10, 9))
+    assert store.student_default_slot(a.id, date(2026, 10, 16)) == ("14:00", "14:45")
+
+
+def test_default_slot_from_a_visit_without_an_end_lasts_thirty_minutes(store):
+    a = store.add_student("甲")
+    store.add_record(a.id, date(2026, 10, 2), start_time="14:00")
+    assert store.student_default_slot(a.id, date(2026, 10, 9)) == ("14:00", "14:30")
+
+
+def test_default_slot_without_a_same_weekday_visit_is_the_latest_start(store):
+    a = store.add_student("甲")
+    store.add_record(a.id, date(2026, 10, 2), start_time="14:00", end_time="14:45")  # Friday
+    store.add_record(a.id, date(2026, 10, 5), start_time="09:00", end_time="10:00")  # Monday
+    assert store.student_default_slot(a.id, date(2026, 10, 7)) == ("09:00", "09:30")  # Wednesday
+
+
+def test_default_slot_of_a_new_student_is_empty(store):
+    a = store.add_student("甲")
+    assert store.student_default_slot(a.id, date(2026, 10, 9)) == ("", "")
+
+
 def test_add_record_keeps_the_start_time(store):
     a = store.add_student("甲")
     record = store.add_record(a.id, date(2026, 10, 1), start_time="14:00")

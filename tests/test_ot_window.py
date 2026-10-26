@@ -124,6 +124,16 @@ def test_new_record_ends_thirty_minutes_after_its_start(qtbot, store):
     assert window.editor.end_box.currentText() == "11:00 AM"
 
 
+def test_new_record_takes_the_time_slot_of_the_same_weekday(qtbot, store):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小明")
+    store.add_record(student_id, date(2026, 10, 2), start_time="14:00", end_time="14:45")  # Friday
+    store.add_record(student_id, date(2026, 10, 5), start_time="09:00", end_time="09:30")  # Monday
+    record_id = window.new_record(student_id, date(2026, 10, 9))  # Friday
+    assert (store.get_record(record_id).start_time, store.get_record(record_id).end_time) == ("14:00", "14:45")
+    assert (window.editor.time_box.currentText(), window.editor.end_box.currentText()) == ("2:00 PM", "2:45 PM")
+
+
 def test_next_record_starts_with_the_students_last_start_time(qtbot, store):
     window = make_window(qtbot, store)
     student_id = window.add_student("王小明")

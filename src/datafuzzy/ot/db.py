@@ -454,6 +454,17 @@ class RecordStore:
                 return record.start_time
         return ""
 
+    def student_default_slot(self, student_id: int, day: date) -> tuple[str, str]:
+        """(start, end) for a new visit on `day`: the times of the student's latest visit on the
+        same weekday that has a start time (its end, or SESSION_MINUTES later if it has none);
+        failing that, the latest visit's start time and SESSION_MINUTES later; ("", "") for none.
+        Sessions tend to repeat weekly, so the same weekday is the better guess."""
+        for record in self.records_for_student(student_id, newest_first=True):
+            if record.start_time and record.visit_date.weekday() == day.weekday():
+                return record.start_time, record.end_time or default_end_time(record.start_time)
+        start = self.student_default_start_time(student_id)
+        return start, default_end_time(start)
+
     def records_at(self, location: str) -> list[Record]:
         """Records at `location` ("" for those with none), newest first. Locations are
         encrypted, so this reads every record."""

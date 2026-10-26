@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.16.0] - 2026-10-26
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 變更
+- 新增病歷的預設時段改為參考同一個星期幾：沿用這位學生最近一次同星期幾、有填時間的病歷的開始與結束時間（例如週五的病歷帶入上次週五的時段）。每週兩天不同時段的學生，兩天會各自帶入正確的時段。
+- 該次沒有結束時間時，結束時間為開始後 30 分鐘；沒有任何同星期幾的紀錄時，照舊用最近一次的開始時間，結束為 30 分鐘後。
+
 ## [0.7.0.15.0] - 2026-10-26
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。

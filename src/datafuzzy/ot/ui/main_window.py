@@ -34,7 +34,7 @@ from ...core.models import ModelSpec
 from ...core.pipeline import Pipeline
 from ...ui.model_manager import ModelManager
 from .. import APP_NAME
-from ..db import DuplicateRecord, RecordStore, StudentProfile, default_end_time
+from ..db import DuplicateRecord, RecordStore, StudentProfile
 from .about import AboutDialog
 from .date_view import DayRecordsView, MarkedCalendar, to_date, to_qdate
 from .editor import RecordEditor
@@ -397,8 +397,9 @@ class TheraNoteWindow(QMainWindow):
 
     def new_record(self, student_id: int | None = None, day: date | None = None) -> int | None:
         """Start a chart for a student on a day (asking which, unless given) and open it.
-        It is at the student's location (from the profile) and starts at their last start
-        time; a first chart starts without one. If the student already has a chart that day,
+        It is at the student's location (from the profile) and in the time slot of their
+        latest visit on the same weekday, else at their last start time; a first chart starts
+        without one. If the student already has a chart that day,
         offers to open it instead. Returns the record id."""
         if student_id is None or day is None:
             picked = self._pick_new_record()
@@ -411,11 +412,11 @@ class TheraNoteWindow(QMainWindow):
                 self.open_record(existing.id)
                 return existing.id
             return None
-        start_time = self.store.student_default_start_time(student_id)
+        start_time, end_time = self.store.student_default_slot(student_id, day)
         try:
             record = self.store.add_record(
                 student_id, day, self.store.student_location(student_id),
-                start_time=start_time, end_time=default_end_time(start_time))
+                start_time=start_time, end_time=end_time)
         except DuplicateRecord as e:  # created elsewhere between the check and now
             self.open_record(e.record_id)
             return e.record_id
