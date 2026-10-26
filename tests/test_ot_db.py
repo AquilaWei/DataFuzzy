@@ -547,17 +547,72 @@ def test_end_time_is_saved_and_kept_by_other_updates(store):
     assert store.get_record(record.id).end_time == "10:15"
 
 
-def test_chart_book_from_before_end_times_opens_with_empty_end(tmp_path):
+def make_old_book(path, drop_end_time=False):
+    """Mark the chart book as one from before end times were filled in."""
+    old = sqlite3.connect(path)
+    if drop_end_time:
+        old.execute("ALTER TABLE record DROP COLUMN end_time")
+    else:
+        old.execute("UPDATE record SET end_time = NULL")
+    old.execute("PRAGMA user_version = 0")
+    old.commit()
+    old.close()
+
+
+def test_chart_book_from_before_end_times_gets_ends_30_minutes_after_the_start(tmp_path):
+    path = tmp_path / "t.db"
+    with RecordStore(path, KEY) as store:
+        student = store.add_student("王小明")
+        record = store.add_record(student.id, date(2026, 10, 1), start_time="09:30")
+    make_old_book(path, drop_end_time=True)
+    with RecordStore(path, KEY) as again:
+        assert again.get_record(record.id).end_time == "10:00"
+
+
+def test_filling_end_times_leaves_charts_without_a_start_empty(tmp_path):
+    path = tmp_path / "t.db"
+    with RecordStore(path, KEY) as store:
+        student = store.add_student("王小明")
+        record = store.add_record(student.id, date(2026, 10, 1), zh_text="沒填時間")
+    make_old_book(path)
+    with RecordStore(path, KEY) as again:
+        assert (again.get_record(record.id).end_time, again.get_record(record.id).zh_text) == ("", "沒填時間")
+
+
+def test_filling_end_times_keeps_the_end_within_the_day(tmp_path):
+    path = tmp_path / "t.db"
+    with RecordStore(path, KEY) as store:
+        student = store.add_student("王小明")
+        record = store.add_record(student.id, date(2026, 10, 1), start_time="23:45")
+    make_old_book(path)
+    with RecordStore(path, KEY) as again:
+        assert again.get_record(record.id).end_time == "23:59"
+
+
+def test_filling_end_times_keeps_ends_already_set(tmp_path):
+    path = tmp_path / "t.db"
+    with RecordStore(path, KEY) as store:
+        student = store.add_student("王小明")
+        record = store.add_record(student.id, date(2026, 10, 1), start_time="09:30", end_time="10:15")
+    old = sqlite3.connect(path)
+    old.execute("PRAGMA user_version = 0")
+    old.commit()
+    old.close()
+    with RecordStore(path, KEY) as again:
+        assert again.get_record(record.id).end_time == "10:15"
+
+
+def test_end_times_are_filled_only_once(tmp_path):
     path = tmp_path / "t.db"
     with RecordStore(path, KEY) as store:
         student = store.add_student("王小明")
         record = store.add_record(student.id, date(2026, 10, 1), start_time="09:30")
     old = sqlite3.connect(path)
-    old.execute("ALTER TABLE record DROP COLUMN end_time")
+    old.execute("UPDATE record SET end_time = NULL")  # cleared by hand after the fill
     old.commit()
     old.close()
     with RecordStore(path, KEY) as again:
-        assert (again.get_record(record.id).start_time, again.get_record(record.id).end_time) == ("09:30", "")
+        assert again.get_record(record.id).end_time == ""
 
 
 def test_chart_book_from_before_start_times_opens_with_none(tmp_path):

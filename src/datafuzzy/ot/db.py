@@ -81,8 +81,22 @@ def connect(path: Path, check_same_thread: bool = True) -> sqlite3.Connection:
         db.execute("ALTER TABLE record ADD COLUMN start_time TEXT")
     if "end_time" not in columns:  # a chart book from before end times
         db.execute("ALTER TABLE record ADD COLUMN end_time TEXT")
+    if db.execute("PRAGMA user_version").fetchone()[0] < 1:
+        fill_end_times(db)
+        db.execute("PRAGMA user_version = 1")
+    db.commit()
     path.chmod(0o600)
     return db
+
+
+def fill_end_times(db: sqlite3.Connection) -> None:
+    """Give charts from before end times one SESSION_MINUTES after their start. Runs once per
+    database (see connect), so an end time later cleared by hand stays cleared. Only the
+    plaintext times are touched: no key is needed and no chart is decrypted."""
+    rows = db.execute("SELECT id, start_time FROM record"
+                      " WHERE start_time IS NOT NULL AND start_time != '' AND end_time IS NULL").fetchall()
+    db.executemany("UPDATE record SET end_time = ? WHERE id = ?",
+                   [(default_end_time(start), record_id) for record_id, start in rows])
 
 
 def read_meta(path: Path, name: str) -> bytes | None:

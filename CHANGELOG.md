@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.17.0] - 2026-10-26
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 變更
+- 改版前建立、有開始時間但沒有結束時間的病歷，開啟 App 時會自動補上開始後 30 分鐘的結束時間（最晚到 23:59）。沒有開始時間的病歷維持空白，已經有結束時間的不會被改。
+- 補填時只讀寫開始與結束時間這兩個欄位，不需要密碼，也不會解密任何病歷內容或學生資料。
+- 每個資料庫只補一次；之後手動清空的結束時間不會再被自動填回。
+
 ## [0.7.0.16.1] - 2026-10-26
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
