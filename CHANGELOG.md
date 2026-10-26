@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.14.0] - 2026-10-26
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 變更
+- 地點模式點學生後，改為顯示這位學生的全部病歷（所有地點，最新在前），不再只限所選地點。每一列以日期為標題，標籤顯示該次的地點。
+
 ## [0.7.0.13.0] - 2026-10-26
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。

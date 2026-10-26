@@ -1,5 +1,5 @@
-"""The by-location page: the students seen at one place; click one to see their records
-there, newest first."""
+"""The by-location page: the students seen at one place; click one to see all of their
+records, at every place, newest first."""
 
 from __future__ import annotations
 
@@ -25,8 +25,8 @@ NO_LOCATION = "未填地點"
 
 
 class LocationRecordsView(QWidget):
-    """First a list of student names (most recently seen first). A student's records there
-    look like the day list's rows, with the date in the tag where the location would be."""
+    """First a list of student names (most recently seen first). A student's records, from
+    every location, look like the day list's rows with the date in bold where the name would be."""
 
     open_record = Signal(int)  # record id
     delete_record = Signal(int)  # record id chosen from a row's right-click menu
@@ -120,15 +120,15 @@ class LocationRecordsView(QWidget):
                 self.students.addItem(item)
             return
         self.pages.setCurrentWidget(self.list)
-        records = [r for r in records if r.student_id == self.student_id]
-        self.title.setText(f"{names[self.student_id]} · {place}")
-        self.count.setText(f"{len(records)} 份病歷")
+        records = self.store.records_for_student(self.student_id)
+        self.title.setText(names[self.student_id])
+        self.count.setText(f"{len(records)} 份病歷（所有地點）")
         for record in records:
             first_line = preview_text(record.zh_text, record.en_text).splitlines()[0]
-            item = QListWidgetItem(f"{names[record.student_id]}\n{record.visit_date.isoformat()} · {first_line}")
+            item = QListWidgetItem(f"{record.visit_date.isoformat()}\n{record.location} · {first_line}")
             item.setData(Qt.ItemDataRole.UserRole, record.id)
-            item.setData(NAME_ROLE, names[record.student_id])
-            item.setData(PLACE_ROLE, date_label(record.visit_date))
+            item.setData(NAME_ROLE, date_label(record.visit_date))
+            item.setData(PLACE_ROLE, record.location or NO_LOCATION)
             item.setData(PREVIEW_ROLE, first_line)
             item.setData(TIME_ROLE, session_label(record.start_time, record.end_time))
             self.list.addItem(item)

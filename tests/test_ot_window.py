@@ -7,6 +7,7 @@ from datafuzzy import __version__
 from datafuzzy.core.pipeline import Pipeline
 from datafuzzy.ot.db import RecordStore, StudentProfile
 from datafuzzy.ot.ui import main_window
+from datafuzzy.ot.ui.date_view import NAME_ROLE, PLACE_ROLE
 from datafuzzy.ot.ui.main_window import DATE_MODE, LOCATION_MODE, STUDENT_MODE, TheraNoteWindow
 
 KEY = bytes(range(32))
@@ -532,7 +533,7 @@ def test_location_mode_lists_places_and_their_records_newest_first(qtbot, store)
     assert view.students.count() == 1
 
 
-def test_location_mode_clicking_a_student_shows_their_records_there(qtbot, store):
+def test_location_mode_clicking_a_student_shows_all_their_records(qtbot, store):
     ming = store.add_student("王小明")
     store.add_record(ming.id, date(2026, 10, 1), "新竹國小", "一")
     store.add_record(ming.id, date(2026, 10, 8), "新竹國小", "二")
@@ -544,11 +545,14 @@ def test_location_mode_clicking_a_student_shows_their_records_there(qtbot, store
     assert view.back_btn.isHidden()
     view.students.itemClicked.emit(view.students.item(0))
     assert (view.pages.currentWidget() is view.list, view.title.text(), view.count.text()) == (
-        True, "王小明 · 新竹國小", "2 份病歷")
+        True, "王小明", "3 份病歷（所有地點）")
+    assert [(view.list.item(i).data(NAME_ROLE), view.list.item(i).data(PLACE_ROLE))
+            for i in range(view.list.count())] == [
+        ("2026-10-09  週五", "台北診所"), ("2026-10-08  週四", "新竹國小"), ("2026-10-01  週四", "新竹國小")]
     assert not view.back_btn.isHidden()
     view.list.itemClicked.emit(view.list.item(0))
     window.editor.close_editor()
-    assert (window.content.currentWidget() is view, view.list.count()) == (True, 2)
+    assert (window.content.currentWidget() is view, view.list.count()) == (True, 3)
     view.back_btn.click()
     assert (view.pages.currentWidget() is view.students, view.title.text()) == (True, "新竹國小")
 
