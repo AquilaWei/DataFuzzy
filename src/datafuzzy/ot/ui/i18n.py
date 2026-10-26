@@ -130,6 +130,7 @@ ENGLISH = {
     "{count} 份病歷": "{count} charts",
     "依時間": "By time",
     "依名字": "By name",
+    "未填時間": "No time",
     "這天沒有病歷。": "No charts on this day.",
     "{count} 位學生有病歷": "{count} students charted",
     "‹ 學生": "‹ Students",

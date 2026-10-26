@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.20.0] - 2026-10-26
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 變更
+- 日期模式（以及地點模式的病歷清單）的時段更醒目：每一列最左邊是獨立的時間欄，開始時間以粗體強調色顯示、結束時間在下方，再以一條強調色直線和姓名分開；所有列的姓名對齊在同一個位置。沒有填時間的病歷顯示灰色「未填時間」。
+
 ## [0.7.0.19.0] - 2026-10-26
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。

@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..db import RecordStore
-from .cards import date_label, preview_text, session_label
+from .cards import date_label, preview_text, time_label
 from .i18n import tr
 from .theme import ACCENT
 from .widgets import SegmentedControl, record_menu
@@ -80,15 +80,27 @@ class MarkedCalendar(QCalendarWidget):
 NAME_ROLE = Qt.ItemDataRole.UserRole + 1
 PLACE_ROLE = Qt.ItemDataRole.UserRole + 2  # the tag: the location, or the date in the by-location list
 PREVIEW_ROLE = Qt.ItemDataRole.UserRole + 3
-TIME_ROLE = Qt.ItemDataRole.UserRole + 4
+TIME_ROLE = Qt.ItemDataRole.UserRole + 4  # (start, end) as shown, e.g. ("9:30 AM", "10:00 AM"), or ("", "")
 
 
 class DayRecordDelegate(QStyledItemDelegate):
-    """A row of the day list in three distinct looks, so they are not read as one another:
-    the student's name in bold, the location as a small accent-tinted tag, and the start of
-    the chart in grey. The session's start time, if any, follows the name in grey."""
+    """A row of the day list in distinct looks, so they are not read as one another: the
+    session time in its own column at the left (start in accent bold, end under it), then the
+    student's name in bold, the location as a small accent-tinted tag, and the start of the
+    chart in grey."""
 
     PAD_X, PAD_Y, GAP, TAG_PAD = 12, 8, 4, 6
+    BAR_W, BAR_GAP = 3, 12  # the accent bar between the time column and the rest
+
+    def _time_font(self, option: QStyleOptionViewItem) -> QFont:
+        font = QFont(option.font)
+        font.setPointSizeF(font.pointSizeF() + 1)
+        font.setWeight(QFont.Weight.Bold)
+        return font
+
+    def time_column_width(self, option: QStyleOptionViewItem) -> int:
+        """Wide enough for the longest time, so every row's name starts at the same place."""
+        return QFontMetrics(self._time_font(option)).horizontalAdvance("12:59 PM") + 4
 
     def _fonts(self, option: QStyleOptionViewItem) -> tuple[QFont, QFont, QFont]:
         name = QFont(option.font)
@@ -116,24 +128,41 @@ class DayRecordDelegate(QStyledItemDelegate):
         grey = text if selected else palette.color(QPalette.ColorRole.PlaceholderText)
         name_font, tag_font, body_font = self._fonts(opt)
         r = opt.rect.adjusted(self.PAD_X, self.PAD_Y, -self.PAD_X, -self.PAD_Y)
+        name_h = QFontMetrics(name_font).height()
+        top = r.top() + name_h + self.GAP
+        tag_fm = QFontMetrics(tag_font)
 
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        accent = text if selected else QColor(ACCENT)
+        start, end = index.data(TIME_ROLE) or ("", "")
+        column = QRect(r.left(), r.top(), self.time_column_width(opt), r.height())
+        if start:
+            painter.setFont(self._time_font(opt))
+            painter.setPen(accent)
+            painter.drawText(QRect(column.left(), r.top(), column.width(), name_h),
+                             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, start)
+            painter.setFont(tag_font)
+            painter.setPen(grey)
+            painter.drawText(QRect(column.left(), top, column.width(), tag_fm.height() + 4),
+                             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, end)
+        else:
+            painter.setFont(tag_font)
+            painter.setPen(grey)
+            painter.drawText(QRect(column.left(), r.top(), column.width(), name_h),
+                             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, tr("未填時間"))
+        bar = QColor(accent if start else grey)
+        bar.setAlpha(255 if start else 90)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(bar)
+        painter.drawRoundedRect(QRect(column.right() + self.BAR_GAP, r.top() + 2, self.BAR_W, r.height() - 4), 1.5, 1.5)
+        r.setLeft(column.right() + 2 * self.BAR_GAP + self.BAR_W)
+
         painter.setFont(name_font)
         painter.setPen(text)
-        name_h = QFontMetrics(name_font).height()
-        name = index.data(NAME_ROLE)
         painter.drawText(QRect(r.left(), r.top(), r.width(), name_h),
-                         Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, name)
-        if start := index.data(TIME_ROLE):
-            left = r.left() + QFontMetrics(name_font).horizontalAdvance(name) + 10
-            painter.setFont(body_font)
-            painter.setPen(grey)
-            painter.drawText(QRect(left, r.top(), r.right() - left, name_h),
-                             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, start)
+                         Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, index.data(NAME_ROLE))
 
-        top = r.top() + name_h + self.GAP
-        tag_fm = QFontMetrics(tag_font)
         place = index.data(PLACE_ROLE)
         tag_rect = QRect(r.left(), top, tag_fm.horizontalAdvance(place) + 2 * self.TAG_PAD, tag_fm.height() + 4)
         fill = QColor(text if selected else ACCENT)
@@ -234,7 +263,7 @@ class DayRecordsView(QWidget):
             item.setData(NAME_ROLE, names[record.student_id])
             item.setData(PLACE_ROLE, place)
             item.setData(PREVIEW_ROLE, first_line)
-            item.setData(TIME_ROLE, session_label(record.start_time, record.end_time))
+            item.setData(TIME_ROLE, (time_label(record.start_time), time_label(record.end_time)))
             self.list.addItem(item)
         self.empty.setVisible(not records)
         self.list.setVisible(bool(records))

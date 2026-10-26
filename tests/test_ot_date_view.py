@@ -4,7 +4,15 @@ import pytest
 from PySide6.QtCore import QDate, Qt
 
 from datafuzzy.ot.db import RecordStore
-from datafuzzy.ot.ui.date_view import NAME_ROLE, PLACE_ROLE, PREVIEW_ROLE, TIME_ROLE, DayRecordDelegate, DayRecordsView, MarkedCalendar
+from datafuzzy.ot.ui.date_view import (
+    NAME_ROLE,
+    PLACE_ROLE,
+    PREVIEW_ROLE,
+    TIME_ROLE,
+    DayRecordDelegate,
+    DayRecordsView,
+    MarkedCalendar,
+)
 
 KEY = bytes(range(32))
 
@@ -97,7 +105,7 @@ def test_day_view_rows_keep_name_place_and_preview_apart(qtbot, seen):
     view = make_day_view(qtbot, seen, date(2026, 10, 1))
     item = view.list.item(0)
     assert [item.data(r) for r in (NAME_ROLE, PLACE_ROLE, PREVIEW_ROLE)] == ["王小明", "新竹國小", "王的第一次"]
-    assert item.data(TIME_ROLE) == ""
+    assert item.data(TIME_ROLE) == ("", "")
     assert isinstance(view.list.itemDelegate(), DayRecordDelegate)
     assert view.list.visualItemRect(item).height() > view.fontMetrics().height() * 2
 
@@ -131,3 +139,9 @@ def test_day_view_refresh_shows_a_new_record(qtbot, seen):
     seen.add_record(third.id, date(2026, 10, 8), "", "新增")
     view.refresh()
     assert view.list.count() == 2
+
+
+def test_day_view_rows_carry_the_start_and_end_for_the_time_column(qtbot, store):
+    record = store.add_record(store.add_student("王小明").id, date(2026, 10, 1), start_time="09:30", end_time="10:00")
+    view = make_day_view(qtbot, store, record.visit_date)
+    assert view.list.item(0).data(TIME_ROLE) == ("9:30 AM", "10:00 AM")
