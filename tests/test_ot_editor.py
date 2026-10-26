@@ -200,6 +200,32 @@ def test_impossible_times_are_not_saved(qtbot, store, record, typed):
     assert store.get_record(record.id).start_time == "08:00"
 
 
+def test_changing_the_start_moves_the_default_end_along(qtbot, store, record):
+    store.update_record(record.id, start_time="08:00", end_time="08:30")
+    editor = make_editor(qtbot, store, record)
+    editor.time_box.setEditText("9:15 AM")
+    editor.flush()
+    assert editor.end_box.currentText() == "9:45 AM"
+    assert store.get_record(record.id).end_time == "09:45"
+
+
+def test_end_set_by_hand_stays_when_the_start_changes(qtbot, store, record):
+    store.update_record(record.id, start_time="08:00", end_time="08:30")
+    editor = make_editor(qtbot, store, record)
+    editor.end_box.setEditText("9:00 AM")
+    editor.time_box.setEditText("8:15 AM")
+    editor.flush()
+    assert (store.get_record(record.id).start_time, store.get_record(record.id).end_time) == ("08:15", "09:00")
+
+
+def test_end_saved_earlier_by_hand_stays_when_the_start_changes(qtbot, store, record):
+    store.update_record(record.id, start_time="08:00", end_time="08:50")
+    editor = make_editor(qtbot, store, record)
+    editor.time_box.setEditText("8:15 AM")
+    editor.flush()
+    assert store.get_record(record.id).end_time == "08:50"
+
+
 def test_half_typed_start_time_is_not_saved(qtbot, store, record):
     store.update_record(record.id, start_time="08:00")
     editor = make_editor(qtbot, store, record)

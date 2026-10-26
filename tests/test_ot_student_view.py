@@ -4,7 +4,7 @@ import pytest
 from PySide6.QtCore import Qt
 
 from datafuzzy.ot.db import RecordStore
-from datafuzzy.ot.ui.cards import date_label, preview_text
+from datafuzzy.ot.ui.cards import date_label, preview_text, session_label
 from datafuzzy.ot.ui.student_view import StudentRecordsView
 
 KEY = bytes(range(32))
@@ -124,6 +124,14 @@ def test_each_card_has_a_shadow_just_below_it_that_ignores_the_mouse(view):
 
 def test_cards_have_no_graphics_effect_to_reblur_on_every_frame(view):
     assert [card.graphicsEffect() for card in view.stack.cards] == [None, None, None]
+
+
+def test_session_label_shows_start_and_end():
+    assert session_label("09:30", "10:00") == "9:30 AM–10:00 AM"
+
+
+def test_session_label_without_an_end_shows_the_start():
+    assert session_label("14:05", "") == "2:05 PM"
 
 
 def test_date_label_includes_weekday():

@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS record (
     updated_at TEXT NOT NULL,
     activity   BLOB,  -- NULL in records made before the column existed
     start_time TEXT,  -- "HH:MM", or NULL when not filled in
+    end_time   TEXT,  -- "HH:MM", or NULL when not filled in
     UNIQUE (student_id, visit_date)
 );
 CREATE INDEX IF NOT EXISTS record_by_date ON record(visit_date);
@@ -78,6 +79,8 @@ def connect(path: Path, check_same_thread: bool = True) -> sqlite3.Connection:
         db.execute("ALTER TABLE record ADD COLUMN activity BLOB")
     if "start_time" not in columns:  # a chart book from before session times
         db.execute("ALTER TABLE record ADD COLUMN start_time TEXT")
+    if "end_time" not in columns:  # a chart book from before end times
+        db.execute("ALTER TABLE record ADD COLUMN end_time TEXT")
     path.chmod(0o600)
     return db
 
@@ -123,6 +126,18 @@ class StudentProfile:
     goals: str = ""
 
 
+SESSION_MINUTES = 30  # a new session's default length
+
+
+def default_end_time(start_time: str) -> str:
+    """SESSION_MINUTES after "HH:MM" ("" for ""), kept within the same day."""
+    if not start_time:
+        return ""
+    hour, minute = (int(part) for part in start_time.split(":"))
+    end = min(hour * 60 + minute + SESSION_MINUTES, 23 * 60 + 59)
+    return f"{end // 60:02d}:{end % 60:02d}"
+
+
 @dataclass(frozen=True)
 class Record:
     id: int
@@ -134,6 +149,7 @@ class Record:
     updated_at: datetime
     activity: str = ""  # the day's therapy activities; never exported
     start_time: str = ""  # when the session began, "HH:MM", or "" if not filled in; never exported
+    end_time: str = ""  # when it ended, likewise
 
 
 @dataclass(frozen=True)
@@ -276,7 +292,7 @@ class RecordStore:
 
     def add_record(self, student_id: int, visit_date: date, location: str = "",
                    zh_text: str = "", en_text: str = "", activity: str = "",
-                   start_time: str = "") -> Record:
+                   start_time: str = "", end_time: str = "") -> Record:
         """Raises DuplicateRecord if the student already has a record that day, NotFound
         for an unknown student."""
         self.get_student(student_id)
@@ -288,21 +304,22 @@ class RecordStore:
             with self._db:
                 cur = self._db.execute(
                     "INSERT INTO record(student_id, visit_date, location, zh_text, en_text,"
-                    " updated_at, activity, start_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    " updated_at, activity, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (student_id, visit_date.isoformat(), self._enc(location, "record.location"),
                      self._enc(zh_text, "record.zh_text"), self._enc(en_text, "record.en_text"),
                      updated_at.isoformat(), self._enc(activity, "record.activity"),
-                     start_time or None))
+                     start_time or None, end_time or None))
         return Record(cur.lastrowid, student_id, visit_date, location, zh_text, en_text, updated_at,
-                      activity, start_time)
+                      activity, start_time, end_time)
 
     def update_record(self, record_id: int, *, location: str | None = None,
                       zh_text: str | None = None, en_text: str | None = None,
-                      activity: str | None = None, start_time: str | None = None) -> Record:
+                      activity: str | None = None, start_time: str | None = None,
+                      end_time: str | None = None) -> Record:
         """Change only the fields given (None leaves one alone), for autosave. The English
         text is overwritten, not versioned. Raises NotFound for an unknown record."""
         given = {"location": location, "zh_text": zh_text, "en_text": en_text, "activity": activity,
-                 "start_time": start_time}
+                 "start_time": start_time, "end_time": end_time}
         with self._lock:
             record = self.get_record(record_id)
             new = replace(record, updated_at=self._now(),
@@ -336,10 +353,11 @@ class RecordStore:
     def _write_texts(self, r: Record) -> None:
         self._db.execute(
             "UPDATE record SET location = ?, zh_text = ?, en_text = ?, updated_at = ?,"
-            " activity = ?, start_time = ? WHERE id = ?",
+            " activity = ?, start_time = ?, end_time = ? WHERE id = ?",
             (self._enc(r.location, "record.location"), self._enc(r.zh_text, "record.zh_text"),
              self._enc(r.en_text, "record.en_text"), r.updated_at.isoformat(),
-             self._enc(r.activity, "record.activity"), r.start_time or None, r.id))
+             self._enc(r.activity, "record.activity"), r.start_time or None,
+             r.end_time or None, r.id))
 
     def delete_record(self, record_id: int) -> None:
         """Remove a record for good. Raises NotFound for an unknown record."""
@@ -349,7 +367,7 @@ class RecordStore:
             raise NotFound(f"record {record_id}")
 
     _RECORD_COLUMNS = ("id, student_id, visit_date, location, zh_text, en_text, updated_at,"
-                       " activity, start_time")
+                       " activity, start_time, end_time")
 
     def get_record(self, record_id: int) -> Record:
         with self._lock:
@@ -370,7 +388,8 @@ class RecordStore:
         return Record(row[0], row[1], date.fromisoformat(row[2]),
                       self._dec(row[3], "record.location"), self._dec(row[4], "record.zh_text"),
                       self._dec(row[5], "record.en_text"), datetime.fromisoformat(row[6]),
-                      "" if row[7] is None else self._dec(row[7], "record.activity"), row[8] or "")
+                      "" if row[7] is None else self._dec(row[7], "record.activity"), row[8] or "",
+                      row[9] or "")
 
     def _records(self, where: str, args: tuple, order: str) -> list[Record]:
         with self._lock:

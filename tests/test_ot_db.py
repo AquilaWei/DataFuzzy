@@ -6,7 +6,15 @@ import pytest
 
 from datafuzzy.ot import APP_NAME
 from datafuzzy.ot.crypto import Cipher, DecryptionError
-from datafuzzy.ot.db import DB_ENV, DuplicateRecord, NotFound, RecordStore, StudentProfile, default_db_path
+from datafuzzy.ot.db import (
+    DB_ENV,
+    DuplicateRecord,
+    NotFound,
+    RecordStore,
+    StudentProfile,
+    default_db_path,
+    default_end_time,
+)
 
 KEY = bytes(range(32))
 
@@ -450,6 +458,39 @@ def test_start_time_is_saved_cleared_and_kept_by_other_updates(store):
     assert store.get_record(record.id).start_time == "09:30"
     store.update_record(record.id, start_time="")
     assert store.get_record(record.id).start_time == ""
+
+
+def test_default_end_time_is_thirty_minutes_after_the_start():
+    assert default_end_time("09:45") == "10:15"
+
+
+def test_default_end_time_stays_within_the_day():
+    assert default_end_time("23:45") == "23:59"
+
+
+def test_no_start_time_gives_no_default_end_time():
+    assert default_end_time("") == ""
+
+
+def test_end_time_is_saved_and_kept_by_other_updates(store):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, date(2026, 10, 1), start_time="09:30", end_time="10:00")
+    store.update_record(record.id, end_time="10:15")
+    store.update_record(record.id, start_time="09:45")
+    assert store.get_record(record.id).end_time == "10:15"
+
+
+def test_chart_book_from_before_end_times_opens_with_empty_end(tmp_path):
+    path = tmp_path / "t.db"
+    with RecordStore(path, KEY) as store:
+        student = store.add_student("王小明")
+        record = store.add_record(student.id, date(2026, 10, 1), start_time="09:30")
+    old = sqlite3.connect(path)
+    old.execute("ALTER TABLE record DROP COLUMN end_time")
+    old.commit()
+    old.close()
+    with RecordStore(path, KEY) as again:
+        assert (again.get_record(record.id).start_time, again.get_record(record.id).end_time) == ("09:30", "")
 
 
 def test_chart_book_from_before_start_times_opens_with_none(tmp_path):

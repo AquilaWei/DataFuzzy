@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..db import DuplicateRecord, RecordStore
+from ..db import DuplicateRecord, RecordStore, default_end_time
 from .cards import time_label
 from .date_view import to_date, to_qdate
 
@@ -100,6 +100,16 @@ class RecordEditor(QWidget):
         self.time_box.addItems(TIME_CHOICES)
         self.time_box.setEditText(time_label(record.start_time))
         self.time_box.setMinimumContentsLength(8)
+        self.end_box = QComboBox()
+        self.end_box.setObjectName("time")
+        self.end_box.setEditable(True)
+        self.end_box.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.end_box.lineEdit().setPlaceholderText("例如 10:00 AM")
+        self.end_box.addItems(TIME_CHOICES)
+        self.end_box.setEditText(time_label(record.end_time))
+        self.end_box.setMinimumContentsLength(8)
+        # The end keeps to SESSION_MINUTES after the start until it is set by hand.
+        self._end_follows = not record.end_time or record.end_time == default_end_time(record.start_time)
 
         self.activity_edit = QPlainTextEdit(record.activity)
         self.activity_edit.setPlaceholderText("今天的治療活動與手段（只留在本機，不會匯出）")
@@ -125,6 +135,8 @@ class RecordEditor(QWidget):
         place.addSpacing(12)
         place.addWidget(QLabel("開始時間"))
         place.addWidget(self.time_box)
+        place.addWidget(QLabel("結束時間"))
+        place.addWidget(self.end_box)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 16, 24, 20)
         layout.setSpacing(10)
@@ -147,7 +159,8 @@ class RecordEditor(QWidget):
         # Connected after the texts are filled in, so showing a record is not an edit.
         self.location_box.editTextChanged.connect(lambda: self._changed("location"))
         self.activity_edit.textChanged.connect(lambda: self._changed("activity"))
-        self.time_box.editTextChanged.connect(lambda: self._changed("start_time"))
+        self.time_box.editTextChanged.connect(self._start_changed)
+        self.end_box.editTextChanged.connect(self._end_changed)
         self.zh_edit.textChanged.connect(lambda: self._changed("zh_text"))
         self.en_edit.textChanged.connect(lambda: self._changed("en_text"))
         self.back_btn.clicked.connect(self.close_editor)
@@ -199,6 +212,19 @@ class RecordEditor(QWidget):
         self.saved.emit(self.record_id)
         return True
 
+    def _start_changed(self) -> None:
+        self._changed("start_time")
+        start = normal_time(self.time_box.currentText())
+        if self._end_follows and start is not None:
+            self.end_box.blockSignals(True)  # not a hand edit: keep following
+            self.end_box.setEditText(time_label(default_end_time(start)))
+            self.end_box.blockSignals(False)
+            self._changed("end_time")
+
+    def _end_changed(self) -> None:
+        self._end_follows = False
+        self._changed("end_time")
+
     def _changed(self, field: str) -> None:
         self._dirty.add(field)
         self.status.setText("編輯中…")
@@ -213,7 +239,8 @@ class RecordEditor(QWidget):
                   "activity": self.activity_edit.toPlainText(),
                   "zh_text": self.zh_edit.toPlainText(),
                   "en_text": self.en_edit.toPlainText(),
-                  "start_time": normal_time(self.time_box.currentText())}
+                  "start_time": normal_time(self.time_box.currentText()),
+                  "end_time": normal_time(self.end_box.currentText())}
         # A half-typed time ("9:") is not saved; the last good one stays until it is complete.
         changed = {field: values[field] for field in self._dirty if values[field] is not None}
         self._dirty.clear()

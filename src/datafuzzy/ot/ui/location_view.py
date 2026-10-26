@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..db import RecordStore
-from .cards import date_label, preview_text, time_label
+from .cards import date_label, preview_text, session_label
 from .date_view import NAME_ROLE, PLACE_ROLE, PREVIEW_ROLE, TIME_ROLE, DayRecordDelegate
 from .widgets import record_menu
 
@@ -130,5 +130,5 @@ class LocationRecordsView(QWidget):
             item.setData(NAME_ROLE, names[record.student_id])
             item.setData(PLACE_ROLE, date_label(record.visit_date))
             item.setData(PREVIEW_ROLE, first_line)
-            item.setData(TIME_ROLE, time_label(record.start_time))
+            item.setData(TIME_ROLE, session_label(record.start_time, record.end_time))
             self.list.addItem(item)

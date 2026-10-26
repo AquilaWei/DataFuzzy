@@ -33,7 +33,7 @@ from ...core.models import ModelSpec
 from ...core.pipeline import Pipeline
 from ...ui.model_manager import ModelManager
 from .. import APP_NAME
-from ..db import DuplicateRecord, RecordStore, StudentProfile
+from ..db import DuplicateRecord, RecordStore, StudentProfile, default_end_time
 from .about import AboutDialog
 from .date_view import DayRecordsView, MarkedCalendar, to_date, to_qdate
 from .editor import RecordEditor
@@ -407,11 +407,12 @@ class TheraNoteWindow(QMainWindow):
                 self.open_record(existing.id)
                 return existing.id
             return None
+        start_time = self.store.student_default_start_time(student_id)
         try:
             record = self.store.add_record(
                 student_id, day,
                 self.store.student_default_location(student_id) if location is None else location,
-                start_time=self.store.student_default_start_time(student_id))
+                start_time=start_time, end_time=default_end_time(start_time))
         except DuplicateRecord as e:  # created elsewhere between the check and now
             self.open_record(e.record_id)
             return e.record_id

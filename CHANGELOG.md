@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.12.0] - 2026-10-26
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 病歷新增「結束時間」，在編輯器的開始時間旁邊。新病歷的結束時間預設為開始時間後 30 分鐘。
+- 修改開始時間時，結束時間會跟著維持 30 分鐘後；一旦手動改過結束時間，就不再自動跟著變。
+- 卡片、日期清單與地點清單的時間顯示為「9:30 AM–10:00 AM」；舊病歷沒有結束時間時只顯示開始時間。結束時間與開始時間一樣不參與匯出。
+
 ## [0.7.0.11.0] - 2026-10-26
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。

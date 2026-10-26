@@ -57,6 +57,15 @@ def time_label(start_time: str) -> str:
     return f"{(hour - 1) % 12 + 1}:{minute:02d} {'AM' if hour < 12 else 'PM'}"
 
 
+def session_label(start_time: str, end_time: str) -> str:
+    """"9:30 AM–10:00 AM", or just the start (or "") when the end is not filled in."""
+    if not start_time:
+        return ""
+    if not end_time:
+        return time_label(start_time)
+    return f"{time_label(start_time)}–{time_label(end_time)}"
+
+
 def preview_text(zh_text: str, en_text: str) -> str:
     """The first lines of the chart (Chinese, else English) for a card."""
     text = zh_text.strip() or en_text.strip()
@@ -120,7 +129,7 @@ class RecordCard(QWidget):
         self.index = index
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFixedHeight(CARD_H)
-        when = date_label(record.visit_date) + (f"  {time_label(record.start_time)}" if record.start_time else "")
+        when = date_label(record.visit_date) + (f"  {session_label(record.start_time, record.end_time)}" if record.start_time else "")
         self.date_label = QLabel(when)
         self.date_label.setStyleSheet("font-size: 15px; font-weight: 600;")
         self.location_label = QLabel(record.location or "未填地點")

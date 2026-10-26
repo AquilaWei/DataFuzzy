@@ -92,6 +92,16 @@ def test_next_record_starts_with_the_students_last_location(qtbot, store):
     assert window.editor.location_box.currentText() == "新竹國小"
 
 
+def test_new_record_ends_thirty_minutes_after_its_start(qtbot, store):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小明")
+    first = window.new_record(student_id, OCT_1)
+    store.update_record(first, start_time="10:30")
+    second = window.new_record(student_id, date(2026, 10, 8))
+    assert store.get_record(second).end_time == "11:00"
+    assert window.editor.end_box.currentText() == "11:00 AM"
+
+
 def test_next_record_starts_with_the_students_last_start_time(qtbot, store):
     window = make_window(qtbot, store)
     student_id = window.add_student("王小明")
