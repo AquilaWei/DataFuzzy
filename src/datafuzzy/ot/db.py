@@ -138,7 +138,7 @@ class Session:
     weekday: int  # Monday 0 … Sunday 6
     start: str  # "HH:MM"
     end: str  # "HH:MM"
-    classroom: str = ""  # the 學生教室: the room to fetch the student from; "" if not set
+    classroom: str = ""  # the 領取教室: where to find the child for the session; "" if not set
 
 
 @dataclass(frozen=True)
@@ -497,7 +497,7 @@ class RecordStore:
         return ""
 
     def session_classrooms(self) -> list[str]:
-        """Every 學生教室 given in a session time, sorted, for the profile's drop-downs."""
+        """Every 領取教室 given in a session time, sorted, for the profile's drop-downs."""
         return sorted({session.classroom for student in self.students()
                        for session in self.get_profile(student.id).sessions if session.classroom})
 

@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.23.1] - 2026-10-26
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 變更
+- 「學生教室」改名為「領取教室」，意思是去哪裡找這個孩子。基本資訊顯示為「（領取教室：301）」，課表卡片顯示「領取教室：301」；English 介面為「Pickup room」。已填的資料不受影響。
+
 ## [0.7.0.23.0] - 2026-10-26
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。

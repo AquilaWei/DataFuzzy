@@ -148,7 +148,7 @@ class TimetableView(QWidget):
                 for session, student in cells.get((weekday, start), []):
                     lines = [student.name, session_label(session.start, session.end)]
                     if session.classroom:
-                        lines.append(tr("教室：{room}", room=session.classroom))
+                        lines.append(tr("領取教室：{room}", room=session.classroom))
                     button = QPushButton("\n".join(lines))
                     button.setObjectName("slot")
                     button.setToolTip(tr("查看 {name} 的所有病歷", name=student.name))

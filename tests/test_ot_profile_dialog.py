@@ -106,4 +106,4 @@ def test_summary_shows_the_classroom_of_a_session(qtbot):
     summary = ProfileSummary()
     qtbot.addWidget(summary)
     summary.show_profile("王小明", StudentProfile(sessions=(Session(4, "10:00", "10:30", "301"),)))
-    assert summary.values["sessions"].text() == "週五 10:00 AM–10:30 AM（教室：301）"
+    assert summary.values["sessions"].text() == "週五 10:00 AM–10:30 AM（領取教室：301）"

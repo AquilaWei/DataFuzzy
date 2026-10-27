@@ -696,4 +696,4 @@ def test_timetable_shows_the_classroom_to_fetch_the_student_from(qtbot, store):
     store.set_profile(amy.id, StudentProfile(sessions=(Session(4, "10:00", "10:30", "301"),)))
     window = make_window(qtbot, store)
     window.set_mode(3)
-    assert [b.text() for b in window.timetable_view.slot_buttons] == ["Amy\n10:00 AM–10:30 AM\n教室：301"]
+    assert [b.text() for b in window.timetable_view.slot_buttons] == ["Amy\n10:00 AM–10:30 AM\n領取教室：301"]

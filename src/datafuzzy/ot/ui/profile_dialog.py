@@ -32,20 +32,20 @@ MONTH_FORMAT = "MM/yyyy"
 
 
 def session_text(session: Session) -> str:
-    """"週五 10:00 AM–10:30 AM（教室：301）", the room left out when not set."""
+    """"週五 10:00 AM–10:30 AM（領取教室：301）", the room left out when not set."""
     text = f"{weekday_label(session.weekday)} {session_label(session.start, session.end)}"
-    return text + tr("（教室：{room}）", room=session.classroom) if session.classroom else text
+    return text + tr("（領取教室：{room}）", room=session.classroom) if session.classroom else text
 
 
 def sessions_text(sessions: tuple[Session, ...]) -> str:
-    """Every session time for the summary, e.g. "週五 10:00 AM–10:30 AM（教室：301）、週一 …"."""
+    """Every session time for the summary, e.g. "週五 10:00 AM–10:30 AM（領取教室：301）、週一 …"."""
     return (", " if language() == "en" else "、").join(session_text(s) for s in sessions)
 
 
 class SessionRow(QWidget):
-    """One weekly session time: weekday, start, end and the 學生教室 (the room to fetch the
-    student from; `classrooms` fills its drop-down, any other can be typed). The end keeps to
-    SESSION_MINUTES after the start until it is changed by hand, as in the chart editor."""
+    """One weekly session time: weekday, start, end and the 領取教室 (where to find the child
+    for the session; `classrooms` fills its drop-down, any other can be typed). The end keeps
+    to SESSION_MINUTES after the start until it is changed by hand, as in the chart editor."""
 
     removed = Signal(object)  # this row
 
@@ -62,8 +62,8 @@ class SessionRow(QWidget):
         self.classroom.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.classroom.addItems(classrooms or [])
         self.classroom.setEditText("")
-        self.classroom.lineEdit().setPlaceholderText(tr("學生教室"))
-        self.classroom.setToolTip(tr("到哪個教室接學生"))
+        self.classroom.lineEdit().setPlaceholderText(tr("領取教室"))
+        self.classroom.setToolTip(tr("去哪裡找這個孩子"))
         self.classroom.setMinimumContentsLength(6)
         self.remove_btn = QPushButton("✕")
         self.remove_btn.setObjectName("flat")
@@ -162,7 +162,7 @@ class SessionsEditor(QWidget):
 class StudentProfileDialog(QDialog):
     """Location, diagnosis, age, grade, classroom, case manager, school year and goals of one
     student, and their weekly session times. `locations` and `classrooms` fill the drop-downs
-    of the location and of each session's 學生教室; any other can be typed."""
+    of the location and of each session's 領取教室; any other can be typed."""
 
     def __init__(self, name: str, profile: StudentProfile, today: date | None = None,
                  parent: QWidget | None = None, locations: list[str] | None = None,
