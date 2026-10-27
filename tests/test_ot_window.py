@@ -3,12 +3,12 @@ from datetime import date
 
 import pytest
 from PySide6.QtCore import QDate, QPoint, Qt
-from PySide6.QtWidgets import QFrame
+from PySide6.QtWidgets import QFrame, QLabel
 
 from datafuzzy import __version__
 from datafuzzy.core.pipeline import Pipeline
 from datafuzzy.ot.db import RecordStore, Session, StudentProfile
-from datafuzzy.ot.ui import main_window
+from datafuzzy.ot.ui import main_window, timetable_view
 from datafuzzy.ot.ui.date_view import NAME_ROLE, PLACE_ROLE
 from datafuzzy.ot.ui.location_view import DETAILS_ROLE, INACTIVE_ROLE, SESSIONS_ROLE
 from datafuzzy.ot.ui.main_window import (
@@ -693,6 +693,12 @@ def test_timetable_sidebar_lists_active_students_without_a_session_time(qtbot, s
     assert [window.unscheduled_list.item(i).text() for i in range(window.unscheduled_list.count())] == ["王小明"]
 
 
+class FixedToday(date):
+    @classmethod
+    def today(cls):
+        return cls(2026, 10, 28)
+
+
 def timetable_cells(window, kind):
     return [c for c in window.timetable_view.scroll.widget().findChildren(QFrame, "ttCell")
             if c.property("kind") == kind]
@@ -758,6 +764,35 @@ def test_timetable_shades_every_other_time_row(qtbot, store):
     window.set_mode(3)
     button = window.timetable_view.slot_buttons[1]  # the 13:00 row, the second one
     assert button.parent().property("kind") == "band"
+
+
+def test_timetable_gives_a_student_the_same_colour_on_every_day(qtbot, store):
+    amy = store.add_student("Amy")
+    store.set_profile(amy.id, StudentProfile(sessions=(Session(0, "09:00", "09:30"), Session(3, "13:00", "13:30"))))
+    window = make_window(qtbot, store)
+    window.set_mode(3)
+    first, second = window.timetable_view.slot_buttons
+    assert first.colour == second.colour
+
+
+def test_timetable_gives_different_students_different_colours(qtbot, store):
+    amy, ming = store.add_student("Amy"), store.add_student("王小明")
+    store.set_profile(amy.id, StudentProfile(sessions=(Session(0, "09:00", "09:30"),)))
+    store.set_profile(ming.id, StudentProfile(sessions=(Session(0, "09:00", "09:30"),)))
+    window = make_window(qtbot, store)
+    window.set_mode(3)
+    first, second = window.timetable_view.slot_buttons
+    assert first.colour != second.colour
+
+
+def test_timetable_highlights_todays_weekday(qtbot, store, monkeypatch):
+    monkeypatch.setattr(timetable_view, "date", FixedToday)  # a Wednesday
+    amy = store.add_student("Amy")
+    store.set_profile(amy.id, StudentProfile(sessions=(Session(0, "09:00", "09:30"),)))
+    window = make_window(qtbot, store)
+    window.set_mode(3)
+    heads = window.timetable_view.scroll.widget().findChildren(QLabel, "weekday")
+    assert [h.text() for h in heads if h.property("today")] == ["週三"]
 
 
 def test_timetable_shows_the_classroom_to_fetch_the_student_from(qtbot, store):

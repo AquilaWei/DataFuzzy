@@ -3,7 +3,10 @@ session times in their profiles. Clicking a student shows all of their charts.""
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from datetime import date
+
+from PySide6.QtCore import QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPaintEvent, QPalette
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -22,6 +25,76 @@ from .i18n import tr
 from .student_view import StudentRecordsView
 
 WORKDAYS = range(5)  # Monday to Friday always get a column; the weekend only when used
+# Each student keeps one of these colours wherever they appear, so the same child is easy to
+# follow across the week; mid-tone, so they read on light and dark backgrounds alike.
+STUDENT_COLOURS = ("#0a84ff", "#30a46c", "#f76b15", "#8e4ec6", "#d6409f", "#12a594", "#e5484d", "#c2860a")
+
+
+def student_colour(student_id: int) -> QColor:
+    return QColor(STUDENT_COLOURS[student_id % len(STUDENT_COLOURS)])
+
+
+class SlotChip(QPushButton):
+    """A student in the timetable: a rounded tile in the student's colour, the name in bold and
+    the time (and pickup room) under it. text() holds all the lines, for tests and accessibility."""
+
+    PAD_X, PAD_Y, GAP, BAR = 10, 7, 2, 3
+
+    def __init__(self, student: Student, lines: list[str], parent: QWidget | None = None) -> None:
+        super().__init__("\n".join([student.name, *lines]), parent)
+        self.setObjectName("slot")
+        self.name, self.lines = student.name, lines
+        self.colour = student_colour(student.id)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover)
+
+    def _fonts(self) -> tuple[QFont, QFont]:
+        name = QFont(self.font())
+        name.setWeight(QFont.Weight.Bold)
+        small = QFont(self.font())
+        small.setPointSizeF(small.pointSizeF() - 1)
+        return name, small
+
+    def sizeHint(self) -> QSize:
+        name, small = self._fonts()
+        widths = [QFontMetrics(name).horizontalAdvance(self.name)]
+        widths += [QFontMetrics(small).horizontalAdvance(line) for line in self.lines]
+        height = QFontMetrics(name).height() + len(self.lines) * (QFontMetrics(small).height() + self.GAP)
+        return QSize(max(widths) + 2 * self.PAD_X + self.BAR, height + 2 * self.PAD_Y)
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(60, self.sizeHint().height())
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        fill = QColor(self.colour)
+        fill.setAlphaF(0.26 if self.underMouse() else 0.14)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(fill)
+        painter.drawRoundedRect(rect, 9, 9)
+        painter.setBrush(self.colour)
+        painter.drawRoundedRect(QRectF(rect.left() + 5, rect.top() + 7, self.BAR, rect.height() - 14), 1.5, 1.5)
+
+        name_font, small_font = self._fonts()
+        left = int(rect.left()) + self.PAD_X + self.BAR
+        width = int(rect.width()) - left - self.PAD_X
+        top = self.PAD_Y
+        painter.setFont(name_font)
+        painter.setPen(self.palette().color(QPalette.ColorRole.Text))
+        metrics = QFontMetrics(name_font)
+        painter.drawText(left, top, width, metrics.height(), Qt.AlignmentFlag.AlignLeft,
+                         metrics.elidedText(self.name, Qt.TextElideMode.ElideRight, width))
+        top += metrics.height()
+        painter.setFont(small_font)
+        painter.setPen(self.palette().color(QPalette.ColorRole.PlaceholderText))
+        metrics = QFontMetrics(small_font)
+        for line in self.lines:
+            top += self.GAP
+            painter.drawText(left, top, width, metrics.height(), Qt.AlignmentFlag.AlignLeft,
+                             metrics.elidedText(line, Qt.TextElideMode.ElideRight, width))
+            top += metrics.height()
 
 
 def timetable_grid(slots: list[tuple[Session, Student]]) -> tuple[list[int], list[str], dict]:
@@ -125,29 +198,35 @@ class TimetableView(QWidget):
         self.scroll.setWidget(self._grid(slots))
 
     def _grid(self, slots: list[tuple[Session, Student]]) -> QWidget:
-        """A ruled table: weekday columns, one row per start time, every cell framed and every
-        other row shaded, so each student reads across to their time and up to their weekday."""
+        """A rounded card: weekday headings (today's highlighted), then one rounded lane per
+        start time, every other lane tinted, the students as coloured tiles in their weekday."""
         weekdays, starts, cells = timetable_grid(slots)
         widget = QWidget()
         outer = QVBoxLayout(widget)
         outer.setContentsMargins(0, 0, 0, 0)
         table = QFrame()
-        table.setObjectName("timetable")  # draws the outer top and left rules; cells draw the rest
+        table.setObjectName("timetable")
         outer.addWidget(table)
         outer.addStretch(1)
         grid = QGridLayout(table)
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setSpacing(0)
+        grid.setContentsMargins(12, 12, 12, 12)
+        grid.setHorizontalSpacing(0)
+        grid.setVerticalSpacing(6)
         self.slot_buttons = []
-        grid.addWidget(self._cell(QLabel(""), kind="head"), 0, 0)
+        today = date.today().weekday()
         for col, weekday in enumerate(weekdays, start=1):
             head = QLabel(weekday_label(weekday))
             head.setObjectName("weekday")
+            head.setProperty("today", weekday == today)  # picked up by the stylesheet
             head.setAlignment(Qt.AlignmentFlag.AlignCenter)
             grid.addWidget(self._cell(head, kind="head"), 0, col)
             grid.setColumnStretch(col, 1)
         for row, start in enumerate(starts, start=1):
             band = "band" if row % 2 == 0 else "plain"
+            lane = QFrame()  # behind the row's cells: added first, so drawn first
+            lane.setObjectName("lane")
+            lane.setProperty("kind", band)
+            grid.addWidget(lane, row, 0, 1, len(weekdays) + 1)
             time = QLabel(time_label(start))
             time.setObjectName("slotTime")
             time.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
@@ -160,24 +239,23 @@ class TimetableView(QWidget):
 
     @staticmethod
     def _cell(*children: QWidget, kind: str) -> QFrame:
-        """One framed cell of the table; `kind` (head, time, band or plain) picks its look."""
+        """One cell of the table; `kind` (head, time, band or plain) says which part it is."""
         cell = QFrame()
         cell.setObjectName("ttCell")
-        cell.setProperty("kind", kind)  # picked up by the stylesheet
+        cell.setProperty("kind", kind)
         layout = QVBoxLayout(cell)
-        layout.setContentsMargins(6, 6, 6, 6)
-        layout.setSpacing(4)
+        layout.setContentsMargins(5, 6, 5, 6)
+        layout.setSpacing(5)
         for child in children:
             layout.addWidget(child)
         layout.addStretch(1)
         return cell
 
     def _slot_button(self, session: Session, student: Student) -> QPushButton:
-        lines = [student.name, session_label(session.start, session.end)]
+        lines = [session_label(session.start, session.end)]
         if session.classroom:
             lines.append(tr("領取教室：{room}", room=session.classroom))
-        button = QPushButton("\n".join(lines))
-        button.setObjectName("slot")
+        button = SlotChip(student, lines)
         button.setToolTip(tr("查看 {name} 的所有病歷", name=student.name))
         button.clicked.connect(lambda _=False, sid=student.id: self.show_student(sid))
         button.setProperty("student_id", student.id)

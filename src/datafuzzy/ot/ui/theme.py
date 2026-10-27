@@ -66,20 +66,19 @@ QPushButton#segment[position="first"] {
 QPushButton#segment[position="last"] { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
 QPushButton#flat { background: transparent; border: none; color: palette(highlight); padding: 4px 6px; }
 QPushButton#flat:hover { background: palette(midlight); }
-QPushButton#slot {
-    text-align: left; padding: 6px 10px; border: none; border-left: 3px solid #0a84ff;
-    border-radius: 6px; background: rgba(10, 132, 255, 0.12);
+QFrame#timetable {
+    background: palette(base); border: 1px solid rgba(127, 127, 127, 0.22); border-radius: 14px;
 }
-QPushButton#slot:hover { background: rgba(10, 132, 255, 0.24); }
-QFrame#timetable { border-top: 1px solid palette(mid); border-left: 1px solid palette(mid); }
-QFrame#ttCell {
-    border-right: 1px solid palette(mid); border-bottom: 1px solid palette(mid); background: palette(base);
+QFrame#lane { border-radius: 10px; background: rgba(127, 127, 127, 0.035); }
+QFrame#lane[kind="band"] { background: rgba(127, 127, 127, 0.085); }
+QFrame#ttCell { background: transparent; border: none; }
+QFrame#ttCell[kind="band"], QFrame#ttCell[kind="plain"] { border-left: 1px solid rgba(127, 127, 127, 0.14); }
+QFrame#ttCell[kind="time"] { min-width: 72px; }
+QLabel#weekday {
+    font-weight: 600; color: palette(placeholder-text); padding: 3px 10px; border-radius: 10px;
 }
-QFrame#ttCell[kind="band"] { background: rgba(127, 127, 127, 0.07); }
-QFrame#ttCell[kind="head"] { background: rgba(127, 127, 127, 0.14); }
-QFrame#ttCell[kind="time"] { background: rgba(10, 132, 255, 0.08); min-width: 76px; }
-QLabel#weekday { font-weight: 600; padding: 2px 0; }
-QLabel#slotTime { font-size: 14px; font-weight: 700; color: #0a84ff; padding: 6px 4px 0 0; }
+QLabel#weekday[today="true"] { color: white; background: #0a84ff; }
+QLabel#slotTime { font-size: 13px; font-weight: 700; color: #0a84ff; padding: 6px 6px 0 0; }
 
 QListWidget { background: transparent; border: none; outline: none; }
 QListWidget::item { border-radius: 8px; padding: 8px 10px; margin: 1px 6px; }

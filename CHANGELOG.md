@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.27.0] - 2026-10-27
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 變更
+- 課表重新設計：整張課表放在圓角卡片上，每個時段是一條圓角橫列（隔行深淺不同、列與列之間留白），星期之間以淡線分隔，今天的星期以藍色圓角標籤標示。
+- 每位學生有固定的顏色，同一個孩子在一週各天的卡片顏色相同，名字粗體、時段與領取教室以灰色小字列在下面；淺色與深色模式都適用。
+
 ## [0.7.0.26.0] - 2026-10-27
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
