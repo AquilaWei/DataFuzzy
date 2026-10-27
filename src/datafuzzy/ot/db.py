@@ -134,10 +134,11 @@ class Student:
 
 @dataclass(frozen=True)
 class Session:
-    """A weekly session time of a student, e.g. Fridays 10:00–10:30."""
+    """A weekly session time of a student, e.g. Fridays 10:00–10:30, fetching them from 301."""
     weekday: int  # Monday 0 … Sunday 6
     start: str  # "HH:MM"
     end: str  # "HH:MM"
+    classroom: str = ""  # the 學生教室: the room to fetch the student from; "" if not set
 
 
 @dataclass(frozen=True)
@@ -314,7 +315,8 @@ class RecordStore:
         """Replace the student's profile, with surrounding spaces trimmed from each field and the
         sessions sorted by weekday and start."""
         trimmed = {k: v.strip() for k, v in asdict(profile).items() if k != "sessions"}
-        trimmed["sessions"] = [asdict(s) for s in sorted(profile.sessions, key=lambda s: (s.weekday, s.start))]
+        trimmed["sessions"] = [asdict(replace(s, classroom=s.classroom.strip()))
+                               for s in sorted(profile.sessions, key=lambda s: (s.weekday, s.start))]
         blob = self._enc(json.dumps(trimmed, ensure_ascii=False), "student.profile")
         with self._lock, self._db:
             cur = self._db.execute("UPDATE student SET profile = ? WHERE id = ?", (blob, student_id))
@@ -493,6 +495,11 @@ class RecordStore:
             if record.start_time:
                 return record.start_time
         return ""
+
+    def session_classrooms(self) -> list[str]:
+        """Every 學生教室 given in a session time, sorted, for the profile's drop-downs."""
+        return sorted({session.classroom for student in self.students()
+                       for session in self.get_profile(student.id).sessions if session.classroom})
 
     def timetable(self) -> list[tuple[Session, Student]]:
         """Every weekly session time of the active students, by weekday, start and name."""

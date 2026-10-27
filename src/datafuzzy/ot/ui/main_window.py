@@ -39,7 +39,7 @@ from .about import AboutDialog
 from .date_view import DayRecordsView, MarkedCalendar, to_date, to_qdate
 from .editor import RecordEditor
 from .exchange_dialogs import ExcelExportDialog, ExportDialog, ImportDialog
-from .i18n import language, save_language, tr
+from .i18n import language, mode_names, save_language, tr
 from .location_view import NO_LOCATION, LocationRecordsView
 from .profile_dialog import StudentProfileDialog
 from .settings_dialog import SettingsDialog
@@ -133,7 +133,7 @@ class TheraNoteWindow(QMainWindow):
         self.resize(1100, 720)
 
         self._build_menus()
-        self.mode_switch = SegmentedControl([tr("學生"), tr("日期"), tr("地點"), tr("課表")])
+        self.mode_switch = SegmentedControl(mode_names(), compact=True)
         self.add_student_btn = QPushButton(tr("新增學生"))
         self.add_record_btn = QPushButton(tr("新增病歷"))
         self.export_btn = QPushButton(tr("匯出"))
@@ -301,7 +301,8 @@ class TheraNoteWindow(QMainWindow):
         return True
 
     def _ask_profile(self, name: str, current: StudentProfile) -> StudentProfile | None:
-        dialog = StudentProfileDialog(name, current, parent=self, locations=self.store.all_locations())
+        dialog = StudentProfileDialog(name, current, parent=self, locations=self.store.all_locations(),
+                                      classrooms=self.store.session_classrooms())
         return dialog.profile() if dialog.exec() == QDialog.DialogCode.Accepted else None
 
     def edit_profile(self, student_id: int) -> bool:

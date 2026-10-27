@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.23.0] - 2026-10-26
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 每個看診時段可以填「學生教室」：要到哪個教室接學生。下拉選單會列出其他時段用過的教室，也可以直接輸入新的；不填則留空。
+- 學生教室會顯示在病歷上方的基本資訊（例如「週五 10:00 AM–10:30 AM（教室：301）」）與課表的每位學生卡片上。
+
+### 修正
+- English 介面的四個模式改為一致的名稱：Students／Calendar／Locations／Timetable（原本單複數混用，且「Students」也誤用在新增病歷、Excel 匯出的單一學生欄位上，現在這些欄位是「Student」）。
+- 側邊欄的模式切換縮小左右留白，English 名稱不再被截斷。
+
 ## [0.7.0.22.0] - 2026-10-26
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。

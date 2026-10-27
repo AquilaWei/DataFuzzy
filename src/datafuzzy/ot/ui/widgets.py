@@ -24,7 +24,8 @@ class SegmentedControl(QWidget):
 
     changed = Signal(int)  # index of the newly selected segment
 
-    def __init__(self, labels: list[str], parent: QWidget | None = None) -> None:
+    def __init__(self, labels: list[str], parent: QWidget | None = None, compact: bool = False) -> None:
+        """`compact` narrows the padding, for many segments in a narrow place (the sidebar)."""
         super().__init__(parent)
         self._group = QButtonGroup(self)
         self._buttons: list[QPushButton] = []
@@ -37,6 +38,7 @@ class SegmentedControl(QWidget):
             button.setCheckable(True)
             position = "first" if i == 0 else "last" if i == len(labels) - 1 else "middle"
             button.setProperty("position", position)  # picked up by the stylesheet
+            button.setProperty("compact", compact)
             self._group.addButton(button, i)
             self._buttons.append(button)
             layout.addWidget(button)

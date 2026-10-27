@@ -180,3 +180,15 @@ def test_model_manager_stays_chinese_without_a_translation(qtbot, tmp_path, file
     dialog = ModelManager([spec], tmp_path)
     qtbot.addWidget(dialog)
     assert dialog.rows[0].button.text() == "下載"
+
+
+def test_mode_names_are_plural_views_in_english():
+    set_language("en")
+    from datafuzzy.ot.ui.i18n import mode_names
+
+    assert mode_names() == ["Students", "Calendar", "Locations", "Timetable"]
+
+
+def test_a_single_student_field_is_singular_in_english():
+    set_language("en")
+    assert tr("學生") == "Student"

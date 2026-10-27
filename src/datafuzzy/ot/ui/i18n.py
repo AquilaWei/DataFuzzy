@@ -47,6 +47,16 @@ def save_language(code: str) -> None:
     _settings().setValue(SETTING, code)
 
 
+MODES = ("學生", "日期", "地點", "課表")
+MODES_ENGLISH = ("Students", "Calendar", "Locations", "Timetable")
+
+
+def mode_names() -> list[str]:
+    """The four modes' names for the switch. Kept apart from ENGLISH because the same Chinese
+    words also label single fields ("學生" is "Student" next to a drop-down)."""
+    return list(MODES_ENGLISH if _language == "en" else MODES)
+
+
 def tr(text: str, **values: object) -> str:
     """`text` (the Chinese) in the interface language, with `values` filled into its {fields}."""
     if _language == "en":
@@ -56,7 +66,7 @@ def tr(text: str, **values: object) -> str:
 
 ENGLISH = {
     # main window
-    "學生": "Students",
+    "學生": "Student",
     "日期": "Date",
     "地點": "Location",
     "新增學生": "Add student",
@@ -156,6 +166,10 @@ ENGLISH = {
     "到": "to",
     "編輯基本資訊": "Edit profile",
     "看診時段": "Sessions",
+    "學生教室": "Classroom",
+    "到哪個教室接學生": "The classroom to pick the student up from",
+    "（教室：{room}）": " (classroom: {room})",
+    "教室：{room}": "Classroom: {room}",
     "＋ 新增時段": "+ Add session",
     "移除這個時段": "Remove this session",
     "例如 10:30 AM": "e.g. 10:30 AM",

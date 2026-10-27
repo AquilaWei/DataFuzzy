@@ -59,6 +59,7 @@ QPushButton#segment {
     border-radius: 0; border: 1px solid palette(mid); padding: 5px 16px; margin-left: -1px;
 }
 QPushButton#segment:checked { background: palette(highlight); color: palette(highlighted-text); }
+QPushButton#segment[compact="true"] { padding: 5px 2px; }
 QPushButton#segment[position="first"] {
     border-top-left-radius: 8px; border-bottom-left-radius: 8px; margin-left: 0;
 }

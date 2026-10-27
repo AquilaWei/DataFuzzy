@@ -90,3 +90,20 @@ def test_summary_lists_the_session_times(qtbot):
     qtbot.addWidget(summary)
     summary.show_profile("王小明", StudentProfile(sessions=(Session(0, "14:00", "14:30"), Session(4, "10:00", "10:30"))))
     assert summary.values["sessions"].text() == "週一 2:00 PM–2:30 PM、週五 10:00 AM–10:30 AM"
+
+
+def test_a_session_can_name_the_classroom_to_fetch_the_student_from(qtbot):
+    dialog = StudentProfileDialog("王小明", StudentProfile(), today=date(2026, 10, 1), classrooms=["301", "資源班"])
+    qtbot.addWidget(dialog)
+    row = dialog.sessions.add_row()
+    row.start.setEditText("10:00 AM")
+    assert [row.classroom.itemText(i) for i in range(row.classroom.count())] == ["301", "資源班"]
+    row.classroom.setEditText("302")
+    assert dialog.profile().sessions == (Session(0, "10:00", "10:30", "302"),)
+
+
+def test_summary_shows_the_classroom_of_a_session(qtbot):
+    summary = ProfileSummary()
+    qtbot.addWidget(summary)
+    summary.show_profile("王小明", StudentProfile(sessions=(Session(4, "10:00", "10:30", "301"),)))
+    assert summary.values["sessions"].text() == "週五 10:00 AM–10:30 AM（教室：301）"

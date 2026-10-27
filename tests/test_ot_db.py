@@ -703,3 +703,24 @@ def test_timetable_lists_active_students_sessions_by_weekday_and_time(store):
     store.set_active(lin.id, False)
     assert [(s.weekday, s.start, st.name) for s, st in store.timetable()] == [
         (0, "09:00", "王小明"), (4, "10:00", "Amy"), (4, "10:00", "王小明")]
+
+
+def test_a_session_keeps_its_classroom_trimmed(store):
+    student = store.add_student("王小明")
+    store.set_profile(student.id, StudentProfile(sessions=(Session(4, "10:00", "10:30", " 301 "),)))
+    assert store.get_profile(student.id).sessions == (Session(4, "10:00", "10:30", "301"),)
+
+
+def test_a_session_saved_before_classrooms_has_none(store):
+    student = store.add_student("王小明")
+    blob = store._enc('{"sessions": [{"weekday": 4, "start": "10:00", "end": "10:30"}]}', "student.profile")
+    with store._db:
+        store._db.execute("UPDATE student SET profile = ? WHERE id = ?", (blob, student.id))
+    assert store.get_profile(student.id).sessions == (Session(4, "10:00", "10:30"),)
+
+
+def test_session_classrooms_lists_each_room_once(store):
+    ming, amy = store.add_student("王小明"), store.add_student("Amy")
+    store.set_profile(ming.id, StudentProfile(sessions=(Session(4, "10:00", "10:30", "301"), Session(0, "09:00", "09:30"))))
+    store.set_profile(amy.id, StudentProfile(sessions=(Session(1, "10:00", "10:30", "301"), Session(2, "09:00", "09:30", "資源班"))))
+    assert store.session_classrooms() == ["301", "資源班"]

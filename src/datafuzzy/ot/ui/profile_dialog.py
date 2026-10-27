@@ -31,25 +31,40 @@ from .i18n import language, tr
 MONTH_FORMAT = "MM/yyyy"
 
 
+def session_text(session: Session) -> str:
+    """"週五 10:00 AM–10:30 AM（教室：301）", the room left out when not set."""
+    text = f"{weekday_label(session.weekday)} {session_label(session.start, session.end)}"
+    return text + tr("（教室：{room}）", room=session.classroom) if session.classroom else text
+
+
 def sessions_text(sessions: tuple[Session, ...]) -> str:
-    """"週五 10:00 AM–10:30 AM、週一 …" for the summary; "" for none."""
-    joiner = ", " if language() == "en" else "、"
-    return joiner.join(f"{weekday_label(s.weekday)} {session_label(s.start, s.end)}" for s in sessions)
+    """Every session time for the summary, e.g. "週五 10:00 AM–10:30 AM（教室：301）、週一 …"."""
+    return (", " if language() == "en" else "、").join(session_text(s) for s in sessions)
 
 
 class SessionRow(QWidget):
-    """One weekly session time: weekday, start and end. The end keeps to SESSION_MINUTES after
-    the start until it is changed by hand, as in the chart editor."""
+    """One weekly session time: weekday, start, end and the 學生教室 (the room to fetch the
+    student from; `classrooms` fills its drop-down, any other can be typed). The end keeps to
+    SESSION_MINUTES after the start until it is changed by hand, as in the chart editor."""
 
     removed = Signal(object)  # this row
 
-    def __init__(self, session: Session | None = None, parent: QWidget | None = None) -> None:
+    def __init__(self, session: Session | None = None, classrooms: list[str] | None = None,
+                 parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.weekday = QComboBox()
         for day in range(7):
             self.weekday.addItem(weekday_label(day), day)
         self.start = self._time_box(tr("例如 10:00 AM"))
         self.end = self._time_box(tr("例如 10:30 AM"))
+        self.classroom = QComboBox()
+        self.classroom.setEditable(True)
+        self.classroom.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.classroom.addItems(classrooms or [])
+        self.classroom.setEditText("")
+        self.classroom.lineEdit().setPlaceholderText(tr("學生教室"))
+        self.classroom.setToolTip(tr("到哪個教室接學生"))
+        self.classroom.setMinimumContentsLength(6)
         self.remove_btn = QPushButton("✕")
         self.remove_btn.setObjectName("flat")
         self.remove_btn.setToolTip(tr("移除這個時段"))
@@ -57,6 +72,7 @@ class SessionRow(QWidget):
             self.weekday.setCurrentIndex(session.weekday)
             self.start.setEditText(time_label(session.start))
             self.end.setEditText(time_label(session.end))
+            self.classroom.setEditText(session.classroom)
         self._end_follows = session is None or session.end == default_end_time(session.start)
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
@@ -64,6 +80,7 @@ class SessionRow(QWidget):
         row.addWidget(self.start)
         row.addWidget(QLabel("–"))
         row.addWidget(self.end)
+        row.addWidget(self.classroom)
         row.addWidget(self.remove_btn)
         row.addStretch(1)
         self.start.editTextChanged.connect(self._start_changed)
@@ -100,14 +117,17 @@ class SessionRow(QWidget):
             raise ValueError("not a time")
         if not start:
             return None
-        return Session(self.weekday.currentData(), start, end or default_end_time(start))
+        return Session(self.weekday.currentData(), start, end or default_end_time(start),
+                       self.classroom.currentText().strip())
 
 
 class SessionsEditor(QWidget):
     """The student's weekly session times, as many as needed."""
 
-    def __init__(self, sessions: tuple[Session, ...] = (), parent: QWidget | None = None) -> None:
+    def __init__(self, sessions: tuple[Session, ...] = (), classrooms: list[str] | None = None,
+                 parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.classrooms = classrooms or []
         self.rows: list[SessionRow] = []
         self.add_btn = QPushButton(tr("＋ 新增時段"))
         self.add_btn.setObjectName("flat")
@@ -122,7 +142,7 @@ class SessionsEditor(QWidget):
         self.add_btn.clicked.connect(lambda: self.add_row())
 
     def add_row(self, session: Session | None = None) -> SessionRow:
-        row = SessionRow(session)
+        row = SessionRow(session, self.classrooms)
         row.removed.connect(self.remove_row)
         self.rows.append(row)
         self._rows.addWidget(row)
@@ -141,13 +161,15 @@ class SessionsEditor(QWidget):
 
 class StudentProfileDialog(QDialog):
     """Location, diagnosis, age, grade, classroom, case manager, school year and goals of one
-    student. `locations` fills the location drop-down; any other place can be typed."""
+    student, and their weekly session times. `locations` and `classrooms` fill the drop-downs
+    of the location and of each session's 學生教室; any other can be typed."""
 
     def __init__(self, name: str, profile: StudentProfile, today: date | None = None,
-                 parent: QWidget | None = None, locations: list[str] | None = None) -> None:
+                 parent: QWidget | None = None, locations: list[str] | None = None,
+                 classrooms: list[str] | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("{name} 的基本資訊", name=name))
-        self.resize(460, 440)
+        self.resize(640, 480)
         self.location = QComboBox()
         self.location.setObjectName("place")
         self.location.setEditable(True)
@@ -165,7 +187,7 @@ class StudentProfileDialog(QDialog):
         self.year_from = self._month_edit(start)
         self.year_to = self._month_edit(end)
         self.goals = QPlainTextEdit(profile.goals)
-        self.sessions = SessionsEditor(profile.sessions)
+        self.sessions = SessionsEditor(profile.sessions, classrooms)
         self.problem = QLabel("")
         self.problem.setStyleSheet("color: #ff453a;")  # as in the unlock prompt
 

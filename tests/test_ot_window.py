@@ -689,3 +689,11 @@ def test_timetable_sidebar_lists_active_students_without_a_session_time(qtbot, s
     window = make_window(qtbot, store)
     window.set_mode(3)
     assert [window.unscheduled_list.item(i).text() for i in range(window.unscheduled_list.count())] == ["王小明"]
+
+
+def test_timetable_shows_the_classroom_to_fetch_the_student_from(qtbot, store):
+    amy = store.add_student("Amy")
+    store.set_profile(amy.id, StudentProfile(sessions=(Session(4, "10:00", "10:30", "301"),)))
+    window = make_window(qtbot, store)
+    window.set_mode(3)
+    assert [b.text() for b in window.timetable_view.slot_buttons] == ["Amy\n10:00 AM–10:30 AM\n教室：301"]
