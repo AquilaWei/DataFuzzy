@@ -3,6 +3,7 @@ from datetime import date
 
 import pytest
 from PySide6.QtCore import QDate, QPoint, Qt
+from PySide6.QtWidgets import QFrame
 
 from datafuzzy import __version__
 from datafuzzy.core.pipeline import Pipeline
@@ -689,6 +690,29 @@ def test_timetable_sidebar_lists_active_students_without_a_session_time(qtbot, s
     window = make_window(qtbot, store)
     window.set_mode(3)
     assert [window.unscheduled_list.item(i).text() for i in range(window.unscheduled_list.count())] == ["王小明"]
+
+
+def timetable_cells(window, kind):
+    return [c for c in window.timetable_view.scroll.widget().findChildren(QFrame, "ttCell")
+            if c.property("kind") == kind]
+
+
+def test_timetable_frames_every_weekday_and_time_even_when_empty(qtbot, store):
+    amy = store.add_student("Amy")
+    store.set_profile(amy.id, StudentProfile(sessions=(Session(4, "10:00", "10:30"), Session(0, "13:00", "13:30"))))
+    window = make_window(qtbot, store)
+    window.set_mode(3)
+    assert (len(timetable_cells(window, "time")), len(timetable_cells(window, "plain")),
+            len(timetable_cells(window, "band"))) == (2, 5, 5)
+
+
+def test_timetable_shades_every_other_time_row(qtbot, store):
+    amy = store.add_student("Amy")
+    store.set_profile(amy.id, StudentProfile(sessions=(Session(0, "09:00", "09:30"), Session(0, "13:00", "13:30"))))
+    window = make_window(qtbot, store)
+    window.set_mode(3)
+    button = window.timetable_view.slot_buttons[1]  # the 13:00 row, the second one
+    assert button.parent().property("kind") == "band"
 
 
 def test_timetable_shows_the_classroom_to_fetch_the_student_from(qtbot, store):

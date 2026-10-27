@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -124,39 +125,61 @@ class TimetableView(QWidget):
         self.scroll.setWidget(self._grid(slots))
 
     def _grid(self, slots: list[tuple[Session, Student]]) -> QWidget:
+        """A ruled table: weekday columns, one row per start time, every cell framed and every
+        other row shaded, so each student reads across to their time and up to their weekday."""
         weekdays, starts, cells = timetable_grid(slots)
         widget = QWidget()
-        grid = QGridLayout(widget)
+        outer = QVBoxLayout(widget)
+        outer.setContentsMargins(0, 0, 0, 0)
+        table = QFrame()
+        table.setObjectName("timetable")  # draws the outer top and left rules; cells draw the rest
+        outer.addWidget(table)
+        outer.addStretch(1)
+        grid = QGridLayout(table)
         grid.setContentsMargins(0, 0, 0, 0)
-        grid.setHorizontalSpacing(8)
-        grid.setVerticalSpacing(8)
+        grid.setSpacing(0)
         self.slot_buttons = []
+        grid.addWidget(self._cell(QLabel(""), kind="head"), 0, 0)
         for col, weekday in enumerate(weekdays, start=1):
             head = QLabel(weekday_label(weekday))
             head.setObjectName("weekday")
             head.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            grid.addWidget(head, 0, col)
+            grid.addWidget(self._cell(head, kind="head"), 0, col)
             grid.setColumnStretch(col, 1)
         for row, start in enumerate(starts, start=1):
+            band = "band" if row % 2 == 0 else "plain"
             time = QLabel(time_label(start))
             time.setObjectName("slotTime")
             time.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
-            grid.addWidget(time, row, 0)
+            grid.addWidget(self._cell(time, kind="time"), row, 0)
             for col, weekday in enumerate(weekdays, start=1):
-                cell = QVBoxLayout()
-                cell.setSpacing(4)
-                for session, student in cells.get((weekday, start), []):
-                    lines = [student.name, session_label(session.start, session.end)]
-                    if session.classroom:
-                        lines.append(tr("領取教室：{room}", room=session.classroom))
-                    button = QPushButton("\n".join(lines))
-                    button.setObjectName("slot")
-                    button.setToolTip(tr("查看 {name} 的所有病歷", name=student.name))
-                    button.clicked.connect(lambda _=False, sid=student.id: self.show_student(sid))
-                    button.setProperty("student_id", student.id)
-                    self.slot_buttons.append(button)
-                    cell.addWidget(button)
-                cell.addStretch(1)
-                grid.addLayout(cell, row, col)
-        grid.setRowStretch(len(starts) + 1, 1)
+                buttons = [self._slot_button(session, student)
+                           for session, student in cells.get((weekday, start), [])]
+                grid.addWidget(self._cell(*buttons, kind=band), row, col)
         return widget
+
+    @staticmethod
+    def _cell(*children: QWidget, kind: str) -> QFrame:
+        """One framed cell of the table; `kind` (head, time, band or plain) picks its look."""
+        cell = QFrame()
+        cell.setObjectName("ttCell")
+        cell.setProperty("kind", kind)  # picked up by the stylesheet
+        layout = QVBoxLayout(cell)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(4)
+        for child in children:
+            layout.addWidget(child)
+        layout.addStretch(1)
+        return cell
+
+    def _slot_button(self, session: Session, student: Student) -> QPushButton:
+        lines = [student.name, session_label(session.start, session.end)]
+        if session.classroom:
+            lines.append(tr("領取教室：{room}", room=session.classroom))
+        button = QPushButton("\n".join(lines))
+        button.setObjectName("slot")
+        button.setToolTip(tr("查看 {name} 的所有病歷", name=student.name))
+        button.clicked.connect(lambda _=False, sid=student.id: self.show_student(sid))
+        button.setProperty("student_id", student.id)
+        self.slot_buttons.append(button)
+        return button

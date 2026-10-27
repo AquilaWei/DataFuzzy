@@ -71,8 +71,15 @@ QPushButton#slot {
     border-radius: 6px; background: rgba(10, 132, 255, 0.12);
 }
 QPushButton#slot:hover { background: rgba(10, 132, 255, 0.24); }
-QLabel#weekday { font-weight: 600; padding: 4px 0; border-bottom: 1px solid palette(mid); }
-QLabel#slotTime { font-weight: 600; color: #0a84ff; padding: 6px 4px 0 0; }
+QFrame#timetable { border-top: 1px solid palette(mid); border-left: 1px solid palette(mid); }
+QFrame#ttCell {
+    border-right: 1px solid palette(mid); border-bottom: 1px solid palette(mid); background: palette(base);
+}
+QFrame#ttCell[kind="band"] { background: rgba(127, 127, 127, 0.07); }
+QFrame#ttCell[kind="head"] { background: rgba(127, 127, 127, 0.14); }
+QFrame#ttCell[kind="time"] { background: rgba(10, 132, 255, 0.08); min-width: 76px; }
+QLabel#weekday { font-weight: 600; padding: 2px 0; }
+QLabel#slotTime { font-size: 14px; font-weight: 700; color: #0a84ff; padding: 6px 4px 0 0; }
 
 QListWidget { background: transparent; border: none; outline: none; }
 QListWidget::item { border-radius: 8px; padding: 8px 10px; margin: 1px 6px; }

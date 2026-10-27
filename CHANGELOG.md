@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.25.0] - 2026-10-27
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 變更
+- 課表改成有格線的表格：每個星期 × 時段都有框線（沒有學生的格子也有），時段列隔行加底色，左邊的時間欄加底色並放大字體，一眼就看得出每位學生落在哪一天的哪個時段。
+
 ## [0.7.0.24.0] - 2026-10-27
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
