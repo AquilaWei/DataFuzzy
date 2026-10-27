@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QScrollArea,
     QSplitter,
     QTabWidget,
     QVBoxLayout,
@@ -32,11 +33,11 @@ from .compare_panel import ComparePanel, candidate_label, compare_candidates
 from .date_view import to_date, to_qdate
 from .i18n import language, tr
 from .profile_dialog import ProfileSummary
+from .widgets import GrowingTextEdit
 
 AUTOSAVE_MS = 800
-
-
-ACTIVITY_LINES = 3  # height of the activity box, in lines
+ACTIVITY_LINES = 3  # the activity box's least height, in lines; it grows with the text
+CHART_MIN_HEIGHT = 280  # the Chinese/English tabs never get squeezed below this; the page scrolls
 
 
 class RecordEditor(QWidget):
@@ -99,10 +100,8 @@ class RecordEditor(QWidget):
         # The end keeps to SESSION_MINUTES after the start until it is set by hand.
         self._end_follows = not record.end_time or record.end_time == default_end_time(record.start_time)
 
-        self.activity_edit = QPlainTextEdit(record.activity)
+        self.activity_edit = GrowingTextEdit(record.activity, ACTIVITY_LINES)
         self.activity_edit.setPlaceholderText(tr("今天的治療活動與手段（只留在本機，不會匯出）"))
-        lines = self.activity_edit.fontMetrics().lineSpacing() * ACTIVITY_LINES
-        self.activity_edit.setFixedHeight(lines + 2 * self.activity_edit.frameWidth() + 12)
 
         self.zh_edit = QPlainTextEdit(record.zh_text)
         self.zh_edit.setPlaceholderText(tr("中文病歷（可中英夾雜）"))
@@ -113,6 +112,7 @@ class RecordEditor(QWidget):
         self.tabs.addTab(self.en_edit, "English")
         self.tabs.setCurrentIndex(1 if language() == "en" else 0)  # the interface language first
         self.tabs.setToolTip(tr("點兩下「中文」或「English」複製整份病歷"))
+        self.tabs.setMinimumHeight(CHART_MIN_HEIGHT)
 
         top = QHBoxLayout()
         top.addWidget(self.back_btn)
@@ -154,14 +154,26 @@ class RecordEditor(QWidget):
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         self.splitter.setChildrenCollapsible(False)
         self.splitter.addWidget(chart)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 16, 24, 20)
-        layout.setSpacing(10)
-        layout.addLayout(top)
+        # Everything under the top bar scrolls as one page, so a long profile or activity list
+        # pushes the chart down instead of squeezing it.
+        page = QWidget()
+        self.page_layout = QVBoxLayout(page)
+        self.page_layout.setContentsMargins(24, 0, 24, 20)
+        self.page_layout.setSpacing(10)
         # Who the student is first and across the full width, so it stays on top while comparing.
-        layout.addWidget(self.profile)
-        layout.addWidget(line)
-        layout.addWidget(self.splitter, 1)
+        self.page_layout.addWidget(self.profile)
+        self.page_layout.addWidget(line)
+        self.page_layout.addWidget(self.splitter, 1)
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll.setWidget(page)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 16, 0, 0)
+        layout.setSpacing(10)
+        top.setContentsMargins(24, 0, 24, 0)
+        layout.addLayout(top)
+        layout.addWidget(self.scroll, 1)
 
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
@@ -169,6 +181,7 @@ class RecordEditor(QWidget):
         self._timer.timeout.connect(self.flush)
         # Connected after the texts are filled in, so showing a record is not an edit.
         self.activity_edit.textChanged.connect(lambda: self._changed("activity"))
+        self.activity_edit.fitted.connect(self._match_activities)
         self.time_box.editTextChanged.connect(self._start_changed)
         self.end_box.editTextChanged.connect(self._end_changed)
         self.zh_edit.textChanged.connect(lambda: self._changed("zh_text"))
@@ -217,7 +230,17 @@ class RecordEditor(QWidget):
             height = max(mine.sizeHint().height(), theirs.sizeHint().height())
             mine.setFixedHeight(height)
             theirs.setFixedHeight(height)
-        panel.activity.setFixedHeight(self.activity_edit.maximumHeight())
+        panel.activity.fitted.connect(self._match_activities)
+        self._match_activities()
+
+    def _match_activities(self) -> None:
+        """Both activity boxes as tall as the longer one needs, as either text grows or rewraps."""
+        boxes = [self.activity_edit] + ([self.compare.activity] if self.compare is not None else [])
+        height = max(box.needed_height() for box in boxes)
+        for box in boxes:
+            if box.floor != height:
+                box.floor = height
+                box.fit()
 
     def close_compare(self) -> None:
         if self.compare is None:
@@ -225,6 +248,7 @@ class RecordEditor(QWidget):
         self.compare.setParent(None)  # out of the splitter now, not when deleteLater runs
         self.compare.deleteLater()
         self.compare = None
+        self._match_activities()  # back to its own height
 
     def copy_tab(self, index: int) -> None:
         """Put the whole Chinese (0) or English (1) chart on the clipboard."""

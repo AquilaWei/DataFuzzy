@@ -2,10 +2,19 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 
-from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QMenu, QPushButton, QWidget
+from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtGui import QResizeEvent
+from PySide6.QtWidgets import (
+    QButtonGroup,
+    QHBoxLayout,
+    QMenu,
+    QPlainTextEdit,
+    QPushButton,
+    QWidget,
+)
 
 from .i18n import tr
 
@@ -54,3 +63,48 @@ class SegmentedControl(QWidget):
 
     def button(self, index: int) -> QPushButton:
         return self._buttons[index]
+
+
+class GrowingTextEdit(QPlainTextEdit):
+    """A text box as tall as its text (never shorter than `min_lines`), so all of it shows
+    without scrolling inside the box; the page around it scrolls instead. The height follows
+    typing and rewrapping when the box gets narrower or wider.
+
+    `floor` is a height in pixels it will not go below, for lining it up with another box."""
+
+    fitted = Signal()  # after the height was recalculated
+
+    def __init__(self, text: str = "", min_lines: int = 3, parent: QWidget | None = None) -> None:
+        super().__init__(text, parent)
+        self.min_lines = min_lines
+        self.floor = 0
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.document().documentLayout().documentSizeChanged.connect(lambda _: self.fit())
+        self.fit()
+
+    def needed_height(self) -> int:
+        """Pixels to show every line, from the laid-out blocks (a wrapped block is several lines)."""
+        layout = self.document().documentLayout()
+        text_height = 0.0
+        block = self.document().begin()
+        while block.isValid():
+            text_height += layout.blockBoundingRect(block).height()
+            block = block.next()
+        text_height = max(text_height, self.min_lines * self.fontMetrics().lineSpacing())
+        margins = self.contentsMargins()
+        return (math.ceil(text_height) + 2 * int(self.document().documentMargin())
+                + margins.top() + margins.bottom())
+
+    def fit(self) -> None:
+        self.setFixedHeight(max(self.needed_height(), self.floor))
+        self.fitted.emit()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)  # rewraps the text to the new width
+        if event.size().width() != event.oldSize().width():
+            self.fit()
+
+    def changeEvent(self, event: QEvent) -> None:
+        super().changeEvent(event)
+        if event.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange):
+            self.fit()

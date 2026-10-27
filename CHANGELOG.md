@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.24.0] - 2026-10-27
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 變更
+- 病歷頁整頁可以上下捲動：基本資訊（例如 Goals）很長時，下方的活動與病歷不再被擠壓，往下捲就看得到。
+- 「活動」欄會隨字數自動調整高度（至少 3 行），所有內容都直接顯示，不必在小框裡捲動；視窗變窄、文字換行變多時也會跟著長高。
+- 對照其他病歷時，兩邊的活動欄取較高的一邊，維持左右對齊。
+
 ## [0.7.0.23.1] - 2026-10-26
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。

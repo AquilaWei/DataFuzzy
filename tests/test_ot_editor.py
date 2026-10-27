@@ -40,7 +40,7 @@ def test_profile_is_shown_above_the_chart(qtbot, store, record):
     values = editor.profile.values
     assert (values["diagnosis"].text(), values["grade"].text(), values["location"].text(), values["age"].text()) == (
         "ADHD, ODD", "3", "新竹國小", "—")
-    page = editor.layout()
+    page = editor.page_layout
     assert page.indexOf(editor.profile) < page.indexOf(editor.splitter)
 
 
@@ -281,7 +281,7 @@ def test_the_profile_stays_above_both_charts_while_comparing(qtbot, store, recor
     compare_setup(store, record)
     editor = make_editor(qtbot, store, record)
     editor.compare_menu().actions()[0].trigger()
-    assert editor.profile.parent() is editor
+    assert editor.profile.parent() is editor.scroll.widget()
     assert editor.splitter.count() == 2
 
 
@@ -293,6 +293,41 @@ def test_the_comparisons_rows_line_up_with_the_charts(qtbot, store, record):
     assert panel.heading_row.height() == editor.heading_row.height()
     assert panel.times_row.height() == editor.times_row.height()
     assert panel.activity.height() == editor.activity_edit.height()
+
+
+def test_long_activities_make_the_box_taller(qtbot, store, record):
+    editor = make_editor(qtbot, store, record)
+    editor.show()
+    short = editor.activity_edit.height()
+    editor.activity_edit.setPlainText("串珠\n平衡木\n拋接球\n剪紙\n跳格子\n盪鞦韆")
+    qtbot.wait(10)
+    assert editor.activity_edit.height() > short
+    assert editor.activity_edit.verticalScrollBar().maximum() == 0
+
+
+def test_the_profile_and_chart_scroll_as_one_page(qtbot, store, record):
+    editor = make_editor(qtbot, store, record)
+    assert editor.scroll.widget().isAncestorOf(editor.profile)
+    assert editor.scroll.widget().isAncestorOf(editor.splitter)
+
+
+def test_a_longer_compared_activity_makes_both_boxes_taller(qtbot, store, record):
+    older, _, _ = compare_setup(store, record)
+    store.update_record(older.id, activity="串珠\n平衡木\n拋接球\n剪紙\n跳格子\n盪鞦韆")
+    editor = make_editor(qtbot, store, record)
+    short = editor.activity_edit.height()
+    editor.show_compare(older.id)
+    assert editor.activity_edit.height() == editor.compare.activity.height() > short
+
+
+def test_closing_the_comparison_gives_the_activity_its_own_height_back(qtbot, store, record):
+    older, _, _ = compare_setup(store, record)
+    store.update_record(older.id, activity="串珠\n平衡木\n拋接球\n剪紙\n跳格子\n盪鞦韆")
+    editor = make_editor(qtbot, store, record)
+    short = editor.activity_edit.height()
+    editor.show_compare(older.id)
+    editor.close_compare()
+    assert editor.activity_edit.height() == short
 
 
 def test_the_comparison_shows_its_own_times(qtbot, store, record):

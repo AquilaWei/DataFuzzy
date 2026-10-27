@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 from ..db import Record
 from .cards import date_label, preview_text, time_label
 from .i18n import language, tr
+from .widgets import GrowingTextEdit
 
 
 def compare_candidates(records: list[Record], current_id: int, current_day: date) -> list[Record]:
@@ -52,11 +53,14 @@ class ComparePanel(QWidget):
         self.close_btn.setToolTip(tr("關閉對照"))
         self.start = QLabel(time_label(record.start_time) or "—")
         self.end = QLabel(time_label(record.end_time) or "—")
-        self.activity = self._read_only(record.activity, tr("（沒有記錄活動）"))
+        self.activity = GrowingTextEdit(record.activity)
+        self.activity.setReadOnly(True)
+        self.activity.setPlaceholderText(tr("（沒有記錄活動）"))
         self.tabs = QTabWidget()
         self.tabs.addTab(self._read_only(record.zh_text, tr("（沒有中文病歷）")), tr("中文"))
         self.tabs.addTab(self._read_only(record.en_text, tr("（沒有英文病歷）")), "English")
         self.tabs.setCurrentIndex(1 if language() == "en" else 0)  # as in the editor
+        self.tabs.setMinimumHeight(280)  # the editor's CHART_MIN_HEIGHT
 
         self.heading_row = QWidget()
         heading = QHBoxLayout(self.heading_row)
