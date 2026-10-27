@@ -3,7 +3,15 @@ records, at every place, newest first."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, Qt, Signal
+from PySide6.QtCore import QModelIndex, QPoint, QRect, QSize, Qt, Signal
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QFontMetrics,
+    QGuiApplication,
+    QPainter,
+    QPalette,
+)
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -12,17 +20,115 @@ from PySide6.QtWidgets import (
     QMenu,
     QPushButton,
     QStackedWidget,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QVBoxLayout,
     QWidget,
 )
 
-from ..db import RecordStore
+from ..db import RecordStore, StudentProfile
 from .cards import date_label, preview_text, time_label
 from .date_view import NAME_ROLE, PLACE_ROLE, PREVIEW_ROLE, TIME_ROLE, DayRecordDelegate
 from .i18n import tr
+from .profile_dialog import sessions_text
+from .theme import ACCENT
 from .widgets import record_menu
 
 NO_LOCATION = "未填地點"
+DETAILS_ROLE = Qt.ItemDataRole.UserRole + 1  # [(label, value), …] of the profile, "" when not filled
+SESSIONS_ROLE = Qt.ItemDataRole.UserRole + 2  # the weekly session times as text, "" when none
+INACTIVE_ROLE = Qt.ItemDataRole.UserRole + 3
+PROFILE_FIELDS = (("Diagnosis", "diagnosis"), ("Age", "age"), ("Grade", "grade"), ("Classroom", "classroom"))
+
+
+def profile_details(profile: StudentProfile) -> list[tuple[str, str]]:
+    """The fields shown under a student's name, in this order, "—" standing in for an empty one
+    so every row has its values in the same places."""
+    return [(label, getattr(profile, field) or "—") for label, field in PROFILE_FIELDS]
+
+
+class StudentRowDelegate(QStyledItemDelegate):
+    """A student of the by-location list as a card: the name large and bold, then the profile's
+    Diagnosis, Age, Grade and Classroom (label in grey, value in the text colour), then the weekly
+    session times if any."""
+
+    PAD_X, PAD_Y, GAP, PAIR_GAP = 14, 10, 5, 18
+
+    def _fonts(self, option: QStyleOptionViewItem) -> tuple[QFont, QFont, QFont]:
+        name = QFont(option.font)
+        name.setPointSizeF(name.pointSizeF() + 3)
+        name.setWeight(QFont.Weight.Bold)
+        value = QFont(option.font)
+        value.setWeight(QFont.Weight.DemiBold)
+        small = QFont(option.font)
+        small.setPointSizeF(small.pointSizeF() - 1)
+        return name, value, small
+
+    def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
+        name, value, small = self._fonts(option)
+        height = 2 * self.PAD_Y + QFontMetrics(name).height() + self.GAP + QFontMetrics(value).height()
+        if index.data(SESSIONS_ROLE):
+            height += self.GAP + QFontMetrics(small).height()
+        return QSize(option.rect.width(), height)
+
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex) -> None:
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        selected = bool(opt.state & QStyle.StateFlag.State_Selected)
+        hovered = bool(opt.state & QStyle.StateFlag.State_MouseOver)
+        palette = QGuiApplication.palette()  # the list's own Base is transparent (stylesheet)
+        text = palette.color(QPalette.ColorRole.HighlightedText if selected else QPalette.ColorRole.Text)
+        grey = text if selected else palette.color(QPalette.ColorRole.PlaceholderText)
+        name_font, value_font, small_font = self._fonts(opt)
+
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        card = opt.rect.adjusted(1, 1, -1, -1)
+        painter.setPen(QColor(palette.color(QPalette.ColorRole.Mid)))
+        painter.setBrush(palette.color(QPalette.ColorRole.Highlight if selected
+                                       else QPalette.ColorRole.Midlight if hovered else QPalette.ColorRole.Base))
+        painter.drawRoundedRect(card, 8, 8)
+        inactive = bool(index.data(INACTIVE_ROLE))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(grey if inactive else (text if selected else QColor(ACCENT)))
+        painter.drawRoundedRect(QRect(card.left() + 6, card.top() + 8, 3, card.height() - 16), 1.5, 1.5)
+
+        r = card.adjusted(self.PAD_X, self.PAD_Y - 1, -self.PAD_X, -self.PAD_Y + 1)
+        name_h = QFontMetrics(name_font).height()
+        painter.setFont(name_font)
+        painter.setPen(grey if inactive else text)
+        name = opt.text if not inactive else tr("{name}（停用）", name=opt.text)
+        painter.drawText(QRect(r.left(), r.top(), r.width(), name_h),
+                         Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, name)
+
+        top = r.top() + name_h + self.GAP
+        line_h = QFontMetrics(value_font).height()
+        x = r.left()
+        for label, value in index.data(DETAILS_ROLE) or []:
+            for font, colour, part in ((small_font, grey, label + " "), (value_font, text, value)):
+                metrics = QFontMetrics(font)
+                room = r.right() - x
+                if room <= 0:
+                    break
+                shown = metrics.elidedText(part, Qt.TextElideMode.ElideRight, room)
+                painter.setFont(font)
+                painter.setPen(colour)
+                painter.drawText(QRect(x, top, room, line_h),
+                                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, shown)
+                x += metrics.horizontalAdvance(shown)
+            x += self.PAIR_GAP
+
+        if sessions := index.data(SESSIONS_ROLE):
+            top += line_h + self.GAP
+            metrics = QFontMetrics(small_font)
+            painter.setFont(small_font)
+            painter.setPen(grey)
+            painter.drawText(QRect(r.left(), top, r.width(), metrics.height()),
+                             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                             metrics.elidedText(tr("看診時段") + "  " + sessions, Qt.TextElideMode.ElideRight,
+                                                r.width()))
+        painter.restore()
 
 
 class LocationRecordsView(QWidget):
@@ -46,7 +152,8 @@ class LocationRecordsView(QWidget):
         self.count = QLabel("")
         self.count.setObjectName("subtle")
         self.students = QListWidget()
-        self.students.setSpacing(2)
+        self.students.setSpacing(3)
+        self.students.setItemDelegate(StudentRowDelegate(self.students))
         self.list = QListWidget()
         self.list.setSpacing(4)
         self.list.setItemDelegate(DayRecordDelegate(self.list))
@@ -104,7 +211,8 @@ class LocationRecordsView(QWidget):
             self.count.setText("")
             self.back_btn.hide()
             return
-        names = {s.id: s.name for s in self.store.students()}
+        students = {s.id: s for s in self.store.students()}
+        names = {sid: s.name for sid, s in students.items()}
         seen = self.store.students_at(self.location)
         if self.student_id not in seen:
             self.student_id = None  # deleted, or no longer seen here
@@ -114,9 +222,14 @@ class LocationRecordsView(QWidget):
             self.pages.setCurrentWidget(self.students)
             self.title.setText(place)
             self.count.setText(tr("{count} 位學生", count=len(seen)))
-            for student_id in seen:
+            # Inactive students last, as in the main student list; otherwise most recently seen first.
+            for student_id in sorted(seen, key=lambda sid: not students[sid].active):
+                profile = self.store.get_profile(student_id)
                 item = QListWidgetItem(names[student_id])
                 item.setData(Qt.ItemDataRole.UserRole, student_id)
+                item.setData(DETAILS_ROLE, profile_details(profile))
+                item.setData(SESSIONS_ROLE, sessions_text(profile.sessions))
+                item.setData(INACTIVE_ROLE, not students[student_id].active)
                 self.students.addItem(item)
             return
         self.pages.setCurrentWidget(self.list)

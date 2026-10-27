@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.26.0] - 2026-10-27
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 變更
+- 地點模式的學生清單改成卡片：名字放大加粗，下面列出 Diagnosis、Age、Grade、Classroom（沒填的顯示「—」），有看診時段的再多一行時段與領取教室。
+- 停用的學生在地點模式也排在最後、以灰色顯示並標示「（停用）」。
+
 ## [0.7.0.25.0] - 2026-10-27
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。

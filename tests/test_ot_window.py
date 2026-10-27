@@ -10,6 +10,7 @@ from datafuzzy.core.pipeline import Pipeline
 from datafuzzy.ot.db import RecordStore, Session, StudentProfile
 from datafuzzy.ot.ui import main_window
 from datafuzzy.ot.ui.date_view import NAME_ROLE, PLACE_ROLE
+from datafuzzy.ot.ui.location_view import DETAILS_ROLE, INACTIVE_ROLE, SESSIONS_ROLE
 from datafuzzy.ot.ui.main_window import (
     DATE_MODE,
     LOCATION_MODE,
@@ -695,6 +696,50 @@ def test_timetable_sidebar_lists_active_students_without_a_session_time(qtbot, s
 def timetable_cells(window, kind):
     return [c for c in window.timetable_view.scroll.widget().findChildren(QFrame, "ttCell")
             if c.property("kind") == kind]
+
+
+def location_student_rows(window):
+    view = window.location_view
+    return [view.students.item(i) for i in range(view.students.count())]
+
+
+def test_location_students_show_diagnosis_age_grade_and_classroom(qtbot, store):
+    ming = store.add_student("王小明")
+    store.set_profile(ming.id, StudentProfile(diagnosis="ADHD, ODD", age="8", grade="3", classroom="301"))
+    store.add_record(ming.id, date(2026, 10, 1), "新竹國小", "x")
+    window = make_window(qtbot, store)
+    window.set_mode(2)
+    assert location_student_rows(window)[0].data(DETAILS_ROLE) == [
+        ("Diagnosis", "ADHD, ODD"), ("Age", "8"), ("Grade", "3"), ("Classroom", "301")]
+
+
+def test_location_students_show_a_dash_for_an_empty_profile_field(qtbot, store):
+    ming = store.add_student("王小明")
+    store.set_profile(ming.id, StudentProfile(diagnosis="ASD"))
+    store.add_record(ming.id, date(2026, 10, 1), "新竹國小", "x")
+    window = make_window(qtbot, store)
+    window.set_mode(2)
+    assert location_student_rows(window)[0].data(DETAILS_ROLE)[1] == ("Age", "—")
+
+
+def test_location_students_show_their_session_times(qtbot, store):
+    ming = store.add_student("王小明")
+    store.set_profile(ming.id, StudentProfile(sessions=(Session(4, "10:00", "10:30", "301"),)))
+    store.add_record(ming.id, date(2026, 10, 1), "新竹國小", "x")
+    window = make_window(qtbot, store)
+    window.set_mode(2)
+    assert location_student_rows(window)[0].data(SESSIONS_ROLE) == "週五 10:00 AM–10:30 AM（領取教室：301）"
+
+
+def test_location_lists_inactive_students_last(qtbot, store):
+    amy, ming = store.add_student("Amy"), store.add_student("王小明")
+    store.add_record(amy.id, date(2026, 10, 8), "新竹國小", "x")
+    store.add_record(ming.id, date(2026, 10, 1), "新竹國小", "x")
+    store.set_active(amy.id, False)
+    window = make_window(qtbot, store)
+    window.set_mode(2)
+    assert [(r.text(), r.data(INACTIVE_ROLE)) for r in location_student_rows(window)] == [
+        ("王小明", False), ("Amy", True)]
 
 
 def test_timetable_frames_every_weekday_and_time_even_when_empty(qtbot, store):
