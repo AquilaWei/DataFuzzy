@@ -8,8 +8,8 @@ from datafuzzy.ot.ui.profile_dialog import ProfileSummary, StudentProfileDialog
 
 def test_dialog_starts_from_the_saved_profile(qtbot):
     saved = StudentProfile(diagnosis="ADHD, ODD", age="8", grade="3", classroom="301",
-                           case_manager="Ms. Lee", school_year="09/2025-06/2026", goals="Fine motor",
-                           location="新竹國小")
+                           case_manager="Ms. Lee", school_year="09/2025-06/2026", goals=("Fine motor", "Self-care"),
+                           location="新竹國小", plan_504=True, plan_date="10/15/2026")
     dialog = StudentProfileDialog("王小明", saved, today=date(2026, 10, 26))
     qtbot.addWidget(dialog)
     assert dialog.profile() == saved
@@ -107,3 +107,54 @@ def test_summary_shows_the_classroom_of_a_session(qtbot):
     qtbot.addWidget(summary)
     summary.show_profile("王小明", StudentProfile(sessions=(Session(4, "10:00", "10:30", "301"),)))
     assert summary.values["sessions"].text() == "週五 10:00 AM–10:30 AM（領取教室：301）"
+
+
+def test_goals_can_be_added_as_many_as_needed(qtbot):
+    dialog = StudentProfileDialog("王小明", StudentProfile(), today=date(2026, 10, 1))
+    qtbot.addWidget(dialog)
+    dialog.goals.add_row().edit.setPlainText("剪直線")
+    dialog.goals.add_row().edit.setPlainText("扣釦子")
+    assert dialog.profile().goals == ("剪直線", "扣釦子")
+
+
+def test_removing_a_goal_renumbers_the_ones_after_it(qtbot):
+    dialog = StudentProfileDialog("王小明", StudentProfile(goals=("a", "b", "c")), today=date(2026, 10, 1))
+    qtbot.addWidget(dialog)
+    dialog.goals.rows[0].remove_btn.click()
+    assert [row.label.text() for row in dialog.goals.rows] == ["Goal 1", "Goal 2"]
+    assert dialog.profile().goals == ("b", "c")
+
+
+def test_a_blank_goal_is_left_out(qtbot):
+    dialog = StudentProfileDialog("王小明", StudentProfile(), today=date(2026, 10, 1))
+    qtbot.addWidget(dialog)
+    dialog.goals.add_row()
+    assert dialog.profile().goals == ()
+
+
+def test_a_new_profile_is_an_iep(qtbot):
+    dialog = StudentProfileDialog("王小明", StudentProfile(), today=date(2026, 10, 1))
+    qtbot.addWidget(dialog)
+    assert not dialog.profile().plan_504
+
+
+def test_ticking_504_makes_the_plan_a_504(qtbot):
+    dialog = StudentProfileDialog("王小明", StudentProfile(), today=date(2026, 10, 1))
+    qtbot.addWidget(dialog)
+    dialog.plan_504.setChecked(True)
+    dialog.plan_date.setText("03/02/2026")
+    assert (dialog.profile().plan_504, dialog.profile().plan_date) == (True, "03/02/2026")
+
+
+def test_summary_numbers_the_goals(qtbot):
+    summary = ProfileSummary()
+    qtbot.addWidget(summary)
+    summary.show_profile("王小明", StudentProfile(goals=("剪直線", "扣釦子")))
+    assert summary.values["goals"].text() == "1. 剪直線\n2. 扣釦子"
+
+
+def test_summary_shows_which_plan_the_date_is_of(qtbot):
+    summary = ProfileSummary()
+    qtbot.addWidget(summary)
+    summary.show_profile("王小明", StudentProfile(plan_504=True, plan_date="03/02/2026"))
+    assert summary.values["plan"].text() == "504 03/02/2026"

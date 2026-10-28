@@ -1,9 +1,12 @@
 """Writing charts into the school's Excel form: one workbook per student and location, each
-visit's date, activity and English chart in a slot of the template."""
+visit a row of the template: date, time, session type, activity, English chart and a score
+for each of the student's goals."""
 
 from __future__ import annotations
 
+import math
 import re
+import unicodedata
 from collections.abc import Iterable
 from copy import copy
 from datetime import date
@@ -12,18 +15,23 @@ from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment
+from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
 from .db import Record, RecordStore, Student, StudentProfile
 from .school_year import default_school_year, format_school_year
 
 TEMPLATE_SHEET = "blank"
-FIRST_SLOT_ROW = 4
-SLOT_ROWS = 3
-TEMPLATE_SLOTS = 10
-LAST_COLUMN = 11  # K
+HEADER_ROW, GOALS_ROW, HEADINGS_ROW = 1, 2, 3
+FIRST_SLOT_ROW = 4  # one row per visit
+TEMPLATE_SLOTS = 8
+# Columns of a visit's row; Session type, Activity and Comment span several (see _merge_slot).
+DATE_COL, TIME_COL, TYPE_COL, ACTIVITY_COL, COMMENT_COL, FIRST_GOAL_COL = 1, 2, 3, 5, 7, 13
+TEMPLATE_GOALS = 2  # the template's goal columns, M and N
+BLANK_COL = 15  # a column of the template with nothing in it, for resetting spare goal columns
 DATE_FORMAT = "yyyy-mm-dd"
-HEADER_LINE_HEIGHT = 16  # points per line of the Goals row
+LINE_HEIGHT = 16  # points per line of 12-point text
+NO_SCORE = "--"
 
 _FILE_UNSAFE = re.compile(r'[/\\:*?"<>|\x00-\x1f]')
 _SHEET_UNSAFE = re.compile(r"[\[\]:*?/\\]")
@@ -68,21 +76,96 @@ def sheet_title(name: str, used: set[str]) -> str:
 
 
 def header_text(name: str, profile: StudentProfile, today: date) -> str:
-    """The form's first row: who the student is and the school year (this one when not set)."""
+    """The form's first row: who the student is, the date of their IEP (or 504 plan) and the
+    school year (this one when not set). Frequency is left for the therapist to write in."""
     school_year = profile.school_year or format_school_year(*default_school_year(today))
     return (f"Name: {name} / Diagnosis: {profile.diagnosis} / Age: {profile.age} / "
             f"Grade: {profile.grade} / Classroom: {profile.classroom} / "
-            f"Case manager: {profile.case_manager}\nSchool year: {school_year}")
+            f"Case manager: {profile.case_manager}\n{profile.plan_label}: {profile.plan_date}\n"
+            f"Frequency:\nSchool year: {school_year}")
 
 
-def _fill_header(ws: Worksheet, student: Student, profile: StudentProfile, today: date) -> None:
-    ws["A1"] = header_text(student.name, profile, today)
-    goals = ws["A2"]
-    goals.value = f"Goals: {profile.goals}" if profile.goals else "Goals:"
+def goals_text(goals: tuple[str, ...]) -> str:
+    """The form's second row, "Goal 1: …" a line each; "Goal 1:" for a student with none."""
+    return "\n".join(f"Goal {i}: {goal}" for i, goal in enumerate(goals or ("",), start=1)).rstrip()
+
+
+def time_text(start: str, end: str) -> str:
+    """"9:30-10:00" from "09:30" and "10:00", on the 12-hour clock as the form is written
+    by hand; just the start without an end, "" without a start."""
+    def short(hhmm: str) -> str:
+        hour, minute = (int(part) for part in hhmm.split(":"))
+        return f"{(hour - 1) % 12 + 1}:{minute:02d}"
+    if not start:
+        return ""
+    return f"{short(start)}-{short(end)}" if end else short(start)
+
+
+def score_text(score: str) -> str:
+    """A goal's score as the form shows it: "75" becomes "75%", a blank one is NO_SCORE and
+    anything else ("75%", "not met") stays as typed."""
+    score = score.strip()
+    if not score:
+        return NO_SCORE
+    return f"{score}%" if re.fullmatch(r"\d+(\.\d+)?", score) else score
+
+
+def _text_width(text: str) -> int:
+    """Width in Excel's character units: a CJK character takes two."""
+    return sum(2 if unicodedata.east_asian_width(ch) in "WF" else 1 for ch in text)
+
+
+def _lines(text: str, width: float) -> int:
+    """About how many lines `text` wraps to in a cell `width` characters wide."""
+    usable = max(width * 0.9, 1)  # 12-point text is a little wider than the width unit
+    return sum(max(1, math.ceil(_text_width(line) / usable)) for line in text.split("\n"))
+
+
+def _width(ws: Worksheet, first: int, last: int) -> float:
+    return sum(ws.column_dimensions[get_column_letter(c)].width or 13 for c in range(first, last + 1))
+
+
+def _set_goal_columns(ws: Worksheet, count: int) -> int:
+    """Make the template's two goal columns `count` (at least one), each styled like the
+    template's, and stretch the two header rows over them. Returns the last column."""
+    last = FIRST_GOAL_COL + max(count, 1) - 1
+    template_last = FIRST_GOAL_COL + TEMPLATE_GOALS - 1
+    for cells in (f"A{HEADER_ROW}:{get_column_letter(template_last)}{HEADER_ROW}",
+                  f"A{GOALS_ROW}:{get_column_letter(template_last - 1)}{GOALS_ROW}"):
+        ws.unmerge_cells(cells)
+    rows = range(HEADER_ROW, FIRST_SLOT_ROW + TEMPLATE_SLOTS)
+    # Taken before any is changed, as the template's own goal columns are restyled too.
+    styles = {(row, col): copy(ws.cell(row, col)._style)
+              for row in rows for col in (2, FIRST_GOAL_COL, template_last, BLANK_COL)}
+    width = ws.column_dimensions[get_column_letter(FIRST_GOAL_COL)].width or 13
+    for col in range(FIRST_GOAL_COL, max(last, template_last) + 1):
+        for row in rows:
+            if col > last:
+                source = (row, BLANK_COL)
+            elif row in (HEADER_ROW, GOALS_ROW):  # both like the header: one framed box across
+                source = (HEADER_ROW, template_last if col == last else FIRST_GOAL_COL)
+            else:
+                source = (row, FIRST_GOAL_COL)
+            ws.cell(row, col)._style = copy(styles[source])
+        ws.column_dimensions[get_column_letter(col)].width = width
+        ws.cell(HEADINGS_ROW, col).value = f"Goal {col - FIRST_GOAL_COL + 1}" if col <= last else None
+    for col in range(2, min(last, FIRST_GOAL_COL)):
+        ws.cell(GOALS_ROW, col)._style = copy(styles[(HEADER_ROW, 2)])
+    for row in (HEADER_ROW, GOALS_ROW):
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last)
+    return last
+
+
+def _fill_header(ws: Worksheet, student: Student, profile: StudentProfile, today: date) -> int:
+    """Fill the two header rows; returns the last column of the form."""
+    last = _set_goal_columns(ws, len(profile.goals))
+    ws.cell(HEADER_ROW, 1).value = header_text(student.name, profile, today)
+    goals = ws.cell(GOALS_ROW, 1)
+    goals.value = goals_text(profile.goals)
     goals.alignment = Alignment(vertical="top", wrap_text=True)
-    lines = goals.value.count("\n") + 1
-    if lines > 1:
-        ws.row_dimensions[2].height = HEADER_LINE_HEIGHT * lines
+    lines = _lines(goals.value, _width(ws, 1, last))
+    ws.row_dimensions[GOALS_ROW].height = max(ws.row_dimensions[GOALS_ROW].height or 0, LINE_HEIGHT * lines)
+    return last
 
 
 def _load_template() -> Workbook:
@@ -90,37 +173,44 @@ def _load_template() -> Workbook:
         return load_workbook(path)
 
 
-def _copy_slot_style(ws: Worksheet, slot: int) -> None:
-    """Give slot `slot` (0-based, past the template's ten) the look of the last template slot."""
-    source = FIRST_SLOT_ROW + SLOT_ROWS * (TEMPLATE_SLOTS - 1)
-    top = FIRST_SLOT_ROW + SLOT_ROWS * slot
-    for offset in range(SLOT_ROWS):
-        for col in range(1, LAST_COLUMN + 1):
-            src = ws.cell(source + offset, col)
-            dst = ws.cell(top + offset, col)
-            dst._style = copy(src._style)
-    _merge_slot(ws, top)
+def _copy_slot_style(ws: Worksheet, slot: int, last: int) -> None:
+    """Give slot `slot` (0-based, past the template's) the look of the last template slot."""
+    source = FIRST_SLOT_ROW + TEMPLATE_SLOTS - 1
+    for col in range(1, last + 1):
+        ws.cell(FIRST_SLOT_ROW + slot, col)._style = copy(ws.cell(source, col)._style)
+    _merge_slot(ws, FIRST_SLOT_ROW + slot)
 
 
-def _merge_slot(ws: Worksheet, top: int) -> None:
-    bottom = top + SLOT_ROWS - 1
-    for cells in (f"A{top}:A{bottom}", f"B{top}:C{bottom}", f"D{top}:K{bottom}"):
+def _merge_slot(ws: Worksheet, row: int) -> None:
+    for cells in (f"C{row}:D{row}", f"E{row}:F{row}", f"G{row}:L{row}"):
         if cells not in ws.merged_cells:
             ws.merge_cells(cells)
 
 
-def _fill(ws: Worksheet, records: list[Record]) -> None:
+def _fill(ws: Worksheet, records: list[Record], goal_count: int, last: int) -> None:
+    spans = {DATE_COL: DATE_COL, TIME_COL: TIME_COL, TYPE_COL: ACTIVITY_COL - 1,
+             ACTIVITY_COL: COMMENT_COL - 1, COMMENT_COL: FIRST_GOAL_COL - 1}
     for slot, record in enumerate(records):
         if slot >= TEMPLATE_SLOTS:
-            _copy_slot_style(ws, slot)
-        top = FIRST_SLOT_ROW + SLOT_ROWS * slot
-        cells = ((1, record.visit_date), (2, record.activity), (4, record.en_text))
+            _copy_slot_style(ws, slot, last)
+        row = FIRST_SLOT_ROW + slot
+        scores = [score_text(s) for s in record.goal_scores[:goal_count]]
+        scores += [NO_SCORE] * (max(goal_count, 1) - len(scores))
+        cells = [(DATE_COL, record.visit_date), (TIME_COL, time_text(record.start_time, record.end_time)),
+                 (TYPE_COL, record.session_type), (ACTIVITY_COL, record.activity),
+                 (COMMENT_COL, record.en_text)]
+        cells += [(FIRST_GOAL_COL + i, score) for i, score in enumerate(scores)]
+        lines = 1
         for col, value in cells:
-            cell = ws.cell(top, col)
+            cell = ws.cell(row, col)
             cell.value = value if value != "" else None
             cell.alignment = Alignment(horizontal=cell.alignment.horizontal,
                                        vertical="top", wrap_text=True)
-        ws.cell(top, 1).number_format = DATE_FORMAT
+            if isinstance(value, str) and value:
+                lines = max(lines, _lines(value, _width(ws, col, spans.get(col, col))))
+        ws.cell(row, DATE_COL).number_format = DATE_FORMAT
+        if lines > 1:  # Excel does not fit a row's height to merged cells by itself
+            ws.row_dimensions[row].height = LINE_HEIGHT * lines
 
 
 def build_workbook(store: RecordStore, records: Iterable[Record], today: date | None = None) -> Workbook:
@@ -140,8 +230,9 @@ def build_workbook(store: RecordStore, records: Iterable[Record], today: date | 
         ws.page_setup.orientation = template.page_setup.orientation
         ws.page_margins = copy(template.page_margins)
         ws.sheet_view.zoomScale = template.sheet_view.zoomScale
-        _fill_header(ws, student, store.get_profile(student.id), today or date.today())
-        _fill(ws, sorted(by_student[student.id], key=lambda r: (r.visit_date, r.id)))
+        profile = store.get_profile(student.id)
+        last = _fill_header(ws, student, profile, today or date.today())
+        _fill(ws, sorted(by_student[student.id], key=lambda r: (r.visit_date, r.id)), len(profile.goals), last)
     wb.remove(template)
     for i, ws in enumerate(wb.worksheets):
         ws.sheet_view.tabSelected = i == 0

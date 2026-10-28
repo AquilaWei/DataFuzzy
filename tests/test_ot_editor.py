@@ -353,3 +353,48 @@ def test_closing_the_comparison_leaves_the_chart_alone(qtbot, store, record):
     editor.compare_menu().actions()[0].trigger()
     editor.compare.close_btn.click()
     assert editor.compare is None
+
+
+def test_a_chart_starts_as_an_individual_session(qtbot, store, record):
+    editor = make_editor(qtbot, store, record)
+    assert editor.session_type.button("individual").isChecked()
+
+
+def test_picking_a_session_type_is_saved(qtbot, store, record):
+    editor = make_editor(qtbot, store, record)
+    editor.session_type.button("make up").click()
+    editor.flush()
+    assert store.get_record(record.id).session_type == "make up"
+
+
+def test_a_score_box_is_shown_for_each_goal(qtbot, store, record):
+    store.set_profile(record.student_id, StudentProfile(goals=("剪直線", "扣釦子")))
+    editor = make_editor(qtbot, store, record)
+    assert len(editor.scores.boxes) == 2
+
+
+def test_goal_scores_are_saved(qtbot, store, record):
+    store.set_profile(record.student_id, StudentProfile(goals=("剪直線", "扣釦子")))
+    editor = make_editor(qtbot, store, record)
+    editor.scores.boxes[0].setEditText("75%")
+    editor.scores.boxes[1].setEditText("not met")
+    editor.flush()
+    assert store.get_record(record.id).goal_scores == ("75%", "not met")
+
+
+def test_a_goal_added_to_the_profile_gets_a_score_box_and_keeps_the_scores(qtbot, store, record):
+    store.set_profile(record.student_id, StudentProfile(goals=("剪直線",)))
+    editor = make_editor(qtbot, store, record, debounce_ms=60_000)  # not saved while the test runs
+    editor.scores.boxes[0].setEditText("80%")
+    store.set_profile(record.student_id, StudentProfile(goals=("剪直線", "扣釦子")))
+    editor.show_profile()
+    assert editor.scores.scores() == ("80%", "")
+
+
+def test_compared_chart_shows_its_session_type_and_scores(qtbot, store, record):
+    store.set_profile(record.student_id, StudentProfile(goals=("剪直線", "扣釦子")))
+    other = store.add_record(record.student_id, date(2026, 9, 24), session_type="consult", goal_scores=("60%",))
+    editor = make_editor(qtbot, store, record)
+    editor.show_compare(other.id)
+    assert editor.compare.session_type.text() == "Consult"
+    assert [box.text() for box in editor.compare.scores.boxes] == ["60%", "--"]

@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 from ..db import Record
 from .cards import date_label, preview_text, time_label
 from .i18n import language, tr
+from .session_fields import GoalScores, session_type_label
 from .widgets import GrowingTextEdit
 
 
@@ -40,7 +41,8 @@ def candidate_label(record: Record) -> str:
 class ComparePanel(QWidget):
     closed = Signal()
 
-    def __init__(self, record: Record, parent: QWidget | None = None) -> None:
+    def __init__(self, record: Record, goals: tuple[str, ...] = (), parent: QWidget | None = None) -> None:
+        """`goals` are the student's, for naming the record's scores."""
         super().__init__(parent)
         self.record_id = record.id
         # Laid out row for row like the editor's chart, which then matches the row heights.
@@ -84,11 +86,25 @@ class ComparePanel(QWidget):
         times.addWidget(QLabel(tr("結束時間")))
         times.addWidget(self.end)
         times.addStretch(1)
+        self.type_row = QWidget()
+        type_line = QHBoxLayout(self.type_row)
+        type_line.setContentsMargins(0, 0, 0, 0)
+        type_line.addWidget(QLabel("Session type"))
+        self.session_type = QLabel(session_type_label(record.session_type))
+        type_line.addWidget(self.session_type, 1)
+        self.scores_row = QWidget()
+        scores = QVBoxLayout(self.scores_row)
+        scores.setContentsMargins(0, 0, 0, 0)
+        scores.addWidget(QLabel(tr("目標表現")))
+        self.scores = GoalScores(goals, record.goal_scores, read_only=True)
+        scores.addWidget(self.scores)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 0, 0, 0)
         layout.setSpacing(10)  # the editor's chart spacing
         layout.addWidget(self.heading_row)
         layout.addWidget(self.times_row)
+        layout.addWidget(self.type_row)
+        layout.addWidget(self.scores_row)
         layout.addWidget(QLabel(tr("活動")))
         layout.addWidget(self.activity)
         layout.addWidget(self.tabs, 1)

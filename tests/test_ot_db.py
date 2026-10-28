@@ -1,3 +1,4 @@
+import json
 import os
 import sqlite3
 from datetime import date, datetime
@@ -15,6 +16,7 @@ from datafuzzy.ot.db import (
     StudentProfile,
     default_db_path,
     default_end_time,
+    split_goals,
 )
 
 KEY = bytes(range(32))
@@ -88,10 +90,12 @@ def test_profile_is_saved_trimmed(store):
     student = store.add_student("王小明")
     store.set_profile(student.id, StudentProfile(diagnosis=" ADHD, ODD ", age="8", grade="3",
                                                  classroom="301", case_manager="Ms. Lee",
-                                                 school_year="09/2026-06/2027", goals="Fine motor\n"))
+                                                 school_year="09/2026-06/2027",
+                                                 goals=(" Fine motor\n", "  ", "Self-care"),
+                                                 plan_date=" 10/15/2026 "))
     assert store.get_profile(student.id) == StudentProfile(
         diagnosis="ADHD, ODD", age="8", grade="3", classroom="301", case_manager="Ms. Lee",
-        school_year="09/2026-06/2027", goals="Fine motor")
+        school_year="09/2026-06/2027", goals=("Fine motor", "Self-care"), plan_date="10/15/2026")
 
 
 def test_profile_is_stored_encrypted(tmp_path):
@@ -724,3 +728,106 @@ def test_session_classrooms_lists_each_room_once(store):
     store.set_profile(ming.id, StudentProfile(sessions=(Session(4, "10:00", "10:30", "301"), Session(0, "09:00", "09:30"))))
     store.set_profile(amy.id, StudentProfile(sessions=(Session(1, "10:00", "10:30", "301"), Session(2, "09:00", "09:30", "資源班"))))
     assert store.session_classrooms() == ["301", "資源班"]
+
+
+def write_old_profile(path, student_id, fields):
+    """A profile as saved before goals were kept one by one: `goals` is a single text."""
+    old = sqlite3.connect(path)
+    old.execute("UPDATE student SET profile = ? WHERE id = ?",
+                (Cipher(KEY).encrypt(json.dumps(fields, ensure_ascii=False), "student.profile"), student_id))
+    old.commit()
+    old.close()
+
+
+def test_profile_from_before_goal_lists_has_its_goals_split_by_number(tmp_path):
+    path = tmp_path / "t.db"
+    with RecordStore(path, KEY) as store:
+        student = store.add_student("王小明")
+    write_old_profile(path, student.id, {"diagnosis": "ADHD", "goals": "1. 剪直線\n2. 扣釦子\n3. 寫名字"})
+    with RecordStore(path, KEY) as again:
+        assert again.get_profile(student.id).goals == ("剪直線", "扣釦子", "寫名字")
+
+
+def test_profile_from_before_goal_lists_keeps_the_other_fields(tmp_path):
+    path = tmp_path / "t.db"
+    with RecordStore(path, KEY) as store:
+        student = store.add_student("王小明")
+    write_old_profile(path, student.id, {"diagnosis": "ADHD", "goals": "Fine motor"})
+    with RecordStore(path, KEY) as again:
+        assert again.get_profile(student.id) == StudentProfile(diagnosis="ADHD", goals=("Fine motor",))
+
+
+def test_goals_numbered_on_one_line_are_split():
+    assert split_goals("1. Fine motor 2. Self-care") == ("Fine motor", "Self-care")
+
+
+def test_goals_numbered_without_spaces_are_split():
+    assert split_goals("1.寫字2.剪紙") == ("寫字", "剪紙")
+
+
+def test_goals_numbered_goal_1_goal_2_are_split():
+    assert split_goals("Goal 1: cut lines\nGoal 2: write") == ("cut lines", "write")
+
+
+def test_a_number_out_of_turn_stays_in_the_goal():
+    assert split_goals("1. cut 3. lines 2. write") == ("cut 3. lines", "write")
+
+
+def test_a_decimal_is_not_a_goal_number():
+    assert split_goals("Use 1.5 inch grips") == ("Use 1.5 inch grips",)
+
+
+def test_text_before_goal_1_joins_goal_1_without_a_goals_heading():
+    assert split_goals("Goals: in class\n1. cut\n2. write") == ("in class cut", "write")
+
+
+def test_blank_goals_text_is_no_goals():
+    assert split_goals("  ") == ()
+
+
+def test_profile_is_an_iep_unless_marked_504():
+    assert StudentProfile().plan_label == "IEP Date"
+    assert StudentProfile(plan_504=True).plan_label == "504 Date"
+
+
+def test_new_record_is_an_individual_session(store):
+    student = store.add_student("王小明")
+    assert store.add_record(student.id, date(2026, 10, 1)).session_type == "individual"
+
+
+def test_session_type_and_goal_scores_are_read_back(store):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, date(2026, 10, 1))
+    store.update_record(record.id, session_type="group", goal_scores=("75%", "not met"))
+    again = store.get_record(record.id)
+    assert (again.session_type, again.goal_scores) == ("group", ("75%", "not met"))
+
+
+def test_an_unknown_session_type_is_refused(store):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, date(2026, 10, 1))
+    with pytest.raises(ValueError):
+        store.update_record(record.id, session_type="pair")
+
+
+def test_goal_scores_are_stored_encrypted(tmp_path):
+    path = tmp_path / "t.db"
+    with RecordStore(path, KEY) as store:
+        student = store.add_student("王小明")
+        store.add_record(student.id, date(2026, 10, 1), goal_scores=("not met",))
+    assert b"not met" not in path.read_bytes()
+
+
+def test_chart_book_from_before_session_types_reads_them_as_individual(tmp_path):
+    path = tmp_path / "t.db"
+    with RecordStore(path, KEY) as store:
+        student = store.add_student("王小明")
+        record = store.add_record(student.id, date(2026, 10, 1), session_type="consult")
+    old = sqlite3.connect(path)
+    old.execute("ALTER TABLE record DROP COLUMN session_type")
+    old.execute("ALTER TABLE record DROP COLUMN goal_scores")
+    old.commit()
+    old.close()
+    with RecordStore(path, KEY) as again:
+        assert again.get_record(record.id).session_type == "individual"
+        assert again.get_record(record.id).goal_scores == ()

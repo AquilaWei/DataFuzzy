@@ -8,9 +8,12 @@ from datafuzzy.ot.db import RecordStore, StudentProfile
 from datafuzzy.ot.excel_export import (
     build_workbook,
     file_name,
+    goals_text,
     group_by_location,
     header_text,
+    score_text,
     sheet_title,
+    time_text,
     write_workbook,
 )
 from datafuzzy.ot.ui.exchange_dialogs import ExcelExportDialog
@@ -73,20 +76,53 @@ def test_workbook_has_a_sheet_per_student_filled_oldest_first(charts, tmp_path):
     assert wb.sheetnames == ["Amy", "王小明"]
     ws = wb["王小明"]
     assert ws["A1"].value.startswith("Name:")
-    assert ws["A2"].value == "Goals:"
-    assert (ws["A4"].value, ws["B4"].value, ws["D4"].value) == (datetime(2026, 10, 1), "畫畫", "Drew circles.")
-    assert (ws["A7"].value, ws["B7"].value, ws["D7"].value) == (datetime(2026, 10, 8), "剪紙", "Worked on cutting.")
-    assert ws["A10"].value is None
-    assert {"A4:A6", "B4:C6", "D4:K6"} <= {str(r) for r in ws.merged_cells.ranges}
-    assert (wb["Amy"]["B4"].value, wb["Amy"]["D4"].value) == ("鞦韆", None)
+    assert ws["A2"].value == "Goal 1:"
+    assert (ws["A4"].value, ws["E4"].value, ws["G4"].value) == (datetime(2026, 10, 1), "畫畫", "Drew circles.")
+    assert (ws["A5"].value, ws["E5"].value, ws["G5"].value) == (datetime(2026, 10, 8), "剪紙", "Worked on cutting.")
+    assert ws["A6"].value is None
+    assert {"C4:D4", "E4:F4", "G4:L4"} <= {str(r) for r in ws.merged_cells.ranges}
+    assert (wb["Amy"]["E4"].value, wb["Amy"]["G4"].value) == ("鞦韆", None)
 
 
-def test_header_lists_the_profile_and_school_year():
+def test_header_lists_the_profile_iep_date_and_school_year():
     profile = StudentProfile(diagnosis="ADHD, ODD", age="8", grade="3", classroom="301",
-                             case_manager="Ms. Lee", school_year="09/2026-06/2027")
+                             case_manager="Ms. Lee", school_year="09/2026-06/2027", plan_date="10/15/2026")
     assert header_text("王小明", profile, TODAY) == (
         "Name: 王小明 / Diagnosis: ADHD, ODD / Age: 8 / Grade: 3 / Classroom: 301 / "
-        "Case manager: Ms. Lee\nSchool year: 09/2026-06/2027")
+        "Case manager: Ms. Lee\nIEP Date: 10/15/2026\nFrequency:\nSchool year: 09/2026-06/2027")
+
+
+def test_header_of_a_504_plan_shows_the_504_date():
+    profile = StudentProfile(plan_504=True, plan_date="03/02/2026")
+    assert "\n504 Date: 03/02/2026\n" in header_text("Amy", profile, TODAY)
+
+
+def test_goals_row_has_a_line_per_goal():
+    assert goals_text(("Fine motor", "Self-care")) == "Goal 1: Fine motor\nGoal 2: Self-care"
+
+
+def test_time_is_written_as_the_form_has_it():
+    assert time_text("09:30", "10:00") == "9:30-10:00"
+
+
+def test_afternoon_time_is_on_the_12_hour_clock():
+    assert time_text("13:00", "13:30") == "1:00-1:30"
+
+
+def test_time_without_an_end_is_the_start():
+    assert time_text("09:30", "") == "9:30"
+
+
+def test_a_bare_number_score_is_a_percentage():
+    assert score_text("75") == "75%"
+
+
+def test_a_blank_score_is_two_dashes():
+    assert score_text(" ") == "--"
+
+
+def test_not_met_stays_as_typed():
+    assert score_text("not met") == "not met"
 
 
 def test_header_without_a_school_year_uses_the_current_one():
@@ -95,12 +131,53 @@ def test_header_without_a_school_year_uses_the_current_one():
 
 def test_sheet_header_is_filled_from_the_students_profile(store):
     student = store.add_student("王小明")
-    store.set_profile(student.id, StudentProfile(diagnosis="ADHD", goals="Fine motor\nSelf-care"))
+    store.set_profile(student.id, StudentProfile(diagnosis="ADHD", goals=("Fine motor", "Self-care")))
     store.add_record(student.id, date(2026, 10, 1), "Lincoln", en_text="Drew.")
     ws = build_workbook(store, store.records_for_student(student.id), today=TODAY)["王小明"]
     assert ws["A1"].value.startswith("Name: 王小明 / Diagnosis: ADHD / ")
-    assert ws["A2"].value == "Goals: Fine motor\nSelf-care"
-    assert ws.row_dimensions[2].height == 32
+    assert ws["A2"].value == "Goal 1: Fine motor\nGoal 2: Self-care"
+
+
+def test_visit_row_has_time_session_type_and_a_score_per_goal(store):
+    student = store.add_student("王小明")
+    store.set_profile(student.id, StudentProfile(goals=("Cut", "Write", "Button")))
+    store.add_record(student.id, date(2026, 10, 1), start_time="09:30", end_time="10:00",
+                     session_type="group", goal_scores=("75", "not met"))
+    ws = build_workbook(store, store.records_for_student(student.id), today=TODAY)["王小明"]
+    assert [ws.cell(4, c).value for c in (2, 3, 13, 14, 15)] == ["9:30-10:00", "group", "75%", "not met", "--"]
+
+
+def test_each_goal_gets_a_column(store):
+    student = store.add_student("王小明")
+    store.set_profile(student.id, StudentProfile(goals=("Cut", "Write", "Button")))
+    store.add_record(student.id, date(2026, 10, 1))
+    ws = build_workbook(store, store.records_for_student(student.id), today=TODAY)["王小明"]
+    assert [ws.cell(3, c).value for c in (13, 14, 15, 16)] == ["Goal 1", "Goal 2", "Goal 3", None]
+    assert ws["O4"].border.right.style == "thin"
+    assert {"A1:O1", "A2:O2"} <= {str(r) for r in ws.merged_cells.ranges}
+
+
+def test_one_goal_leaves_one_goal_column(store):
+    student = store.add_student("王小明")
+    store.set_profile(student.id, StudentProfile(goals=("Cut",)))
+    store.add_record(student.id, date(2026, 10, 1))
+    ws = build_workbook(store, store.records_for_student(student.id), today=TODAY)["王小明"]
+    assert (ws["M3"].value, ws["N3"].value, ws["N4"].border.right.style) == ("Goal 1", None, None)
+    assert "A1:M1" in {str(r) for r in ws.merged_cells.ranges}
+
+
+def test_record_from_before_session_types_exports_as_individual(store):
+    student = store.add_student("王小明")
+    store.add_record(student.id, date(2026, 10, 1))
+    ws = build_workbook(store, store.records_for_student(student.id), today=TODAY)["王小明"]
+    assert (ws["C4"].value, ws["M4"].value) == ("individual", "--")
+
+
+def test_a_long_comment_makes_its_row_taller(store):
+    student = store.add_student("王小明")
+    store.add_record(student.id, date(2026, 10, 1), en_text="word " * 60)
+    ws = build_workbook(store, store.records_for_student(student.id), today=TODAY)["王小明"]
+    assert ws.row_dimensions[4].height > 16
 
 
 def test_more_visits_than_the_template_has_slots(store, tmp_path):
@@ -110,11 +187,11 @@ def test_more_visits_than_the_template_has_slots(store, tmp_path):
     path = tmp_path / "out.xlsx"
     write_workbook(store, store.records_for_student(student.id), path)
     ws = load_workbook(path)["王小明"]
-    assert ws["D34"].value == "day 10"
-    assert ws["D37"].value == "day 11"
+    assert ws["G14"].value == "day 10"
+    assert ws["G15"].value == "day 11"
     merged = {str(r) for r in ws.merged_cells.ranges}
-    assert {"A37:A39", "B37:C39", "D37:K39"} <= merged
-    assert ws["A39"].border.bottom.style == "thin"
+    assert {"C15:D15", "E15:F15", "G15:L15"} <= merged
+    assert ws["A15"].border.bottom.style == "thin"
 
 
 def make_dialog(qtbot, store, confirm=lambda path: True, folder=""):
@@ -196,8 +273,8 @@ def test_each_student_gets_a_file_with_only_that_locations_visits(qtbot, charts,
     amy = tmp_path / "Amy-2026-10-01至2026-10-31.xlsx"
     assert dialog.written == [ming, amy]
     assert load_workbook(ming).sheetnames == ["王小明"]
-    assert load_workbook(amy)["Amy"]["D4"].value == "Balance."
-    assert load_workbook(amy)["Amy"]["A7"].value is None
+    assert load_workbook(amy)["Amy"]["G4"].value == "Balance."
+    assert load_workbook(amy)["Amy"]["A5"].value is None
     assert dialog.result() == dialog.DialogCode.Accepted
 
 

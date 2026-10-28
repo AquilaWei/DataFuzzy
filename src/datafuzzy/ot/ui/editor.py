@@ -1,4 +1,5 @@
-"""Editor for one student's chart on one day: location, activities, Chinese and English text."""
+"""Editor for one student's chart on one day: times, session type, goal scores, activities,
+Chinese and English text."""
 
 from __future__ import annotations
 
@@ -33,6 +34,7 @@ from .compare_panel import ComparePanel, candidate_label, compare_candidates
 from .date_view import to_date, to_qdate
 from .i18n import language, tr
 from .profile_dialog import ProfileSummary
+from .session_fields import GoalScores, SessionTypePicker
 from .widgets import GrowingTextEdit
 
 AUTOSAVE_MS = 800
@@ -61,6 +63,9 @@ class RecordEditor(QWidget):
         self.compare: ComparePanel | None = None
         self.visit_date = record.visit_date
         self._dirty: set[str] = set()
+        self.session_type = SessionTypePicker(record.session_type)
+        # show_profile follows later edits of the goals, keeping the scores typed so far.
+        self.scores = GoalScores(store.get_profile(record.student_id).goals, record.goal_scores)
 
         self.back_btn = QPushButton(tr("‹ 返回"))
         self.back_btn.setObjectName("flat")
@@ -138,6 +143,16 @@ class RecordEditor(QWidget):
         times.addWidget(QLabel(tr("結束時間")))
         times.addWidget(self.end_box)
         times.addStretch(1)
+        self.type_row = QWidget()
+        type_line = QHBoxLayout(self.type_row)
+        type_line.setContentsMargins(0, 0, 0, 0)
+        type_line.addWidget(QLabel("Session type"))
+        type_line.addWidget(self.session_type, 1)
+        self.scores_row = QWidget()
+        scores = QVBoxLayout(self.scores_row)
+        scores.setContentsMargins(0, 0, 0, 0)
+        scores.addWidget(QLabel(tr("目標表現")))
+        scores.addWidget(self.scores)
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
         line.setFrameShadow(QFrame.Shadow.Plain)
@@ -148,6 +163,8 @@ class RecordEditor(QWidget):
         body.setSpacing(10)
         body.addWidget(self.heading_row)
         body.addWidget(self.times_row)
+        body.addWidget(self.type_row)
+        body.addWidget(self.scores_row)
         body.addWidget(QLabel(tr("活動")))
         body.addWidget(self.activity_edit)
         body.addWidget(self.tabs, 1)
@@ -184,6 +201,8 @@ class RecordEditor(QWidget):
         self.activity_edit.fitted.connect(self._match_activities)
         self.time_box.editTextChanged.connect(self._start_changed)
         self.end_box.editTextChanged.connect(self._end_changed)
+        self.session_type.changed.connect(lambda: self._changed("session_type"))
+        self.scores.changed.connect(lambda: self._changed("goal_scores"))
         self.zh_edit.textChanged.connect(lambda: self._changed("zh_text"))
         self.en_edit.textChanged.connect(lambda: self._changed("en_text"))
         self.back_btn.clicked.connect(self.close_editor)
@@ -196,6 +215,7 @@ class RecordEditor(QWidget):
         """Re-read the student's name and profile, e.g. after they were edited."""
         self.student_name = self.store.get_student(self.student_id).name
         profile = self.store.get_profile(self.student_id)
+        self.scores.set_goals(profile.goals)
         self.profile.show_profile(self.student_name,
                                   replace(profile, location=self.store.student_location(self.student_id)))
 
@@ -217,7 +237,8 @@ class RecordEditor(QWidget):
     def show_compare(self, record_id: int) -> None:
         """Show another chart read-only on the right, in place of any shown before."""
         self.close_compare()
-        self.compare = ComparePanel(self.store.get_record(record_id))
+        self.compare = ComparePanel(self.store.get_record(record_id),
+                                    self.store.get_profile(self.student_id).goals)
         self.compare.closed.connect(self.close_compare)
         self.splitter.addWidget(self.compare)
         self._line_up(self.compare)
@@ -226,7 +247,8 @@ class RecordEditor(QWidget):
 
     def _line_up(self, panel: ComparePanel) -> None:
         """Give the comparison's rows the heights of this chart's rows, so the two read across."""
-        for mine, theirs in ((self.heading_row, panel.heading_row), (self.times_row, panel.times_row)):
+        for mine, theirs in ((self.heading_row, panel.heading_row), (self.times_row, panel.times_row),
+                             (self.type_row, panel.type_row), (self.scores_row, panel.scores_row)):
             height = max(mine.sizeHint().height(), theirs.sizeHint().height())
             mine.setFixedHeight(height)
             theirs.setFixedHeight(height)
@@ -322,7 +344,9 @@ class RecordEditor(QWidget):
                   "zh_text": self.zh_edit.toPlainText(),
                   "en_text": self.en_edit.toPlainText(),
                   "start_time": normal_time(self.time_box.currentText()),
-                  "end_time": normal_time(self.end_box.currentText())}
+                  "end_time": normal_time(self.end_box.currentText()),
+                  "session_type": self.session_type.value(),
+                  "goal_scores": self.scores.scores()}
         # A half-typed time ("9:") is not saved; the last good one stays until it is complete.
         changed = {field: values[field] for field in self._dirty if values[field] is not None}
         self._dirty.clear()

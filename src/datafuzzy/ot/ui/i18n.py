@@ -173,6 +173,14 @@ ENGLISH = {
     "領取教室：{room}": "Pickup: {room}",
     "＋ 新增時段": "+ Add session",
     "移除這個時段": "Remove this session",
+    "＋ 新增目標": "+ Add goal",
+    "移除這個目標": "Remove this goal",
+    "例如 能獨立扣好三顆釦子": "e.g. Buttons three buttons on their own",
+    "504 計畫（不勾是 IEP）": "504 plan (an IEP if unticked)",
+    "目標表現": "Goal scores",
+    "（基本資料還沒有目標）": "(No goals in the profile yet)",
+    "例如 75%": "e.g. 75%",
+    "留空表示沒有記錄，匯出成 --": "Leave blank when not recorded; exported as --",
     "例如 10:30 AM": "e.g. 10:30 AM",
     # unlock and start-up
     f"這台電腦沒有可用的系統鑰匙圈。請設定一組密碼來保護 {APP_NAME} 的病歷。\n"

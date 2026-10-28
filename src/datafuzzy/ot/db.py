@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import threading
 from collections.abc import Callable
@@ -48,6 +49,8 @@ CREATE TABLE IF NOT EXISTS record (
     activity   BLOB,  -- NULL in records made before the column existed
     start_time TEXT,  -- "HH:MM", or NULL when not filled in
     end_time   TEXT,  -- "HH:MM", or NULL when not filled in
+    session_type TEXT,  -- one of SESSION_TYPES; NULL in records made before it, read as individual
+    goal_scores  BLOB,  -- JSON list, one score per profile goal; NULL when none filled in
     UNIQUE (student_id, visit_date)
 );
 CREATE INDEX IF NOT EXISTS record_by_date ON record(visit_date);
@@ -85,6 +88,10 @@ def connect(path: Path, check_same_thread: bool = True) -> sqlite3.Connection:
         db.execute("ALTER TABLE record ADD COLUMN start_time TEXT")
     if "end_time" not in columns:  # a chart book from before end times
         db.execute("ALTER TABLE record ADD COLUMN end_time TEXT")
+    if "session_type" not in columns:  # a chart book from before session types
+        db.execute("ALTER TABLE record ADD COLUMN session_type TEXT")
+    if "goal_scores" not in columns:  # a chart book from before goal scores
+        db.execute("ALTER TABLE record ADD COLUMN goal_scores BLOB")
     if db.execute("PRAGMA user_version").fetchone()[0] < 1:
         fill_end_times(db)
         db.execute("PRAGMA user_version = 1")
@@ -144,20 +151,56 @@ class Session:
 @dataclass(frozen=True)
 class StudentProfile:
     """What the school form's header asks about a student, besides the name, and where they
-    are seen (one place per student; new records take it). All free text; `school_year` reads
-    like "09/2026-06/2027"."""
+    are seen (one place per student; new records take it). Free text except where noted;
+    `school_year` reads like "09/2026-06/2027"."""
     diagnosis: str = ""
     age: str = ""
     grade: str = ""
     classroom: str = ""
     case_manager: str = ""
     school_year: str = ""
-    goals: str = ""
+    goals: tuple[str, ...] = ()  # Goal 1, Goal 2, …: as many as the student has
     location: str = ""
     sessions: tuple[Session, ...] = ()  # as many as the student has, by weekday then start
+    plan_504: bool = False  # the plan is a 504 plan; an IEP otherwise
+    plan_date: str = ""  # the date of that IEP or 504 plan
+
+    @property
+    def plan_label(self) -> str:
+        """"IEP Date" or "504 Date", as the form names the plan's date."""
+        return "504 Date" if self.plan_504 else "IEP Date"
+
+
+# "1. … 2. …" (also "1、", "1)" or "Goal 1:"); not a number inside another ("10.", "1.5").
+_GOAL_NUMBER = re.compile(r"(?<![A-Za-z])goal\s*(\d{1,2})\s*[.:：、．)]?\s*|(?<![\d.])(\d{1,2})\s*[.、．)](?!\d)\s*",
+                          re.IGNORECASE)
+_GOALS_HEADING = re.compile(r"^\s*goals?\s*[:：]", re.IGNORECASE)
+
+
+def split_goals(text: str) -> tuple[str, ...]:
+    """The goals of a profile from before goals were kept one by one, when they were one text:
+    split where it numbers them 1, 2, 3, … in turn (a number out of turn, like the 3 in
+    "1. a 3. b", stays part of the goal), without the numbers, so goal n stays Goal n. Words
+    before "1." (but a "Goals:" heading) go with goal 1, so nothing is lost. Text without
+    numbers is one goal; blank text is none."""
+    cuts = []  # (where the number starts, where its goal starts)
+    for match in _GOAL_NUMBER.finditer(text):
+        if int(match.group(1) or match.group(2)) == len(cuts) + 1:
+            cuts.append((match.start(), match.end()))
+    if not cuts:
+        goals = [text]
+    else:
+        ends = [start for start, _ in cuts[1:]] + [len(text)]
+        goals = [text[begin:end] for (_, begin), end in zip(cuts, ends)]
+        intro = _GOALS_HEADING.sub("", text[:cuts[0][0]]).strip()
+        if intro:
+            goals[0] = f"{intro} {goals[0].strip()}"
+    return tuple(g.strip() for g in goals if g.strip())
 
 
 SESSION_MINUTES = 30  # a new session's default length
+SESSION_TYPES = ("group", "individual", "consult", "collaboration", "make up")  # as the form names them
+DEFAULT_SESSION_TYPE = "individual"
 
 
 def default_end_time(start_time: str) -> str:
@@ -178,9 +221,16 @@ class Record:
     zh_text: str
     en_text: str
     updated_at: datetime
-    activity: str = ""  # the day's therapy activities; never exported
-    start_time: str = ""  # when the session began, "HH:MM", or "" if not filled in; never exported
+    activity: str = ""  # the day's therapy activities; never in a translation export
+    start_time: str = ""  # when the session began, "HH:MM", or "" if not filled in; never in a translation export
     end_time: str = ""  # when it ended, likewise
+    session_type: str = DEFAULT_SESSION_TYPE  # one of SESSION_TYPES
+    goal_scores: tuple[str, ...] = ()  # how the student did on Goal 1, 2, …: "75%", "not met", "" for none
+
+
+def _check_session_type(session_type: str) -> None:
+    if session_type not in SESSION_TYPES:
+        raise ValueError(f"unknown session type {session_type!r}")
 
 
 @dataclass(frozen=True)
@@ -309,12 +359,16 @@ class RecordStore:
             return StudentProfile()
         fields = json.loads(self._dec(row[0], "student.profile"))
         sessions = tuple(Session(**s) for s in fields.pop("sessions", []))  # none before session times
-        return StudentProfile(**fields, sessions=sessions)
+        goals = fields.pop("goals", [])
+        # One text before goals were kept one by one; saving the profile again stores the list.
+        goals = split_goals(goals) if isinstance(goals, str) else tuple(goals)
+        return StudentProfile(**fields, goals=goals, sessions=sessions)
 
     def set_profile(self, student_id: int, profile: StudentProfile) -> None:
-        """Replace the student's profile, with surrounding spaces trimmed from each field and the
-        sessions sorted by weekday and start."""
-        trimmed = {k: v.strip() for k, v in asdict(profile).items() if k != "sessions"}
+        """Replace the student's profile, with surrounding spaces trimmed from each field, blank
+        goals left out and the sessions sorted by weekday and start."""
+        trimmed = {k: v.strip() if isinstance(v, str) else v for k, v in asdict(profile).items()}
+        trimmed["goals"] = [g.strip() for g in profile.goals if g.strip()]
         trimmed["sessions"] = [asdict(replace(s, classroom=s.classroom.strip()))
                                for s in sorted(profile.sessions, key=lambda s: (s.weekday, s.start))]
         blob = self._enc(json.dumps(trimmed, ensure_ascii=False), "student.profile")
@@ -336,9 +390,11 @@ class RecordStore:
 
     def add_record(self, student_id: int, visit_date: date, location: str = "",
                    zh_text: str = "", en_text: str = "", activity: str = "",
-                   start_time: str = "", end_time: str = "") -> Record:
+                   start_time: str = "", end_time: str = "",
+                   session_type: str = DEFAULT_SESSION_TYPE, goal_scores: tuple[str, ...] = ()) -> Record:
         """Raises DuplicateRecord if the student already has a record that day, NotFound
-        for an unknown student."""
+        for an unknown student, ValueError for a session type not in SESSION_TYPES."""
+        _check_session_type(session_type)
         self.get_student(student_id)
         with self._lock:
             existing = self.find_record(student_id, visit_date)
@@ -348,22 +404,29 @@ class RecordStore:
             with self._db:
                 cur = self._db.execute(
                     "INSERT INTO record(student_id, visit_date, location, zh_text, en_text,"
-                    " updated_at, activity, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    " updated_at, activity, start_time, end_time, session_type, goal_scores)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (student_id, visit_date.isoformat(), self._enc(location, "record.location"),
                      self._enc(zh_text, "record.zh_text"), self._enc(en_text, "record.en_text"),
                      updated_at.isoformat(), self._enc(activity, "record.activity"),
-                     start_time or None, end_time or None))
+                     start_time or None, end_time or None, session_type,
+                     self._enc_scores(tuple(goal_scores))))
         return Record(cur.lastrowid, student_id, visit_date, location, zh_text, en_text, updated_at,
-                      activity, start_time, end_time)
+                      activity, start_time, end_time, session_type, tuple(goal_scores))
 
     def update_record(self, record_id: int, *, location: str | None = None,
                       zh_text: str | None = None, en_text: str | None = None,
                       activity: str | None = None, start_time: str | None = None,
-                      end_time: str | None = None) -> Record:
+                      end_time: str | None = None, session_type: str | None = None,
+                      goal_scores: tuple[str, ...] | None = None) -> Record:
         """Change only the fields given (None leaves one alone), for autosave. The English
-        text is overwritten, not versioned. Raises NotFound for an unknown record."""
+        text is overwritten, not versioned. Raises NotFound for an unknown record, ValueError
+        for a session type not in SESSION_TYPES."""
+        if session_type is not None:
+            _check_session_type(session_type)
         given = {"location": location, "zh_text": zh_text, "en_text": en_text, "activity": activity,
-                 "start_time": start_time, "end_time": end_time}
+                 "start_time": start_time, "end_time": end_time, "session_type": session_type,
+                 "goal_scores": None if goal_scores is None else tuple(goal_scores)}
         with self._lock:
             record = self.get_record(record_id)
             new = replace(record, updated_at=self._now(),
@@ -397,11 +460,18 @@ class RecordStore:
     def _write_texts(self, r: Record) -> None:
         self._db.execute(
             "UPDATE record SET location = ?, zh_text = ?, en_text = ?, updated_at = ?,"
-            " activity = ?, start_time = ?, end_time = ? WHERE id = ?",
+            " activity = ?, start_time = ?, end_time = ?, session_type = ?, goal_scores = ?"
+            " WHERE id = ?",
             (self._enc(r.location, "record.location"), self._enc(r.zh_text, "record.zh_text"),
              self._enc(r.en_text, "record.en_text"), r.updated_at.isoformat(),
              self._enc(r.activity, "record.activity"), r.start_time or None,
-             r.end_time or None, r.id))
+             r.end_time or None, r.session_type, self._enc_scores(r.goal_scores), r.id))
+
+    def _enc_scores(self, scores: tuple[str, ...]) -> bytes | None:
+        """Scores are about the student's progress, so they are encrypted like the charts."""
+        if not any(s.strip() for s in scores):
+            return None
+        return self._enc(json.dumps([s.strip() for s in scores], ensure_ascii=False), "record.goal_scores")
 
     def delete_record(self, record_id: int) -> None:
         """Remove a record for good. Raises NotFound for an unknown record."""
@@ -411,7 +481,7 @@ class RecordStore:
             raise NotFound(f"record {record_id}")
 
     _RECORD_COLUMNS = ("id, student_id, visit_date, location, zh_text, en_text, updated_at,"
-                       " activity, start_time, end_time")
+                       " activity, start_time, end_time, session_type, goal_scores")
 
     def get_record(self, record_id: int) -> Record:
         with self._lock:
@@ -433,7 +503,8 @@ class RecordStore:
                       self._dec(row[3], "record.location"), self._dec(row[4], "record.zh_text"),
                       self._dec(row[5], "record.en_text"), datetime.fromisoformat(row[6]),
                       "" if row[7] is None else self._dec(row[7], "record.activity"), row[8] or "",
-                      row[9] or "")
+                      row[9] or "", row[10] or DEFAULT_SESSION_TYPE,
+                      () if row[11] is None else tuple(json.loads(self._dec(row[11], "record.goal_scores"))))
 
     def _records(self, where: str, args: tuple, order: str) -> list[Record]:
         with self._lock:

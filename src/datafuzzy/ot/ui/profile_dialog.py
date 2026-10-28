@@ -7,6 +7,7 @@ from datetime import date
 
 from PySide6.QtCore import QDate, Qt, Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDateEdit,
     QDialog,
@@ -17,7 +18,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QPlainTextEdit,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -27,6 +27,7 @@ from ..db import Session, StudentProfile, default_end_time
 from ..school_year import default_school_year, format_school_year, parse_school_year
 from .cards import TIME_CHOICES, normal_time, session_label, time_label, weekday_label
 from .i18n import language, tr
+from .widgets import GrowingTextEdit
 
 MONTH_FORMAT = "MM/yyyy"
 
@@ -159,9 +160,73 @@ class SessionsEditor(QWidget):
         return tuple(s for s in (row.session() for row in self.rows) if s is not None)
 
 
+class GoalRow(QWidget):
+    """One goal: "Goal n", its text and a button to take it out."""
+
+    removed = Signal(object)  # this row
+
+    def __init__(self, number: int, goal: str = "", parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.label = QLabel("")
+        self.edit = GrowingTextEdit(goal, min_lines=1)
+        self.edit.setPlaceholderText(tr("例如 能獨立扣好三顆釦子"))
+        self.remove_btn = QPushButton("✕")
+        self.remove_btn.setObjectName("flat")
+        self.remove_btn.setToolTip(tr("移除這個目標"))
+        self.number(number)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(self.label, 0, Qt.AlignmentFlag.AlignTop)
+        row.addWidget(self.edit, 1)
+        row.addWidget(self.remove_btn, 0, Qt.AlignmentFlag.AlignTop)
+        self.remove_btn.clicked.connect(lambda: self.removed.emit(self))
+
+    def number(self, number: int) -> None:
+        self.label.setText(f"Goal {number}")
+
+
+class GoalsEditor(QWidget):
+    """The student's goals, as many as they have. Their order is their number on the form,
+    Goal 1 first; taking one out renumbers those after it."""
+
+    def __init__(self, goals: tuple[str, ...] = (), parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.rows: list[GoalRow] = []
+        self.add_btn = QPushButton(tr("＋ 新增目標"))
+        self.add_btn.setObjectName("flat")
+        self._rows = QVBoxLayout()
+        self._rows.setContentsMargins(0, 0, 0, 0)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addLayout(self._rows)
+        layout.addWidget(self.add_btn, 0, Qt.AlignmentFlag.AlignLeft)
+        layout.addStretch(1)  # the dialog's spare height goes below the goals, not between them
+        for goal in goals:
+            self.add_row(goal)
+        self.add_btn.clicked.connect(lambda: self.add_row())
+
+    def add_row(self, goal: str = "") -> GoalRow:
+        row = GoalRow(len(self.rows) + 1, goal)
+        row.removed.connect(self.remove_row)
+        self.rows.append(row)
+        self._rows.addWidget(row)
+        return row
+
+    def remove_row(self, row: GoalRow) -> None:
+        self.rows.remove(row)
+        row.setParent(None)
+        row.deleteLater()
+        for number, other in enumerate(self.rows, start=1):
+            other.number(number)
+
+    def goals(self) -> tuple[str, ...]:
+        """The filled-in goals in order (blank ones are left out)."""
+        return tuple(g for g in (row.edit.toPlainText().strip() for row in self.rows) if g)
+
+
 class StudentProfileDialog(QDialog):
-    """Location, diagnosis, age, grade, classroom, case manager, school year and goals of one
-    student, and their weekly session times. `locations` and `classrooms` fill the drop-downs
+    """Location, diagnosis, age, grade, classroom, case manager, IEP or 504 date, school year
+    and goals of one student, and their weekly session times. `locations` and `classrooms` fill the drop-downs
     of the location and of each session's 領取教室; any other can be typed."""
 
     def __init__(self, name: str, profile: StudentProfile, today: date | None = None,
@@ -186,7 +251,11 @@ class StudentProfileDialog(QDialog):
         start, end = parse_school_year(profile.school_year) or default_school_year(today or date.today())
         self.year_from = self._month_edit(start)
         self.year_to = self._month_edit(end)
-        self.goals = QPlainTextEdit(profile.goals)
+        self.plan_date = QLineEdit(profile.plan_date)
+        self.plan_date.setPlaceholderText("MM/DD/YYYY")
+        self.plan_504 = QCheckBox(tr("504 計畫（不勾是 IEP）"))
+        self.plan_504.setChecked(profile.plan_504)
+        self.goals = GoalsEditor(profile.goals)
         self.sessions = SessionsEditor(profile.sessions, classrooms)
         self.problem = QLabel("")
         self.problem.setStyleSheet("color: #ff453a;")  # as in the unlock prompt
@@ -204,6 +273,10 @@ class StudentProfileDialog(QDialog):
         form.addRow("Grade", self.grade)
         form.addRow("Classroom", self.classroom)
         form.addRow("Case manager", self.case_manager)
+        plan = QHBoxLayout()
+        plan.addWidget(self.plan_date, 1)
+        plan.addWidget(self.plan_504)
+        form.addRow("IEP/504 Date", plan)
         form.addRow("School year", school_year)
         form.addRow(tr("看診時段"), self.sessions)
         form.addRow("Goals", self.goals)
@@ -238,8 +311,9 @@ class StudentProfileDialog(QDialog):
             classroom=self.classroom.text(), case_manager=self.case_manager.text(),
             school_year=format_school_year(date(start.year(), start.month(), 1),
                                            date(end.year(), end.month(), 1)),
-            goals=self.goals.toPlainText(), location=self.location.currentText(),
-            sessions=self.sessions.sessions())
+            goals=self.goals.goals(), location=self.location.currentText(),
+            sessions=self.sessions.sessions(), plan_504=self.plan_504.isChecked(),
+            plan_date=self.plan_date.text())
 
 
 class ProfileSummary(QFrame):
@@ -247,7 +321,8 @@ class ProfileSummary(QFrame):
 
     edit_requested = Signal()
     FIELDS = (("地點", "location"), ("Diagnosis", "diagnosis"), ("Age", "age"),
-              ("Grade", "grade"), ("Classroom", "classroom"), ("Case manager", "case_manager"))
+              ("Grade", "grade"), ("Classroom", "classroom"), ("Case manager", "case_manager"),
+              ("IEP/504 Date", "plan"))
     PER_ROW = 3
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -263,7 +338,8 @@ class ProfileSummary(QFrame):
         grid.setVerticalSpacing(4)
         wide = (("看診時段", "sessions"), ("School year", "school_year"), ("Goals", "goals"))
         for i, (label, field) in enumerate(self.FIELDS + wide):
-            row, col = divmod(i, self.PER_ROW) if i < len(self.FIELDS) else (i - len(self.FIELDS) + 2, 0)
+            short_rows = -(-len(self.FIELDS) // self.PER_ROW)  # rows of the short fields, rounded up
+            row, col = divmod(i, self.PER_ROW) if i < len(self.FIELDS) else (i - len(self.FIELDS) + short_rows, 0)
             caption = QLabel(tr(label))
             caption.setObjectName("subtle")
             caption.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
@@ -290,5 +366,16 @@ class ProfileSummary(QFrame):
     def show_profile(self, name: str, profile: StudentProfile) -> None:
         self.name.setText(name)
         for field, label in self.values.items():
-            value = sessions_text(profile.sessions) if field == "sessions" else getattr(profile, field)
-            label.setText(value.strip() or "—")
+            label.setText(summary_value(profile, field).strip() or "—")
+
+
+def summary_value(profile: StudentProfile, field: str) -> str:
+    """What the summary shows for `field`: the profile's text, or for the session times, the
+    plan and the goals, a line made from them ("" when there is nothing to show)."""
+    if field == "sessions":
+        return sessions_text(profile.sessions)
+    if field == "plan":
+        return f"{'504' if profile.plan_504 else 'IEP'} {profile.plan_date}" if profile.plan_date else ""
+    if field == "goals":
+        return "\n".join(f"{i}. {goal}" for i, goal in enumerate(profile.goals, start=1))
+    return getattr(profile, field)
