@@ -42,7 +42,7 @@ class ComparePanel(QWidget):
     closed = Signal()
 
     def __init__(self, record: Record, goals: tuple[str, ...] = (), parent: QWidget | None = None) -> None:
-        """`goals` are the student's, for naming the record's scores."""
+        """`goals` are those of the plan in effect on the record's day, for naming its scores."""
         super().__init__(parent)
         self.record_id = record.id
         # Laid out row for row like the editor's chart, which then matches the row heights.

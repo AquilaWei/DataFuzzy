@@ -2,7 +2,7 @@ from datetime import date
 
 from PySide6.QtCore import QDate
 
-from datafuzzy.ot.db import Session, StudentProfile
+from datafuzzy.ot.db import Plan, Session, StudentProfile
 from datafuzzy.ot.ui.profile_dialog import ProfileSummary, StudentProfileDialog
 
 
@@ -158,3 +158,90 @@ def test_summary_shows_which_plan_the_date_is_of(qtbot):
     qtbot.addWidget(summary)
     summary.show_profile("王小明", StudentProfile(plan_504=True, plan_date="03/02/2026"))
     assert summary.values["plan"].text() == "504 03/02/2026"
+
+
+OLD_PLAN = Plan(False, "10/29/2025", ("剪直線",))
+NEW_PLAN = Plan(True, "10/29/2026", ("扣釦子", "寫名字"))
+
+
+def plans_dialog(qtbot, *plans):
+    dialog = StudentProfileDialog("王小明", StudentProfile().with_plans(plans), today=date(2026, 10, 1))
+    qtbot.addWidget(dialog)
+    return dialog
+
+
+def test_dialog_shows_the_latest_plan(qtbot):
+    dialog = plans_dialog(qtbot, OLD_PLAN, NEW_PLAN)
+    assert (dialog.plan_date.text(), dialog.goals.goals()) == ("10/29/2026", ("扣釦子", "寫名字"))
+
+
+def test_an_old_plan_can_be_shown_again(qtbot):
+    dialog = plans_dialog(qtbot, OLD_PLAN, NEW_PLAN)
+    dialog.plans.show_plan(1)
+    assert (dialog.plan_date.text(), dialog.plan_504.isChecked(), dialog.goals.goals()) == (
+        "10/29/2025", False, ("剪直線",))
+
+
+def test_a_new_plan_starts_blank_and_keeps_the_old_one(qtbot):
+    dialog = plans_dialog(qtbot, OLD_PLAN)
+    dialog.plans.add_plan()
+    dialog.plan_date.setText("10/29/2026")
+    dialog.goals.add_row("扣釦子")
+    assert dialog.profile().plans == (OLD_PLAN, Plan(False, "10/29/2026", ("扣釦子",)))
+
+
+def test_picker_shows_only_with_several_plans(qtbot):
+    dialog = plans_dialog(qtbot, OLD_PLAN)
+    dialog.show()
+    assert not dialog.plans.picker.isVisible()
+    dialog.plans.add_plan()
+    assert dialog.plans.picker.isVisible()
+
+
+def test_picker_names_each_plan_newest_first(qtbot):
+    dialog = plans_dialog(qtbot, OLD_PLAN, NEW_PLAN)
+    picker = dialog.plans.picker
+    assert [picker.itemText(i) for i in range(picker.count())] == ["504 10/29/2026", "IEP 10/29/2025"]
+
+
+def test_edits_of_an_old_plan_are_kept_after_switching(qtbot):
+    dialog = plans_dialog(qtbot, OLD_PLAN, NEW_PLAN)
+    dialog.plans.show_plan(1)
+    dialog.goals.add_row("寫名字")
+    dialog.plans.show_plan(0)
+    assert dialog.profile().past_plans == (Plan(False, "10/29/2025", ("剪直線", "寫名字")),)
+
+
+def test_a_plan_can_be_deleted(qtbot):
+    dialog = plans_dialog(qtbot, OLD_PLAN, NEW_PLAN)
+    dialog.plans.remove_plan(confirm=False)
+    assert dialog.profile().plans == (OLD_PLAN,)
+
+
+def test_an_unreadable_plan_date_keeps_the_dialog_open(qtbot):
+    dialog = plans_dialog(qtbot, OLD_PLAN)
+    dialog.plan_date.setText("Oct 29")
+    dialog.accept()
+    assert dialog.problem.text() == "IEP/504 日期請填成 10/29/2026 這樣的格式"
+
+
+def test_a_second_plan_needs_a_date(qtbot):
+    dialog = plans_dialog(qtbot, OLD_PLAN)
+    dialog.plans.add_plan()
+    dialog.accept()
+    assert dialog.problem.text() == "有多份 IEP/504 計畫時，每份都要填日期"
+
+
+def test_two_plans_cannot_share_a_date(qtbot):
+    dialog = plans_dialog(qtbot, OLD_PLAN)
+    dialog.plans.add_plan()
+    dialog.plan_date.setText("10/29/25")
+    dialog.accept()
+    assert dialog.problem.text() == "兩份 IEP/504 計畫的日期不能相同"
+
+
+def test_summary_shows_the_plan_in_effect_on_the_charts_day(qtbot):
+    summary = ProfileSummary()
+    qtbot.addWidget(summary)
+    summary.show_profile("王小明", StudentProfile().with_plans([OLD_PLAN, NEW_PLAN]), date(2026, 3, 1))
+    assert (summary.values["plan"].text(), summary.values["goals"].text()) == ("IEP 10/29/2025", "1. 剪直線")

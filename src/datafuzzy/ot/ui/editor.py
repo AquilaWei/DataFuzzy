@@ -64,8 +64,10 @@ class RecordEditor(QWidget):
         self.visit_date = record.visit_date
         self._dirty: set[str] = set()
         self.session_type = SessionTypePicker(record.session_type)
-        # show_profile follows later edits of the goals, keeping the scores typed so far.
-        self.scores = GoalScores(store.get_profile(record.student_id).goals, record.goal_scores)
+        # The goals of the plan in effect on the visit's day; show_profile follows later edits
+        # of them, keeping the scores typed so far.
+        self.scores = GoalScores(store.get_profile(record.student_id).plan_on(record.visit_date).goals,
+                                 record.goal_scores)
 
         self.back_btn = QPushButton(tr("‹ 返回"))
         self.back_btn.setObjectName("flat")
@@ -215,9 +217,10 @@ class RecordEditor(QWidget):
         """Re-read the student's name and profile, e.g. after they were edited."""
         self.student_name = self.store.get_student(self.student_id).name
         profile = self.store.get_profile(self.student_id)
-        self.scores.set_goals(profile.goals)
+        self.scores.set_goals(profile.plan_on(self.visit_date).goals)
         self.profile.show_profile(self.student_name,
-                                  replace(profile, location=self.store.student_location(self.student_id)))
+                                  replace(profile, location=self.store.student_location(self.student_id)),
+                                  self.visit_date)
 
     def compare_menu(self) -> QMenu:
         """The student's other charts, nearest earlier visit first (see compare_candidates)."""
@@ -237,8 +240,8 @@ class RecordEditor(QWidget):
     def show_compare(self, record_id: int) -> None:
         """Show another chart read-only on the right, in place of any shown before."""
         self.close_compare()
-        self.compare = ComparePanel(self.store.get_record(record_id),
-                                    self.store.get_profile(self.student_id).goals)
+        other = self.store.get_record(record_id)
+        self.compare = ComparePanel(other, self.store.get_profile(self.student_id).plan_on(other.visit_date).goals)
         self.compare.closed.connect(self.close_compare)
         self.splitter.addWidget(self.compare)
         self._line_up(self.compare)
@@ -314,6 +317,7 @@ class RecordEditor(QWidget):
             return False
         self.visit_date = day
         self._show_title()
+        self.show_profile()  # the day may fall under another plan, with other goals
         self.saved.emit(self.record_id)
         return True
 

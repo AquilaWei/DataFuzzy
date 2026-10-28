@@ -1,6 +1,6 @@
-"""Writing charts into the school's Excel form: one workbook per student and location, each
-visit a row of the template: date, time, session type, activity, English chart and a score
-for each of the student's goals."""
+"""Writing charts into the school's Excel form: one workbook per student and location, a
+sheet per school year and IEP or 504 plan, each visit a row of the template: date, time,
+session type, activity, English chart and a score for each goal of the plan."""
 
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
-from .db import Record, RecordStore, Student, StudentProfile
-from .school_year import default_school_year, format_school_year
+from .db import Plan, Record, RecordStore, Student, StudentProfile, parse_plan_date
+from .school_year import default_school_year, format_school_year, parse_school_year
 
 TEMPLATE_SHEET = "blank"
 HEADER_ROW, GOALS_ROW, HEADINGS_ROW = 1, 2, 3
@@ -75,14 +75,50 @@ def sheet_title(name: str, used: set[str]) -> str:
     return title
 
 
-def header_text(name: str, profile: StudentProfile, today: date) -> str:
-    """The form's first row: who the student is, the date of their IEP (or 504 plan) and the
-    school year (this one when not set). Frequency is left for the therapist to write in."""
-    school_year = profile.school_year or format_school_year(*default_school_year(today))
+def school_year_of(day: date, profile: StudentProfile) -> tuple[date, date]:
+    """The school year `day` falls in, its months those of the profile's school year (shifted
+    by whole years) or, when not set, September to June starting from August."""
+    months = parse_school_year(profile.school_year)
+    if months is None:
+        return default_school_year(day)
+    start, end = months
+    first = day.year if day.month >= start.month else day.year - 1
+    shift = first - start.year
+    return date(start.year + shift, start.month, 1), date(end.year + shift, end.month, 1)
+
+
+def period_title(school_year: tuple[date, date], plan: Plan) -> str:
+    """"2026-2027_IEP 10∕29∕26": the school year and the plan of a sheet. Excel takes no "/"
+    in a sheet's name, so the date's slashes are "∕" (division slash), which looks the same."""
+    title = f"{school_year[0].year}-{school_year[1].year}_{plan.kind}"
+    day = parse_plan_date(plan.plan_date)
+    return f"{title} {day:%m}∕{day:%d}∕{day:%y}" if day else title
+
+
+def periods(records: Iterable[Record], profile: StudentProfile) -> list[tuple[tuple[date, date], Plan, list[Record]]]:
+    """A student's records split where the school year or the plan in effect changes, oldest
+    first: (school year, plan, its records oldest first) each."""
+    groups: dict[tuple[tuple[date, date], Plan], list[Record]] = {}
+    for record in sorted(records, key=lambda r: (r.visit_date, r.id)):
+        key = (school_year_of(record.visit_date, profile), profile.plan_on(record.visit_date))
+        groups.setdefault(key, []).append(record)
+    return [(year, plan, rs) for (year, plan), rs in groups.items()]
+
+
+def header_text(name: str, profile: StudentProfile, today: date, plan: Plan | None = None,
+                school_year: tuple[date, date] | None = None) -> str:
+    """The form's first row: who the student is, the date of their IEP (or 504 plan; the
+    latest unless `plan` is given) and the school year (`school_year`, else the profile's,
+    else this one). Frequency is left for the therapist to write in."""
+    plan = plan or profile.plan
+    if school_year is not None:
+        year_text = format_school_year(*school_year)
+    else:
+        year_text = profile.school_year or format_school_year(*default_school_year(today))
     return (f"Name: {name} / Diagnosis: {profile.diagnosis} / Age: {profile.age} / "
             f"Grade: {profile.grade} / Classroom: {profile.classroom} / "
-            f"Case manager: {profile.case_manager}\n{profile.plan_label}: {profile.plan_date}\n"
-            f"Frequency:\nSchool year: {school_year}")
+            f"Case manager: {profile.case_manager}\n{plan.label}: {plan.plan_date}\n"
+            f"Frequency:\nSchool year: {year_text}")
 
 
 def goals_text(goals: tuple[str, ...]) -> str:
@@ -156,12 +192,13 @@ def _set_goal_columns(ws: Worksheet, count: int) -> int:
     return last
 
 
-def _fill_header(ws: Worksheet, student: Student, profile: StudentProfile, today: date) -> int:
-    """Fill the two header rows; returns the last column of the form."""
-    last = _set_goal_columns(ws, len(profile.goals))
-    ws.cell(HEADER_ROW, 1).value = header_text(student.name, profile, today)
+def _fill_header(ws: Worksheet, student: Student, profile: StudentProfile, today: date,
+                 plan: Plan, school_year: tuple[date, date]) -> int:
+    """Fill the two header rows for `plan` in `school_year`; returns the last column of the form."""
+    last = _set_goal_columns(ws, len(plan.goals))
+    ws.cell(HEADER_ROW, 1).value = header_text(student.name, profile, today, plan, school_year)
     goals = ws.cell(GOALS_ROW, 1)
-    goals.value = goals_text(profile.goals)
+    goals.value = goals_text(plan.goals)
     goals.alignment = Alignment(vertical="top", wrap_text=True)
     lines = _lines(goals.value, _width(ws, 1, last))
     ws.row_dimensions[GOALS_ROW].height = max(ws.row_dimensions[GOALS_ROW].height or 0, LINE_HEIGHT * lines)
@@ -214,8 +251,10 @@ def _fill(ws: Worksheet, records: list[Record], goal_count: int, last: int) -> N
 
 
 def build_workbook(store: RecordStore, records: Iterable[Record], today: date | None = None) -> Workbook:
-    """One sheet per student (by name), visits oldest first, the header filled from the
-    student's profile; the template sheet is dropped."""
+    """A sheet per student, school year and plan: a new sheet where the school year changes
+    or a new IEP or 504 plan begins, named like "2026-2027_IEP 10∕29∕26" (after the student's
+    name when there are several students). Visits oldest first, the header and goals those of
+    the sheet's plan; the template sheet is dropped."""
     by_student: dict[int, list[Record]] = {}
     for record in records:
         by_student.setdefault(record.student_id, []).append(record)
@@ -224,15 +263,17 @@ def build_workbook(store: RecordStore, records: Iterable[Record], today: date | 
     template = wb[TEMPLATE_SHEET]
     used: set[str] = set()
     for student in students:
-        ws = wb.copy_worksheet(template)
-        ws.title = sheet_title(student.name, used)
-        # copy_worksheet leaves out the print settings.
-        ws.page_setup.orientation = template.page_setup.orientation
-        ws.page_margins = copy(template.page_margins)
-        ws.sheet_view.zoomScale = template.sheet_view.zoomScale
         profile = store.get_profile(student.id)
-        last = _fill_header(ws, student, profile, today or date.today())
-        _fill(ws, sorted(by_student[student.id], key=lambda r: (r.visit_date, r.id)), len(profile.goals), last)
+        for school_year, plan, student_records in periods(by_student[student.id], profile):
+            ws = wb.copy_worksheet(template)
+            title = period_title(school_year, plan)
+            ws.title = sheet_title(title if len(students) == 1 else f"{student.name} {title}", used)
+            # copy_worksheet leaves out the print settings.
+            ws.page_setup.orientation = template.page_setup.orientation
+            ws.page_margins = copy(template.page_margins)
+            ws.sheet_view.zoomScale = template.sheet_view.zoomScale
+            last = _fill_header(ws, student, profile, today or date.today(), plan, school_year)
+            _fill(ws, student_records, len(plan.goals), last)
     wb.remove(template)
     for i, ws in enumerate(wb.worksheets):
         ws.sheet_view.tabSelected = i == 0

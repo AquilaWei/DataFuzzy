@@ -18,12 +18,13 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
-from ..db import Session, StudentProfile, default_end_time
+from ..db import Plan, Session, StudentProfile, default_end_time, parse_plan_date
 from ..school_year import default_school_year, format_school_year, parse_school_year
 from .cards import TIME_CHOICES, normal_time, session_label, time_label, weekday_label
 from .i18n import language, tr
@@ -201,9 +202,17 @@ class GoalsEditor(QWidget):
         layout.addLayout(self._rows)
         layout.addWidget(self.add_btn, 0, Qt.AlignmentFlag.AlignLeft)
         layout.addStretch(1)  # the dialog's spare height goes below the goals, not between them
+        self.set_goals(goals)
+        self.add_btn.clicked.connect(lambda: self.add_row())
+
+    def set_goals(self, goals: tuple[str, ...]) -> None:
+        """Show `goals` in place of the rows there are, e.g. for another plan."""
+        for row in self.rows:
+            row.setParent(None)
+            row.deleteLater()
+        self.rows = []
         for goal in goals:
             self.add_row(goal)
-        self.add_btn.clicked.connect(lambda: self.add_row())
 
     def add_row(self, goal: str = "") -> GoalRow:
         row = GoalRow(len(self.rows) + 1, goal)
@@ -222,6 +231,134 @@ class GoalsEditor(QWidget):
     def goals(self) -> tuple[str, ...]:
         """The filled-in goals in order (blank ones are left out)."""
         return tuple(g for g in (row.edit.toPlainText().strip() for row in self.rows) if g)
+
+
+def plan_text(plan: Plan) -> str:
+    """"IEP 10/29/2026", or "IEP（未填日期）" for a plan without a date."""
+    return f"{plan.kind} {plan.plan_date.strip() or tr('（未填日期）')}"
+
+
+class PlanEditor(QWidget):
+    """The student's IEP and 504 plans, one shown at a time: its date, whether it is a 504
+    plan, and (in `goals`, laid out by the dialog) its goals. A new plan starts blank and the
+    old ones are kept, to be picked again from `picker`, newest first."""
+
+    def __init__(self, plans: tuple[Plan, ...], parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._plans = list(reversed(plans))  # as the picker lists them, newest first
+        self._shown = 0
+        self.picker = QComboBox()
+        self.picker.setToolTip(tr("切換顯示其他 IEP/504 計畫和它的目標"))
+        self.add_btn = QPushButton(tr("＋ 新的計畫"))
+        self.add_btn.setObjectName("flat")
+        self.add_btn.setToolTip(tr("IEP/504 快到期時，填入新的日期和目標；舊的會保留"))
+        self.remove_btn = QPushButton(tr("刪除這份計畫"))
+        self.remove_btn.setObjectName("flat")
+        self.plan_date = QLineEdit()
+        self.plan_date.setPlaceholderText("MM/DD/YYYY")
+        self.plan_504 = QCheckBox(tr("504 計畫（不勾是 IEP）"))
+        self.goals = GoalsEditor()
+        pick = QHBoxLayout()
+        pick.setContentsMargins(0, 0, 0, 0)
+        pick.addWidget(self.picker, 1)
+        pick.addWidget(self.add_btn)
+        pick.addWidget(self.remove_btn)
+        fields = QHBoxLayout()
+        fields.setContentsMargins(0, 0, 0, 0)
+        fields.addWidget(self.plan_date, 1)
+        fields.addWidget(self.plan_504)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addLayout(pick)
+        layout.addLayout(fields)
+        self._list()
+        self._load()
+        self.picker.currentIndexChanged.connect(self._pick)
+        self.add_btn.clicked.connect(self.add_plan)
+        self.remove_btn.clicked.connect(lambda: self.remove_plan())
+        self.plan_date.textChanged.connect(self._relabel)
+        self.plan_504.toggled.connect(self._relabel)
+
+    def _list(self) -> None:
+        self.picker.blockSignals(True)  # rebuilding the list is not picking a plan
+        self.picker.clear()
+        self.picker.addItems([plan_text(p) for p in self._plans])
+        self.picker.setCurrentIndex(self._shown)
+        self.picker.blockSignals(False)
+        several = len(self._plans) > 1
+        self.picker.setVisible(several)
+        self.remove_btn.setVisible(several)
+
+    def _load(self) -> None:
+        plan = self._plans[self._shown]
+        for edit, set_value in ((self.plan_date, lambda: self.plan_date.setText(plan.plan_date)),
+                                (self.plan_504, lambda: self.plan_504.setChecked(plan.plan_504))):
+            edit.blockSignals(True)
+            set_value()
+            edit.blockSignals(False)
+        self.goals.set_goals(plan.goals)
+
+    def _keep(self) -> None:
+        """Take the shown plan's edits into the list."""
+        self._plans[self._shown] = Plan(self.plan_504.isChecked(), self.plan_date.text(), self.goals.goals())
+
+    def _pick(self, index: int) -> None:
+        self._keep()
+        self._shown = index
+        self._load()
+
+    def _relabel(self) -> None:
+        self._keep()
+        self.picker.setItemText(self._shown, plan_text(self._plans[self._shown]))
+
+    def show_plan(self, index: int) -> None:
+        """Show the plan at `index` of the picker (0 the newest)."""
+        self.picker.setCurrentIndex(index)
+
+    def add_plan(self) -> None:
+        """Start a blank plan, of the kind of the one shown, and show it."""
+        self._keep()
+        self._plans.insert(0, Plan(plan_504=self.plan_504.isChecked()))
+        self._shown = 0
+        self._list()
+        self._load()
+        self.plan_date.setFocus()
+
+    def remove_plan(self, confirm: bool = True) -> None:
+        """Delete the shown plan and its goals, after asking unless `confirm` is False; the
+        last plan stays."""
+        if len(self._plans) < 2:
+            return
+        if confirm and not self._ask_remove():
+            return
+        del self._plans[self._shown]
+        self._shown = 0
+        self._list()
+        self._load()
+
+    def _ask_remove(self) -> bool:
+        box = QMessageBox(QMessageBox.Icon.Warning, tr("刪除計畫"),
+                          tr("要刪除「{plan}」和它的目標嗎？", plan=plan_text(self._plans[self._shown])),
+                          QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel, self)
+        box.setDefaultButton(QMessageBox.StandardButton.Cancel)  # a stray Return keeps the plan
+        return box.exec() == QMessageBox.StandardButton.Yes
+
+    def plans(self) -> list[Plan]:
+        """Every plan, as edited, newest first as listed."""
+        self._keep()
+        return list(self._plans)
+
+    def problem(self) -> str:
+        """Why the plans cannot be saved as they are, or "": a date that cannot be read, or,
+        with several plans, one without a date or two of the same date."""
+        plans = self.plans()
+        if any(p.plan_date.strip() and parse_plan_date(p.plan_date) is None for p in plans):
+            return tr("IEP/504 日期請填成 10/29/2026 這樣的格式")
+        if len(plans) > 1 and not all(p.plan_date.strip() for p in plans):
+            return tr("有多份 IEP/504 計畫時，每份都要填日期")
+        if len({parse_plan_date(p.plan_date) for p in plans}) < len(plans):
+            return tr("兩份 IEP/504 計畫的日期不能相同")
+        return ""
 
 
 class StudentProfileDialog(QDialog):
@@ -251,11 +388,8 @@ class StudentProfileDialog(QDialog):
         start, end = parse_school_year(profile.school_year) or default_school_year(today or date.today())
         self.year_from = self._month_edit(start)
         self.year_to = self._month_edit(end)
-        self.plan_date = QLineEdit(profile.plan_date)
-        self.plan_date.setPlaceholderText("MM/DD/YYYY")
-        self.plan_504 = QCheckBox(tr("504 計畫（不勾是 IEP）"))
-        self.plan_504.setChecked(profile.plan_504)
-        self.goals = GoalsEditor(profile.goals)
+        self.plans = PlanEditor(profile.plans)
+        self.plan_date, self.plan_504, self.goals = self.plans.plan_date, self.plans.plan_504, self.plans.goals
         self.sessions = SessionsEditor(profile.sessions, classrooms)
         self.problem = QLabel("")
         self.problem.setStyleSheet("color: #ff453a;")  # as in the unlock prompt
@@ -273,13 +407,10 @@ class StudentProfileDialog(QDialog):
         form.addRow("Grade", self.grade)
         form.addRow("Classroom", self.classroom)
         form.addRow("Case manager", self.case_manager)
-        plan = QHBoxLayout()
-        plan.addWidget(self.plan_date, 1)
-        plan.addWidget(self.plan_504)
-        form.addRow("IEP/504 Date", plan)
+        form.addRow("IEP/504 Date", self.plans)
+        form.addRow("Goals", self.goals)  # the shown plan's, so right below it
         form.addRow("School year", school_year)
         form.addRow(tr("看診時段"), self.sessions)
-        form.addRow("Goals", self.goals)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
                                    | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept)
@@ -290,7 +421,11 @@ class StudentProfileDialog(QDialog):
         layout.addWidget(buttons)
 
     def accept(self) -> None:
-        """Close only when every session time can be read; otherwise say so and stay open."""
+        """Close only when every session time and plan date can be read; otherwise say so and
+        stay open."""
+        if problem := self.plans.problem():
+            self.problem.setText(problem)
+            return
         try:
             self.sessions.sessions()
         except ValueError:
@@ -311,9 +446,8 @@ class StudentProfileDialog(QDialog):
             classroom=self.classroom.text(), case_manager=self.case_manager.text(),
             school_year=format_school_year(date(start.year(), start.month(), 1),
                                            date(end.year(), end.month(), 1)),
-            goals=self.goals.goals(), location=self.location.currentText(),
-            sessions=self.sessions.sessions(), plan_504=self.plan_504.isChecked(),
-            plan_date=self.plan_date.text())
+            location=self.location.currentText(),
+            sessions=self.sessions.sessions()).with_plans(self.plans.plans())
 
 
 class ProfileSummary(QFrame):
@@ -363,19 +497,23 @@ class ProfileSummary(QFrame):
         layout.addLayout(grid)
         self.edit_btn.clicked.connect(self.edit_requested)
 
-    def show_profile(self, name: str, profile: StudentProfile) -> None:
+    def show_profile(self, name: str, profile: StudentProfile, day: date | None = None) -> None:
+        """Show `profile`, with the plan and goals in effect on `day` (the latest without one)."""
         self.name.setText(name)
+        plan = profile.plan if day is None else profile.plan_on(day)
         for field, label in self.values.items():
-            label.setText(summary_value(profile, field).strip() or "—")
+            label.setText(summary_value(profile, field, plan).strip() or "—")
 
 
-def summary_value(profile: StudentProfile, field: str) -> str:
+def summary_value(profile: StudentProfile, field: str, plan: Plan | None = None) -> str:
     """What the summary shows for `field`: the profile's text, or for the session times, the
-    plan and the goals, a line made from them ("" when there is nothing to show)."""
+    plan and the goals (of `plan`, else the latest), a line made from them ("" when there is
+    nothing to show)."""
+    plan = plan or profile.plan
     if field == "sessions":
         return sessions_text(profile.sessions)
     if field == "plan":
-        return f"{'504' if profile.plan_504 else 'IEP'} {profile.plan_date}" if profile.plan_date else ""
+        return f"{plan.kind} {plan.plan_date}" if plan.plan_date else ""
     if field == "goals":
-        return "\n".join(f"{i}. {goal}" for i, goal in enumerate(profile.goals, start=1))
+        return "\n".join(f"{i}. {goal}" for i, goal in enumerate(plan.goals, start=1))
     return getattr(profile, field)

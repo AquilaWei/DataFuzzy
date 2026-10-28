@@ -11,11 +11,13 @@ from datafuzzy.ot.db import (
     DB_ENV,
     DuplicateRecord,
     NotFound,
+    Plan,
     RecordStore,
     Session,
     StudentProfile,
     default_db_path,
     default_end_time,
+    parse_plan_date,
     split_goals,
 )
 
@@ -831,3 +833,44 @@ def test_chart_book_from_before_session_types_reads_them_as_individual(tmp_path)
     with RecordStore(path, KEY) as again:
         assert again.get_record(record.id).session_type == "individual"
         assert again.get_record(record.id).goal_scores == ()
+
+
+def test_plan_dates_read_month_first_with_a_two_or_four_digit_year():
+    assert parse_plan_date("10/29/2026") == date(2026, 10, 29)
+    assert parse_plan_date("10/29/26") == date(2026, 10, 29)
+    assert parse_plan_date("29/10/2026") is None
+    assert parse_plan_date("") is None
+
+
+OLD_PLAN = Plan(False, "10/29/2025", ("剪直線",))
+NEW_PLAN = Plan(True, "10/29/2026", ("扣釦子", "寫名字"))
+
+
+def test_a_new_plan_takes_over_from_its_date():
+    profile = StudentProfile().with_plans([NEW_PLAN, OLD_PLAN])
+    assert profile.plan_on(date(2026, 10, 28)) == OLD_PLAN
+    assert profile.plan_on(date(2026, 10, 29)) == NEW_PLAN
+
+
+def test_a_day_before_every_plan_falls_under_the_earliest():
+    profile = StudentProfile().with_plans([NEW_PLAN, OLD_PLAN])
+    assert profile.plan_on(date(2020, 1, 1)) == OLD_PLAN
+
+
+def test_the_latest_dated_plan_becomes_the_current_one():
+    profile = StudentProfile().with_plans([NEW_PLAN, OLD_PLAN])
+    assert (profile.plan_504, profile.plan_date, profile.goals, profile.past_plans) == (
+        True, "10/29/2026", ("扣釦子", "寫名字"), (OLD_PLAN,))
+
+
+def test_old_plans_are_kept_with_their_goals(store):
+    student = store.add_student("王小明")
+    store.set_profile(student.id, StudentProfile(diagnosis="ADHD").with_plans([OLD_PLAN, NEW_PLAN]))
+    assert store.get_profile(student.id).plans == (OLD_PLAN, NEW_PLAN)
+
+
+def test_saving_puts_the_plans_in_date_order(store):
+    student = store.add_student("王小明")
+    store.set_profile(student.id, StudentProfile(plan_date="10/29/2025", goals=("剪直線",),
+                                                 past_plans=(NEW_PLAN,)))
+    assert store.get_profile(student.id).plans == (OLD_PLAN, NEW_PLAN)

@@ -2,7 +2,7 @@ from datetime import date, datetime
 
 import pytest
 
-from datafuzzy.ot.db import RecordStore, StudentProfile
+from datafuzzy.ot.db import Plan, RecordStore, StudentProfile
 from datafuzzy.ot.ui.editor import RecordEditor
 
 KEY = bytes(range(32))
@@ -398,3 +398,27 @@ def test_compared_chart_shows_its_session_type_and_scores(qtbot, store, record):
     editor.show_compare(other.id)
     assert editor.compare.session_type.text() == "Consult"
     assert [box.text() for box in editor.compare.scores.boxes] == ["60%", "--"]
+
+
+def test_a_chart_scores_the_goals_of_the_plan_in_effect_on_its_day(qtbot, store, record):
+    store.set_profile(record.student_id, StudentProfile().with_plans(
+        [Plan(False, "09/01/2026", ("剪直線",)), Plan(False, "10/29/2026", ("扣釦子", "寫名字"))]))
+    editor = make_editor(qtbot, store, record)
+    assert len(editor.scores.boxes) == 1
+
+
+def test_moving_a_chart_into_a_new_plan_shows_that_plans_goals(qtbot, store, record):
+    store.set_profile(record.student_id, StudentProfile().with_plans(
+        [Plan(False, "09/01/2026", ("剪直線",)), Plan(False, "10/29/2026", ("扣釦子", "寫名字"))]))
+    editor = make_editor(qtbot, store, record)
+    editor.change_date(date(2026, 10, 30))
+    assert len(editor.scores.boxes) == 2
+
+
+def test_compared_chart_names_its_scores_by_its_own_plan(qtbot, store, record):
+    store.set_profile(record.student_id, StudentProfile().with_plans(
+        [Plan(False, "09/01/2026", ("剪直線",)), Plan(False, "10/29/2026", ("扣釦子", "寫名字"))]))
+    other = store.add_record(record.student_id, date(2026, 11, 5))
+    editor = make_editor(qtbot, store, record)
+    editor.show_compare(other.id)
+    assert len(editor.compare.scores.boxes) == 2
