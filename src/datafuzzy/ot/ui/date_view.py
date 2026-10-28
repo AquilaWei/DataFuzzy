@@ -234,7 +234,8 @@ class DayRecordsView(QWidget):
         if item is None:
             return None
         record_id = item.data(Qt.ItemDataRole.UserRole)
-        return record_menu(self, lambda: self.delete_record.emit(record_id))
+        return record_menu(self, lambda: self.delete_record.emit(record_id),
+                           english=self.store.get_record(record_id).en_text)
 
     def _show_menu(self, pos: QPoint) -> None:
         if menu := self.context_menu(pos):

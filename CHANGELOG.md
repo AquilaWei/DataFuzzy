@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.28.0] - 2026-10-28
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 日期模式在學生上按右鍵，多了「複製英文病歷」，直接把那份英文病歷放到剪貼簿；還沒有英文病歷時這個選項是灰的。
+
+### 變更
+- 右鍵選單裡「刪除病歷…」移到最後，與複製選項之間有分隔線，避免誤點。
+- 刪除病歷的警告視窗改成明確的「刪除」與「取消」按鈕，預設是「取消」（按 Return 或 Esc 都不會刪除），只有按下「刪除」才會刪掉。
+
 ## [0.7.0.27.0] - 2026-10-27
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。

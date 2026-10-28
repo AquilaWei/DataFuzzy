@@ -6,7 +6,7 @@ import math
 from collections.abc import Callable
 
 from PySide6.QtCore import QEvent, Qt, Signal
-from PySide6.QtGui import QResizeEvent
+from PySide6.QtGui import QGuiApplication, QResizeEvent
 from PySide6.QtWidgets import (
     QButtonGroup,
     QHBoxLayout,
@@ -19,11 +19,19 @@ from PySide6.QtWidgets import (
 from .i18n import tr
 
 DELETE_RECORD = "刪除病歷…"
+COPY_ENGLISH = "複製英文病歷"
 
 
-def record_menu(parent: QWidget, on_delete: Callable[[], None]) -> QMenu:
-    """The right-click menu of a record (a card or a row of the day list)."""
+def record_menu(parent: QWidget, on_delete: Callable[[], None],
+                english: str | None = None) -> QMenu:
+    """The right-click menu of a record (a card or a row of the day list). Given `english`,
+    it starts with copying that chart, disabled while it is empty; delete stays last, apart."""
     menu = QMenu(parent)
+    if english is not None:
+        copy = menu.addAction(tr(COPY_ENGLISH))
+        copy.setEnabled(bool(english.strip()))
+        copy.triggered.connect(lambda: QGuiApplication.clipboard().setText(english))
+        menu.addSeparator()
     menu.addAction(tr(DELETE_RECORD)).triggered.connect(on_delete)
     return menu
 

@@ -3,6 +3,7 @@ from datetime import date
 
 import pytest
 from PySide6.QtCore import QDate, QPoint, Qt
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QFrame, QLabel
 
 from datafuzzy import __version__
@@ -427,9 +428,66 @@ def test_day_list_menu_deletes_the_record(qtbot, store, monkeypatch):
     window.calendar.setSelectedDate(QDate(2026, 10, 1))
     rows = window.day_view.list
     rows.viewport().resize(400, 400)
-    window.day_view.context_menu(rows.visualItemRect(rows.item(0)).center()).actions()[0].trigger()
+    day_menu_action(window, 0, "刪除病歷…").trigger()
     assert [r.student_id for r in store.records_on(OCT_1)] == [chen.id]
     assert rows.count() == 1
+
+
+def day_menu_action(window, row: int, text: str):
+    rows = window.day_view.list
+    rows.viewport().resize(400, 400)
+    menu = window.day_view.context_menu(rows.visualItemRect(rows.item(row)).center())
+    return next(a for a in menu.actions() if a.text() == text)
+
+
+def open_day(qtbot, store):
+    window = make_window(qtbot, store)
+    window.set_mode(DATE_MODE)
+    window.calendar.setSelectedDate(QDate(2026, 10, 1))
+    return window
+
+
+def test_day_list_menu_copies_the_english_chart(qtbot, store):
+    student = store.add_student("王小明")
+    store.add_record(student.id, OCT_1, zh_text="中文內容", en_text="Worked on fine motor skills.")
+    QGuiApplication.clipboard().clear()
+    day_menu_action(open_day(qtbot, store), 0, "複製英文病歷").trigger()
+    assert QGuiApplication.clipboard().text() == "Worked on fine motor skills."
+
+
+def test_copying_the_english_chart_is_off_until_there_is_one(qtbot, store):
+    student = store.add_student("王小明")
+    store.add_record(student.id, OCT_1, zh_text="中文內容")
+    assert not day_menu_action(open_day(qtbot, store), 0, "複製英文病歷").isEnabled()
+
+
+def test_delete_sits_last_in_the_day_menu_apart_from_copying(qtbot, store):
+    student = store.add_student("王小明")
+    store.add_record(student.id, OCT_1, en_text="x")
+    window = open_day(qtbot, store)
+    rows = window.day_view.list
+    rows.viewport().resize(400, 400)
+    actions = window.day_view.context_menu(rows.visualItemRect(rows.item(0)).center()).actions()
+    assert [a.isSeparator() for a in actions] == [False, True, False]
+    assert actions[-1].text() == "刪除病歷…"
+
+
+def test_the_delete_prompt_defaults_to_cancel(qtbot, store):
+    window = make_window(qtbot, store)
+    box, delete = window.delete_prompt("王小明", OCT_1)
+    assert box.defaultButton() is box.escapeButton()
+    assert box.defaultButton() is not delete
+    assert delete.text() == "刪除"
+    assert "王小明" in box.text() and "無法復原" in box.text()
+
+
+def test_the_record_stays_unless_delete_is_clicked(qtbot, store, monkeypatch):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, OCT_1, zh_text="王")
+    window = make_window(qtbot, store)
+    monkeypatch.setattr(main_window.QMessageBox, "exec", lambda box: box.defaultButton().click())
+    assert window.delete_record(record.id) is False
+    assert len(store.records_for_student(student.id)) == 1
 
 
 def test_day_list_has_no_menu_below_the_rows(qtbot, store):

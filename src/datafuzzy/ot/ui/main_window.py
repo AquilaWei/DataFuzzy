@@ -496,13 +496,22 @@ class TheraNoteWindow(QMainWindow):
         self.open_record(record.id)
         return record.id
 
+    def delete_prompt(self, student_name: str, day: date) -> tuple[QMessageBox, QPushButton]:
+        """The warning shown before a record is deleted, and its delete button. Cancel is the
+        default and Esc, so a stray Return or click past the menu deletes nothing."""
+        box = QMessageBox(QMessageBox.Icon.Warning, tr("刪除病歷"),
+                          tr("要刪除 {name} 在 {day} 的病歷嗎？\n中英文內容都會一併刪除，無法復原。",
+                             name=student_name, day=day.isoformat()), parent=self)
+        delete = box.addButton(tr("刪除"), QMessageBox.ButtonRole.DestructiveRole)
+        cancel = box.addButton(tr("取消"), QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(cancel)
+        box.setEscapeButton(cancel)
+        return box, delete
+
     def _confirm_delete(self, student_name: str, day: date) -> bool:
-        answer = QMessageBox.warning(
-            self, tr("刪除病歷"), tr("要刪除 {name} 在 {day} 的病歷嗎？\n中英文內容都會一併刪除，無法復原。",
-                                    name=student_name, day=day.isoformat()),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Cancel)
-        return answer == QMessageBox.StandardButton.Yes
+        box, delete = self.delete_prompt(student_name, day)
+        box.exec()
+        return box.clickedButton() is delete
 
     def delete_record(self, record_id: int) -> bool:
         """Delete a record after asking. Returns whether it was deleted."""

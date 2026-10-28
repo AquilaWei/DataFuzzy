@@ -130,6 +130,7 @@ ENGLISH = {
     "這位學生沒有其他病歷": "This student has no other charts",
     "已複製中文病歷": "Chinese chart copied",
     "已複製英文病歷": "English chart copied",
+    "複製英文病歷": "Copy English chart",
     "{name} 在 {day} 已經有一份病歷，日期沒有更改。":
         "{name} already has a chart on {day}; the date was not changed.",
     "編輯中…": "Editing…",
