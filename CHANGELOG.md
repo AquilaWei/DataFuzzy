@@ -3,6 +3,20 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.29.0] - 2026-10-28
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 學生基本資訊多了 IEP/504 Date：預設是 IEP，匯出時表頭顯示 `IEP Date`；勾選「504 計畫」後改顯示 `504 Date`，後面接所填的日期。
+- Goals 改成一個目標一列，可自行新增、移除（Goal 1、Goal 2…自動重新編號），每位學生的目標數量不限。
+- 每份病歷可勾選 Session type（Group、Individual、Consult、Collaboration、Make up，一次一個，預設 Individual）。
+- 每份病歷可為每個目標填入當次表現：例如 75%（只填數字會自動加上 %）、或 not met；沒填就是沒有記錄。對照其他病歷時也會顯示。
+
+### 變更
+- Excel 匯出改用新的學校表單：每次病歷一列，依序是 Date、Time（如 9:30-10:00）、Session Type、Activity、Comment，以及每個目標一欄分數；目標欄數依學生的目標數量增減，沒有記錄的分數顯示 `--`。表頭第二列逐行列出 Goal 1、Goal 2…。
+- 舊資料：原本寫在同一格的 Goals，會依「1. 2. 3.」這類編號自動拆成 Goal 1、Goal 2、Goal 3（沒有編號就當成一個目標）；以前的病歷都視為 Individual。
+
 ## [0.7.0.28.0] - 2026-10-28
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
