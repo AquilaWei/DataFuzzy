@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.31.0] - 2026-10-29
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 每份 IEP/504 計畫多了 Frequency（每月治療分鐘數），從 30、60、90… mins/month 中選，和該計畫的日期、目標綁在一起；新計畫預設沿用目前計畫的 Frequency。
+- Excel 匯出表頭的 `Frequency:` 會填入該頁籤計畫的 Frequency，例如 `Frequency: 60 mins/month`；沒選就留白。病歷上方的基本資訊也會顯示。
+
+### 變更
+- 基本資訊對話框多出的空間改放在最下方，不再把 Goals 和 School year 隔開。
+
 ## [0.7.0.30.0] - 2026-10-28
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
