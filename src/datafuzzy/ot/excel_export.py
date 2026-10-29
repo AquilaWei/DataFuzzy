@@ -109,7 +109,7 @@ def header_text(name: str, profile: StudentProfile, today: date, plan: Plan | No
                 school_year: tuple[date, date] | None = None) -> str:
     """The form's first row: who the student is, the date of their IEP (or 504 plan; the
     latest unless `plan` is given) and the school year (`school_year`, else the profile's,
-    else this one). Frequency is left for the therapist to write in."""
+    else this one) and the plan's frequency ("30 mins/month"; blank when not set)."""
     plan = plan or profile.plan
     if school_year is not None:
         year_text = format_school_year(*school_year)
@@ -118,7 +118,7 @@ def header_text(name: str, profile: StudentProfile, today: date, plan: Plan | No
     return (f"Name: {name} / Diagnosis: {profile.diagnosis} / Age: {profile.age} / "
             f"Grade: {profile.grade} / Classroom: {profile.classroom} / "
             f"Case manager: {profile.case_manager}\n{plan.label}: {plan.plan_date}\n"
-            f"Frequency:\nSchool year: {year_text}")
+            f"Frequency: {plan.frequency_text}".rstrip() + f"\nSchool year: {year_text}")
 
 
 def goals_text(goals: tuple[str, ...]) -> str:

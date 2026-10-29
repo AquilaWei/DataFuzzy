@@ -180,6 +180,7 @@ ENGLISH = {
     "目標表現": "Goal scores",
     "（基本資料還沒有目標）": "(No goals in the profile yet)",
     "（未填日期）": "(no date)",
+    "每個月的治療分鐘數": "Therapy minutes a month",
     "切換顯示其他 IEP/504 計畫和它的目標": "Show another IEP/504 plan and its goals",
     "＋ 新的計畫": "＋ New plan",
     "IEP/504 快到期時，填入新的日期和目標；舊的會保留": "When the IEP/504 is about to expire, enter the new date and goals; the old ones are kept",

@@ -245,3 +245,33 @@ def test_summary_shows_the_plan_in_effect_on_the_charts_day(qtbot):
     qtbot.addWidget(summary)
     summary.show_profile("王小明", StudentProfile().with_plans([OLD_PLAN, NEW_PLAN]), date(2026, 3, 1))
     assert (summary.values["plan"].text(), summary.values["goals"].text()) == ("IEP 10/29/2025", "1. 剪直線")
+
+
+def test_frequency_is_picked_in_steps_of_30_minutes(qtbot):
+    dialog = plans_dialog(qtbot, OLD_PLAN)
+    assert [dialog.frequency.itemText(i) for i in range(3)] == ["—", "30 mins/month", "60 mins/month"]
+
+
+def test_picked_frequency_is_saved_with_the_plan(qtbot):
+    dialog = plans_dialog(qtbot, OLD_PLAN)
+    dialog.frequency.setCurrentIndex(dialog.frequency.findData(120))
+    assert dialog.profile().frequency == 120
+
+
+def test_a_new_plan_starts_with_the_frequency_of_the_one_shown(qtbot):
+    dialog = plans_dialog(qtbot, Plan(False, "10/29/2025", frequency=60))
+    dialog.plans.add_plan()
+    assert dialog.frequency.currentData() == 60
+
+
+def test_switching_plans_shows_each_ones_frequency(qtbot):
+    dialog = plans_dialog(qtbot, Plan(False, "10/29/2025", frequency=30), Plan(False, "10/29/2026", frequency=90))
+    dialog.plans.show_plan(1)
+    assert dialog.frequency.currentText() == "30 mins/month"
+
+
+def test_summary_shows_the_plans_frequency(qtbot):
+    summary = ProfileSummary()
+    qtbot.addWidget(summary)
+    summary.show_profile("王小明", StudentProfile(plan_date="10/29/2026", frequency=60))
+    assert summary.values["plan"].text() == "IEP 10/29/2026 · 60 mins/month"

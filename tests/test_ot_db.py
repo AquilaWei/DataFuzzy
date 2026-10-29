@@ -874,3 +874,15 @@ def test_saving_puts_the_plans_in_date_order(store):
     store.set_profile(student.id, StudentProfile(plan_date="10/29/2025", goals=("剪直線",),
                                                  past_plans=(NEW_PLAN,)))
     assert store.get_profile(student.id).plans == (OLD_PLAN, NEW_PLAN)
+
+
+def test_frequency_reads_as_minutes_a_month():
+    assert Plan(frequency=90).frequency_text == "90 mins/month"
+    assert Plan().frequency_text == ""
+
+
+def test_each_plan_keeps_its_frequency(store):
+    student = store.add_student("王小明")
+    store.set_profile(student.id, StudentProfile().with_plans(
+        [Plan(False, "10/29/2025", frequency=30), Plan(False, "10/29/2026", frequency=60)]))
+    assert [p.frequency for p in store.get_profile(student.id).plans] == [30, 60]

@@ -24,7 +24,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..db import Plan, Session, StudentProfile, default_end_time, parse_plan_date
+from ..db import (
+    FREQUENCY_MAX,
+    FREQUENCY_STEP,
+    Plan,
+    Session,
+    StudentProfile,
+    default_end_time,
+    parse_plan_date,
+)
 from ..school_year import default_school_year, format_school_year, parse_school_year
 from .cards import TIME_CHOICES, normal_time, session_label, time_label, weekday_label
 from .i18n import language, tr
@@ -240,7 +248,7 @@ def plan_text(plan: Plan) -> str:
 
 class PlanEditor(QWidget):
     """The student's IEP and 504 plans, one shown at a time: its date, whether it is a 504
-    plan, and (in `goals`, laid out by the dialog) its goals. A new plan starts blank and the
+    plan, its frequency (minutes a month) and (in `goals`, laid out by the dialog) its goals. A new plan starts blank and the
     old ones are kept, to be picked again from `picker`, newest first."""
 
     def __init__(self, plans: tuple[Plan, ...], parent: QWidget | None = None) -> None:
@@ -257,6 +265,11 @@ class PlanEditor(QWidget):
         self.plan_date = QLineEdit()
         self.plan_date.setPlaceholderText("MM/DD/YYYY")
         self.plan_504 = QCheckBox(tr("504 計畫（不勾是 IEP）"))
+        self.frequency = QComboBox()  # a list, so the minutes stay a multiple of FREQUENCY_STEP
+        self.frequency.setToolTip(tr("每個月的治療分鐘數"))
+        self.frequency.addItem("—", 0)
+        for minutes in range(FREQUENCY_STEP, FREQUENCY_MAX + 1, FREQUENCY_STEP):
+            self.frequency.addItem(f"{minutes} mins/month", minutes)
         self.goals = GoalsEditor()
         pick = QHBoxLayout()
         pick.setContentsMargins(0, 0, 0, 0)
@@ -267,10 +280,16 @@ class PlanEditor(QWidget):
         fields.setContentsMargins(0, 0, 0, 0)
         fields.addWidget(self.plan_date, 1)
         fields.addWidget(self.plan_504)
+        frequency = QHBoxLayout()
+        frequency.setContentsMargins(0, 0, 0, 0)
+        frequency.addWidget(QLabel("Frequency"))
+        frequency.addWidget(self.frequency)
+        frequency.addStretch(1)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(pick)
         layout.addLayout(fields)
+        layout.addLayout(frequency)
         self._list()
         self._load()
         self.picker.currentIndexChanged.connect(self._pick)
@@ -292,7 +311,8 @@ class PlanEditor(QWidget):
     def _load(self) -> None:
         plan = self._plans[self._shown]
         for edit, set_value in ((self.plan_date, lambda: self.plan_date.setText(plan.plan_date)),
-                                (self.plan_504, lambda: self.plan_504.setChecked(plan.plan_504))):
+                                (self.plan_504, lambda: self.plan_504.setChecked(plan.plan_504)),
+                                (self.frequency, lambda: self.set_frequency(plan.frequency))):
             edit.blockSignals(True)
             set_value()
             edit.blockSignals(False)
@@ -300,7 +320,16 @@ class PlanEditor(QWidget):
 
     def _keep(self) -> None:
         """Take the shown plan's edits into the list."""
-        self._plans[self._shown] = Plan(self.plan_504.isChecked(), self.plan_date.text(), self.goals.goals())
+        self._plans[self._shown] = Plan(self.plan_504.isChecked(), self.plan_date.text(), self.goals.goals(),
+                                        self.frequency.currentData())
+
+    def set_frequency(self, minutes: int) -> None:
+        """Pick `minutes` a month; one not in the list (from an older version) is added to it."""
+        index = self.frequency.findData(minutes)
+        if index < 0:
+            self.frequency.addItem(f"{minutes} mins/month", minutes)
+            index = self.frequency.count() - 1
+        self.frequency.setCurrentIndex(index)
 
     def _pick(self, index: int) -> None:
         self._keep()
@@ -316,9 +345,9 @@ class PlanEditor(QWidget):
         self.picker.setCurrentIndex(index)
 
     def add_plan(self) -> None:
-        """Start a blank plan, of the kind of the one shown, and show it."""
+        """Start a blank plan, of the kind and frequency of the one shown, and show it."""
         self._keep()
-        self._plans.insert(0, Plan(plan_504=self.plan_504.isChecked()))
+        self._plans.insert(0, Plan(plan_504=self.plan_504.isChecked(), frequency=self.frequency.currentData()))
         self._shown = 0
         self._list()
         self._load()
@@ -390,6 +419,7 @@ class StudentProfileDialog(QDialog):
         self.year_to = self._month_edit(end)
         self.plans = PlanEditor(profile.plans)
         self.plan_date, self.plan_504, self.goals = self.plans.plan_date, self.plans.plan_504, self.plans.goals
+        self.frequency = self.plans.frequency
         self.sessions = SessionsEditor(profile.sessions, classrooms)
         self.problem = QLabel("")
         self.problem.setStyleSheet("color: #ff453a;")  # as in the unlock prompt
@@ -416,7 +446,8 @@ class StudentProfileDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout = QVBoxLayout(self)
-        layout.addLayout(form, 1)
+        layout.addLayout(form)
+        layout.addStretch(1)  # spare height below the form, not inside the goals
         layout.addWidget(self.problem)
         layout.addWidget(buttons)
 
@@ -513,7 +544,8 @@ def summary_value(profile: StudentProfile, field: str, plan: Plan | None = None)
     if field == "sessions":
         return sessions_text(profile.sessions)
     if field == "plan":
-        return f"{plan.kind} {plan.plan_date}" if plan.plan_date else ""
+        return " · ".join(t for t in (f"{plan.kind} {plan.plan_date}" if plan.plan_date else "",
+                                      plan.frequency_text) if t)
     if field == "goals":
         return "\n".join(f"{i}. {goal}" for i, goal in enumerate(plan.goals, start=1))
     return getattr(profile, field)

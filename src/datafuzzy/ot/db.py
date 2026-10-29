@@ -171,6 +171,12 @@ class Plan:
     plan_504: bool = False  # a 504 plan; an IEP otherwise
     plan_date: str = ""  # as typed, "MM/DD/YYYY"
     goals: tuple[str, ...] = ()  # Goal 1, Goal 2, …: as many as the student has
+    frequency: int = 0  # therapy minutes a month, a multiple of FREQUENCY_STEP; 0 if not set
+
+    @property
+    def frequency_text(self) -> str:
+        """"30 mins/month", as the form writes it; "" when not set."""
+        return f"{self.frequency} mins/month" if self.frequency else ""
 
     @property
     def label(self) -> str:
@@ -185,6 +191,10 @@ class Plan:
     def starts(self) -> date:
         """The plan's date; date.min when blank or unreadable, so such a plan counts as the earliest."""
         return parse_plan_date(self.plan_date) or date.min
+
+
+FREQUENCY_STEP = 30  # a plan's minutes a month come in steps of this
+FREQUENCY_MAX = 600
 
 
 def sort_plans(plans: Iterable[Plan]) -> list[Plan]:
@@ -205,10 +215,11 @@ class StudentProfile:
     goals: tuple[str, ...] = ()  # Goal 1, Goal 2, …: as many as the student has
     location: str = ""
     sessions: tuple[Session, ...] = ()  # as many as the student has, by weekday then start
-    # The latest plan is plan_504, plan_date and goals; the plans it replaced, oldest first,
+    # The latest plan is plan_504, plan_date, frequency and goals; the plans it replaced, oldest first,
     # are kept with their goals for the charts scored on them.
     plan_504: bool = False  # the plan is a 504 plan; an IEP otherwise
     plan_date: str = ""  # the date of that IEP or 504 plan
+    frequency: int = 0  # its therapy minutes a month (see Plan)
     past_plans: tuple[Plan, ...] = ()
 
     @property
@@ -219,7 +230,7 @@ class StudentProfile:
     @property
     def plan(self) -> Plan:
         """The latest plan."""
-        return Plan(self.plan_504, self.plan_date, self.goals)
+        return Plan(self.plan_504, self.plan_date, self.goals, self.frequency)
 
     @property
     def plans(self) -> tuple[Plan, ...]:
@@ -236,7 +247,7 @@ class StudentProfile:
         """This profile with `plans` (in any order; at least one), sorted by date, the latest
         becoming the current plan."""
         *past, latest = sort_plans(plans)
-        return replace(self, plan_504=latest.plan_504, plan_date=latest.plan_date,
+        return replace(self, plan_504=latest.plan_504, plan_date=latest.plan_date, frequency=latest.frequency,
                        goals=latest.goals, past_plans=tuple(past))
 
 
@@ -431,15 +442,15 @@ class RecordStore:
         goals = fields.pop("goals", [])
         # One text before goals were kept one by one; saving the profile again stores the list.
         goals = split_goals(goals) if isinstance(goals, str) else tuple(goals)
-        past = tuple(Plan(p["plan_504"], p["plan_date"], tuple(p["goals"]))
-                     for p in fields.pop("past_plans", []))  # none before plans were kept
+        past = tuple(Plan(p["plan_504"], p["plan_date"], tuple(p["goals"]), p.get("frequency", 0))
+                     for p in fields.pop("past_plans", []))  # none before plans were kept; no frequency before it was asked
         return StudentProfile(**fields, goals=goals, sessions=sessions, past_plans=past)
 
     def set_profile(self, student_id: int, profile: StudentProfile) -> None:
         """Replace the student's profile, with surrounding spaces trimmed from each field, blank
         goals left out, the sessions sorted by weekday and start and the plans by date (the
         latest becoming the current one)."""
-        plans = [Plan(p.plan_504, p.plan_date.strip(), tuple(g.strip() for g in p.goals if g.strip()))
+        plans = [Plan(p.plan_504, p.plan_date.strip(), tuple(g.strip() for g in p.goals if g.strip()), p.frequency)
                  for p in profile.plans]
         profile = profile.with_plans(plans)
         trimmed = {k: v.strip() if isinstance(v, str) else v for k, v in asdict(profile).items()}

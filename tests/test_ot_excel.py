@@ -359,3 +359,22 @@ def test_a_new_school_year_in_the_period_starts_a_new_sheet(store):
     wb = build_workbook(store, store.records_for_student(student.id), today=TODAY)
     assert wb.sheetnames == ["2026-2027_IEP 10∕29∕26", "2027-2028_IEP 10∕29∕26"]
     assert wb.worksheets[1]["A1"].value.endswith("School year: 09/2027-06/2028")
+
+
+def test_header_shows_the_plans_frequency():
+    profile = StudentProfile(plan_date="10/29/2026", frequency=60)
+    assert "\nFrequency: 60 mins/month\n" in header_text("Amy", profile, TODAY)
+
+
+def test_header_without_a_frequency_leaves_it_blank():
+    assert "\nFrequency:\n" in header_text("Amy", StudentProfile(), TODAY)
+
+
+def test_each_plans_sheet_has_that_plans_frequency(store):
+    student = store.add_student("王小明")
+    store.set_profile(student.id, StudentProfile().with_plans(
+        [Plan(False, "10/29/2025", frequency=30), Plan(False, "10/29/2026", frequency=90)]))
+    store.add_record(student.id, date(2026, 10, 28))
+    store.add_record(student.id, date(2026, 10, 29))
+    old, new = build_workbook(store, store.records_for_student(student.id), today=TODAY).worksheets
+    assert ("Frequency: 30 mins/month" in old["A1"].value, "Frequency: 90 mins/month" in new["A1"].value) == (True, True)
