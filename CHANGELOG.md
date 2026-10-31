@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.32.0] - 2026-10-31
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 同一位學生同一天可以新增多份病歷（例如上午、下午不同的治療），不再提示「已經有一份病歷」；病歷日期也能改到已有病歷的那天。同一天的病歷依開始時間排列。
+- 病歷上方新增「預約下次治療」按鈕：新增七天後同一時段、同一位學生的病歷（沿用 Session type），開啟後和原本那份左右對照。重複按不會多出第二份。
+
+### 變更
+- 目標表現改成下拉選單，從 met、not met、not addressed 中選一個；`--` 表示沒有記錄。以前手動輸入的分數（如 75%）保留並照常匯出。
+- 所有下拉選單都加上向下箭頭，一看就知道可以點開。
+- 「對照其他病歷」的清單會顯示開始時間，同一天較早的那次排在最前面。
+
 ## [0.7.0.31.0] - 2026-10-29
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
