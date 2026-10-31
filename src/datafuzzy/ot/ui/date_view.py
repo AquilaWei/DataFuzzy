@@ -250,11 +250,13 @@ class DayRecordsView(QWidget):
             return
         names = {s.id: s.name for s in self.store.students_on(self.day)}  # sorted by name
         order = {student_id: i for i, student_id in enumerate(names)}
-        records = sorted(self.store.records_on(self.day), key=lambda r: order[r.student_id])
+        # A student seen twice that day has a row per record, in the order of the sessions.
+        records = sorted(self.store.records_on(self.day),
+                         key=lambda r: (order[r.student_id], r.start_time or "99:99"))
         if self.sort.index() == BY_TIME:  # stable, so equal times stay in name order
             records.sort(key=lambda r: r.start_time or "99:99")
         self.title.setText(date_label(self.day))
-        self.count.setText(tr("{count} 位學生有病歷", count=len(records)))
+        self.count.setText(tr("{count} 位學生有病歷", count=len(names)))
         self.list.clear()
         for record in records:
             place = record.location or tr("未填地點")

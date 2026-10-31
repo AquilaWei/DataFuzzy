@@ -167,26 +167,24 @@ def test_new_record_appears_as_a_card(qtbot, store):
     assert len(window.student_view.stack.cards) == 1
 
 
-def test_second_record_on_same_day_asks_and_opens_the_existing_one(qtbot, store, monkeypatch):
+def test_second_record_on_same_day_is_a_new_one(qtbot, store):
     window = make_window(qtbot, store)
     student_id = window.add_student("王小明")
     first = window.new_record(student_id, OCT_1)
     window.close_editor()
-    asked = []
-    monkeypatch.setattr(window, "_confirm_open_existing", lambda name, day: asked.append((name, day)) or True)
     again = window.new_record(student_id, OCT_1)
-    assert (again, asked, window.editor.record_id) == (first, [("王小明", OCT_1)], first)
-    assert len(store.records_for_student(student_id)) == 1
+    assert again != first
+    assert window.editor.record_id == again
+    assert len(store.student_records_on(student_id, OCT_1)) == 2
 
 
-def test_declining_the_duplicate_prompt_opens_nothing(qtbot, store, monkeypatch):
+def test_booking_the_next_session_opens_it_beside_the_chart_it_came_from(qtbot, store):
     window = make_window(qtbot, store)
     student_id = window.add_student("王小明")
-    window.new_record(student_id, OCT_1)
-    window.close_editor()
-    monkeypatch.setattr(window, "_confirm_open_existing", lambda name, day: False)
-    assert window.new_record(student_id, OCT_1) is None
-    assert window.editor is None
+    first = window.new_record(student_id, OCT_1)
+    window.editor.book_btn.click()
+    [booked] = store.student_records_on(student_id, date(2026, 10, 8))
+    assert (window.editor.record_id, window.editor.compare.record_id) == (booked.id, first)
 
 
 def test_new_record_button_asks_which_student_and_day(qtbot, store, monkeypatch):
@@ -194,7 +192,7 @@ def test_new_record_button_asks_which_student_and_day(qtbot, store, monkeypatch)
     window = make_window(qtbot, store)
     monkeypatch.setattr(window, "_pick_new_record", lambda: (student.id, OCT_1))
     window.add_record_btn.click()
-    assert window.editor.record_id == store.find_record(student.id, OCT_1).id
+    assert window.editor.record_id == store.student_records_on(student.id, OCT_1)[0].id
 
 
 def _dialog_setup(store):

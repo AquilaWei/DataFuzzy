@@ -22,20 +22,26 @@ from .session_fields import GoalScores, session_type_label
 from .widgets import GrowingTextEdit
 
 
-def compare_candidates(records: list[Record], current_id: int, current_day: date) -> list[Record]:
-    """The student's other charts in the order to offer them: the visits before `current_day`
-    from the nearest back to the oldest, then any later ones from the nearest on."""
-    others = [r for r in records if r.id != current_id]
-    earlier = sorted((r for r in others if r.visit_date < current_day),
-                     key=lambda r: (r.visit_date, r.id), reverse=True)
-    later = sorted((r for r in others if r.visit_date >= current_day), key=lambda r: (r.visit_date, r.id))
+def _session(record: Record) -> tuple[date, str, int]:
+    """Where a record falls among the student's sessions: by day, then start time."""
+    return record.visit_date, record.start_time or "99:99", record.id
+
+
+def compare_candidates(records: list[Record], current: Record) -> list[Record]:
+    """The student's other charts in the order to offer them: the sessions before `current`
+    (an earlier one the same day included) from the nearest back to the oldest, then any later
+    ones from the nearest on."""
+    others = [r for r in records if r.id != current.id]
+    earlier = sorted((r for r in others if _session(r) < _session(current)), key=_session, reverse=True)
+    later = sorted((r for r in others if _session(r) > _session(current)), key=_session)
     return earlier + later
 
 
 def candidate_label(record: Record) -> str:
-    """One line of the pick list: date, location and the start of the chart."""
+    """One line of the pick list: date, start time, location and the start of the chart."""
     first_line = preview_text(record.zh_text, record.en_text).splitlines()[0]
-    return f"{date_label(record.visit_date)} · {record.location or tr('未填地點')} · {first_line}"
+    when = " ".join(part for part in (date_label(record.visit_date), time_label(record.start_time)) if part)
+    return f"{when} · {record.location or tr('未填地點')} · {first_line}"
 
 
 class ComparePanel(QWidget):

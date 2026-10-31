@@ -14,7 +14,7 @@ import sqlite3
 import threading
 from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, replace
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Self
 
@@ -27,18 +27,9 @@ from .crypto import Cipher
 DB_ENV = f"{APP_NAME.upper()}_DB"
 KEY_CHECK_TEXT = "key-check"
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS meta (
-    key   TEXT PRIMARY KEY,
-    value BLOB NOT NULL
-);
-CREATE TABLE IF NOT EXISTS student (
-    id      INTEGER PRIMARY KEY,
-    name    BLOB NOT NULL,
-    profile BLOB,  -- StudentProfile as JSON; NULL until first filled in
-    active  INTEGER NOT NULL DEFAULT 1  -- 0 once their plan is done; they leave the timetable
-);
-CREATE TABLE IF NOT EXISTS record (
+# A student may have several records a day (a morning and an afternoon session).
+RECORD_TABLE = """
+CREATE TABLE IF NOT EXISTS {name} (
     id         INTEGER PRIMARY KEY,
     student_id INTEGER NOT NULL REFERENCES student(id) ON DELETE CASCADE,
     visit_date TEXT NOT NULL,
@@ -50,15 +41,30 @@ CREATE TABLE IF NOT EXISTS record (
     start_time TEXT,  -- "HH:MM", or NULL when not filled in
     end_time   TEXT,  -- "HH:MM", or NULL when not filled in
     session_type TEXT,  -- one of SESSION_TYPES; NULL in records made before it, read as individual
-    goal_scores  BLOB,  -- JSON list, one score per profile goal; NULL when none filled in
-    UNIQUE (student_id, visit_date)
+    goal_scores  BLOB   -- JSON list, one score per profile goal; NULL when none filled in
 );
-CREATE INDEX IF NOT EXISTS record_by_date ON record(visit_date);
+"""
+RECORD_COLUMNS = ("id, student_id, visit_date, location, zh_text, en_text, updated_at,"
+                  " activity, start_time, end_time, session_type, goal_scores")
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS meta (
+    key   TEXT PRIMARY KEY,
+    value BLOB NOT NULL
+);
+CREATE TABLE IF NOT EXISTS student (
+    id      INTEGER PRIMARY KEY,
+    name    BLOB NOT NULL,
+    profile BLOB,  -- StudentProfile as JSON; NULL until first filled in
+    active  INTEGER NOT NULL DEFAULT 1  -- 0 once their plan is done; they leave the timetable
+);
 CREATE TABLE IF NOT EXISTS export_batch (
     id         INTEGER PRIMARY KEY,
     created_at TEXT NOT NULL,
     payload    BLOB NOT NULL
 );
+""" + RECORD_TABLE.format(name="record") + """
+CREATE INDEX IF NOT EXISTS record_by_date ON record(visit_date);
 """
 
 
@@ -95,9 +101,30 @@ def connect(path: Path, check_same_thread: bool = True) -> sqlite3.Connection:
     if db.execute("PRAGMA user_version").fetchone()[0] < 1:
         fill_end_times(db)
         db.execute("PRAGMA user_version = 1")
+    if db.execute("PRAGMA user_version").fetchone()[0] < 2:
+        allow_several_records_a_day(db)
+        db.execute("PRAGMA user_version = 2")
     db.commit()
     path.chmod(0o600)
     return db
+
+
+def allow_several_records_a_day(db: sqlite3.Connection) -> None:
+    """Rebuild a record table from when a student could have only one record a day, without
+    that rule. SQLite cannot drop a constraint, so the rows are copied to a new table as they
+    are: no key is needed and nothing is decrypted. Runs once per database (see connect)."""
+    (sql,) = db.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'record'").fetchone()
+    if "UNIQUE" not in sql:
+        return
+    db.commit()
+    db.execute("BEGIN")
+    db.execute("DROP TABLE IF EXISTS record_new")
+    db.execute(RECORD_TABLE.format(name="record_new"))
+    db.execute(f"INSERT INTO record_new({RECORD_COLUMNS}) SELECT {RECORD_COLUMNS} FROM record")
+    db.execute("DROP TABLE record")  # its indexes go with it
+    db.execute("ALTER TABLE record_new RENAME TO record")
+    db.execute("CREATE INDEX record_by_date ON record(visit_date)")
+    db.commit()
 
 
 def fill_end_times(db: sqlite3.Connection) -> None:
@@ -324,17 +351,6 @@ class NotFound(LookupError):
     """No student, record or batch with that id."""
 
 
-class DuplicateRecord(Exception):
-    """The student already has a record on that date. `record_id` is the existing one, so
-    the caller can offer to open it instead."""
-
-    def __init__(self, student_id: int, visit_date: date, record_id: int) -> None:
-        super().__init__(f"student {student_id} already has record {record_id} on {visit_date}")
-        self.student_id = student_id
-        self.visit_date = visit_date
-        self.record_id = record_id
-
-
 class RecordStore:
     """Encrypted chart book. Safe to use from worker threads (calls are serialised).
 
@@ -479,14 +495,11 @@ class RecordStore:
                    zh_text: str = "", en_text: str = "", activity: str = "",
                    start_time: str = "", end_time: str = "",
                    session_type: str = DEFAULT_SESSION_TYPE, goal_scores: tuple[str, ...] = ()) -> Record:
-        """Raises DuplicateRecord if the student already has a record that day, NotFound
-        for an unknown student, ValueError for a session type not in SESSION_TYPES."""
+        """Raises NotFound for an unknown student, ValueError for a session type not in
+        SESSION_TYPES. The student may already have records that day."""
         _check_session_type(session_type)
         self.get_student(student_id)
         with self._lock:
-            existing = self.find_record(student_id, visit_date)
-            if existing:
-                raise DuplicateRecord(student_id, visit_date, existing.id)
             updated_at = self._now()
             with self._db:
                 cur = self._db.execute(
@@ -523,13 +536,9 @@ class RecordStore:
         return new
 
     def move_record(self, record_id: int, visit_date: date) -> Record:
-        """Correct the day of a record. Raises DuplicateRecord if the student already has
-        another record that day, NotFound for an unknown record."""
+        """Correct the day of a record. Raises NotFound for an unknown record."""
         with self._lock:
             record = self.get_record(record_id)
-            existing = self.find_record(record.student_id, visit_date)
-            if existing and existing.id != record_id:
-                raise DuplicateRecord(record.student_id, visit_date, existing.id)
             new = replace(record, visit_date=visit_date, updated_at=self._now())
             with self._db:
                 self._db.execute("UPDATE record SET visit_date = ?, updated_at = ? WHERE id = ?",
@@ -567,23 +576,33 @@ class RecordStore:
         if cur.rowcount == 0:
             raise NotFound(f"record {record_id}")
 
-    _RECORD_COLUMNS = ("id, student_id, visit_date, location, zh_text, en_text, updated_at,"
-                       " activity, start_time, end_time, session_type, goal_scores")
-
     def get_record(self, record_id: int) -> Record:
         with self._lock:
-            row = self._db.execute(f"SELECT {self._RECORD_COLUMNS} FROM record WHERE id = ?",
+            row = self._db.execute(f"SELECT {RECORD_COLUMNS} FROM record WHERE id = ?",
                                    (record_id,)).fetchone()
         if row is None:
             raise NotFound(f"record {record_id}")
         return self._record(row)
 
-    def find_record(self, student_id: int, visit_date: date) -> Record | None:
+    def student_records_on(self, student_id: int, day: date) -> list[Record]:
+        """The student's records of one day, by start time (those without one first)."""
+        return self._records("student_id = ? AND visit_date = ?", (student_id, day.isoformat()),
+                             "start_time, id")
+
+    def book_next_visit(self, record_id: int, days: int = 7) -> Record:
+        """A record for the next session, `days` after this one: the same student, start and end
+        time and session type, at the student's location now. If the student already has a
+        record then that starts at the same time, it is returned instead, so booking twice makes
+        one. Raises NotFound for an unknown record."""
         with self._lock:
-            row = self._db.execute(
-                f"SELECT {self._RECORD_COLUMNS} FROM record WHERE student_id = ? AND visit_date = ?",
-                (student_id, visit_date.isoformat())).fetchone()
-        return self._record(row) if row else None
+            record = self.get_record(record_id)
+            day = record.visit_date + timedelta(days=days)
+            for booked in self.student_records_on(record.student_id, day):
+                if booked.start_time == record.start_time:
+                    return booked
+            return self.add_record(record.student_id, day, self.student_location(record.student_id),
+                                   start_time=record.start_time, end_time=record.end_time,
+                                   session_type=record.session_type)
 
     def _record(self, row: tuple) -> Record:
         return Record(row[0], row[1], date.fromisoformat(row[2]),
@@ -596,7 +615,7 @@ class RecordStore:
     def _records(self, where: str, args: tuple, order: str) -> list[Record]:
         with self._lock:
             rows = self._db.execute(
-                f"SELECT {self._RECORD_COLUMNS} FROM record WHERE {where} ORDER BY {order}",
+                f"SELECT {RECORD_COLUMNS} FROM record WHERE {where} ORDER BY {order}",
                 args).fetchall()
         return [self._record(r) for r in rows]
 
@@ -604,7 +623,7 @@ class RecordStore:
 
     def records_for_student(self, student_id: int, newest_first: bool = True) -> list[Record]:
         direction = "DESC" if newest_first else "ASC"
-        return self._records("student_id = ?", (student_id,), f"visit_date {direction}, id {direction}")
+        return self._records("student_id = ?", (student_id,), f"visit_date {direction}, start_time {direction}, id {direction}")
 
     def records_on(self, day: date) -> list[Record]:
         """The records of one day, in the order they were created."""

@@ -43,6 +43,8 @@ a = Analysis(
         (str(PKG / "ot" / "ui" / "clock@2x.png"), "datafuzzy/ot/ui"),
         (str(PKG / "ot" / "ui" / "place.png"), "datafuzzy/ot/ui"),
         (str(PKG / "ot" / "ui" / "place@2x.png"), "datafuzzy/ot/ui"),
+        (str(PKG / "ot" / "ui" / "chevron.png"), "datafuzzy/ot/ui"),
+        (str(PKG / "ot" / "ui" / "chevron@2x.png"), "datafuzzy/ot/ui"),
         (str(PKG / "given_names.txt"), "datafuzzy"),
         (str(ROOT / "LICENSE"), "datafuzzy"),
         (str(ROOT / "build" / "THIRD_PARTY_LICENSES.txt"), "datafuzzy"),

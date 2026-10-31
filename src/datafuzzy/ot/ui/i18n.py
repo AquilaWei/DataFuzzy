@@ -87,8 +87,6 @@ ENGLISH = {
     "要刪除 {name} 嗎？\n這位學生的 {count} 份病歷（中英文內容）都會一併刪除，無法復原。":
         "Delete {name}?\nAll {count} of this student's charts (Chinese and English) will be deleted. "
         "This cannot be undone.",
-    "已有病歷": "Chart exists",
-    "{name} 在 {day} 已經有一份病歷。要開啟它嗎？": "{name} already has a chart on {day}. Open it?",
     "刪除病歷": "Delete chart",
     "刪除病歷…": "Delete chart…",
     "要刪除 {name} 在 {day} 的病歷嗎？\n中英文內容都會一併刪除，無法復原。":
@@ -131,8 +129,6 @@ ENGLISH = {
     "已複製中文病歷": "Chinese chart copied",
     "已複製英文病歷": "English chart copied",
     "複製英文病歷": "Copy English chart",
-    "{name} 在 {day} 已經有一份病歷，日期沒有更改。":
-        "{name} already has a chart on {day}; the date was not changed.",
     "編輯中…": "Editing…",
     "時間請填成 9:30 AM 這樣的格式": "Enter times like 9:30 AM",
     "已儲存 {time}": "Saved {time}",
@@ -178,6 +174,9 @@ ENGLISH = {
     "例如 能獨立扣好三顆釦子": "e.g. Buttons three buttons on their own",
     "504 計畫（不勾是 IEP）": "504 plan (an IEP if unticked)",
     "目標表現": "Goal scores",
+    "-- 表示沒有記錄": "-- means not recorded",
+    "預約下次治療": "Book next session",
+    "新增七天後同一時段的病歷，和這份並排顯示": "Add a chart for the same time seven days later and show it beside this one",
     "（基本資料還沒有目標）": "(No goals in the profile yet)",
     "（未填日期）": "(no date)",
     "每個月的治療分鐘數": "Therapy minutes a month",
@@ -190,8 +189,6 @@ ENGLISH = {
     "IEP/504 日期請填成 10/29/2026 這樣的格式": "Enter IEP/504 dates like 10/29/2026",
     "有多份 IEP/504 計畫時，每份都要填日期": "With more than one IEP/504 plan, each needs a date",
     "兩份 IEP/504 計畫的日期不能相同": "Two IEP/504 plans cannot have the same date",
-    "例如 75%": "e.g. 75%",
-    "留空表示沒有記錄，匯出成 --": "Leave blank when not recorded; exported as --",
     "例如 10:30 AM": "e.g. 10:30 AM",
     # unlock and start-up
     f"這台電腦沒有可用的系統鑰匙圈。請設定一組密碼來保護 {APP_NAME} 的病歷。\n"

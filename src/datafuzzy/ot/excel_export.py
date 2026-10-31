@@ -97,9 +97,9 @@ def period_title(school_year: tuple[date, date], plan: Plan) -> str:
 
 def periods(records: Iterable[Record], profile: StudentProfile) -> list[tuple[tuple[date, date], Plan, list[Record]]]:
     """A student's records split where the school year or the plan in effect changes, oldest
-    first: (school year, plan, its records oldest first) each."""
+    first: (school year, plan, its records oldest first, a day's by start time) each."""
     groups: dict[tuple[tuple[date, date], Plan], list[Record]] = {}
-    for record in sorted(records, key=lambda r: (r.visit_date, r.id)):
+    for record in sorted(records, key=lambda r: (r.visit_date, r.start_time or "99:99", r.id)):
         key = (school_year_of(record.visit_date, profile), profile.plan_on(record.visit_date))
         groups.setdefault(key, []).append(record)
     return [(year, plan, rs) for (year, plan), rs in groups.items()]

@@ -18,7 +18,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMenu,
-    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QScrollArea,
@@ -28,7 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..db import DuplicateRecord, RecordStore, default_end_time
+from ..db import RecordStore, default_end_time
 from .cards import TIME_CHOICES, date_label, normal_time, time_label
 from .compare_panel import ComparePanel, candidate_label, compare_candidates
 from .date_view import to_date, to_qdate
@@ -50,6 +49,7 @@ class RecordEditor(QWidget):
     closed = Signal()    # the back button was pressed, after everything was saved
     saved = Signal(int)  # a record id, after a write; views showing it can refresh
     edit_profile = Signal(int)  # student id, from the profile's edit button
+    book_next = Signal(int)  # this record's id, from the book-next-session button
 
     def __init__(self, store: RecordStore, record_id: int, debounce_ms: int = AUTOSAVE_MS,
                  parent: QWidget | None = None) -> None:
@@ -79,6 +79,8 @@ class RecordEditor(QWidget):
         self._show_title()
         self.compare_btn = QPushButton(tr("對照其他病歷"))
         self.compare_btn.setToolTip(tr("在右邊並排顯示這位學生的另一份病歷"))
+        self.book_btn = QPushButton(tr("預約下次治療"))
+        self.book_btn.setToolTip(tr("新增七天後同一時段的病歷，和這份並排顯示"))
         self.status = QLabel("")
         self.status.setObjectName("subtle")
 
@@ -125,6 +127,7 @@ class RecordEditor(QWidget):
         top.addWidget(self.back_btn)
         top.addStretch(1)
         top.addWidget(self.status)
+        top.addWidget(self.book_btn)
         top.addWidget(self.compare_btn)
         # Rows are widgets so a comparison beside them can be lined up with them (see show_compare).
         self.heading_row = QWidget()
@@ -211,6 +214,7 @@ class RecordEditor(QWidget):
         self.date_btn.clicked.connect(lambda: self.change_date())
         self.tabs.tabBarDoubleClicked.connect(self.copy_tab)
         self.compare_btn.clicked.connect(self._show_compare_menu)
+        self.book_btn.clicked.connect(lambda: self.book_next.emit(self.record_id))
         self.profile.edit_requested.connect(lambda: self.edit_profile.emit(self.student_id))
 
     def show_profile(self) -> None:
@@ -223,10 +227,10 @@ class RecordEditor(QWidget):
                                   self.visit_date)
 
     def compare_menu(self) -> QMenu:
-        """The student's other charts, nearest earlier visit first (see compare_candidates)."""
+        """The student's other charts, nearest earlier session first (see compare_candidates)."""
         menu = QMenu(self)
         candidates = compare_candidates(self.store.records_for_student(self.student_id),
-                                        self.record_id, self.visit_date)
+                                        self.store.get_record(self.record_id))
         if not candidates:
             menu.addAction(tr("這位學生沒有其他病歷")).setEnabled(False)
         for record in candidates:
@@ -300,21 +304,12 @@ class RecordEditor(QWidget):
         form.addRow(buttons)
         return to_date(edit.date()) if dialog.exec() == QDialog.DialogCode.Accepted else None
 
-    def _warn_taken(self, day: date) -> None:
-        QMessageBox.warning(self, tr("修改日期"), tr("{name} 在 {day} 已經有一份病歷，日期沒有更改。",
-                                                 name=self.student_name, day=day.isoformat()))
-
     def change_date(self, day: date | None = None) -> bool:
-        """Move the record to another day, asking which unless given. Refused (with a
-        warning) if the student already has a record that day. Returns whether it moved."""
+        """Move the record to another day, asking which unless given. Returns whether it moved."""
         day = self._ask_date() if day is None else day
         if day is None or day == self.visit_date:
             return False
-        try:
-            self.store.move_record(self.record_id, day)
-        except DuplicateRecord:
-            self._warn_taken(day)
-            return False
+        self.store.move_record(self.record_id, day)
         self.visit_date = day
         self._show_title()
         self.show_profile()  # the day may fall under another plan, with other goals

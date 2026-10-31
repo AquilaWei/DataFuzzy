@@ -154,14 +154,11 @@ def test_changing_the_date_moves_the_record_and_updates_the_title(qtbot, store, 
     assert store.get_record(record.id).visit_date == date(2026, 10, 2)
 
 
-def test_date_already_taken_is_refused(qtbot, store, record, monkeypatch):
+def test_date_with_another_chart_of_the_student_is_allowed(qtbot, store, record):
     store.add_record(record.student_id, date(2026, 10, 2))
     editor = make_editor(qtbot, store, record)
-    warned = []
-    monkeypatch.setattr(editor, "_warn_taken", warned.append)
-    assert not editor.change_date(date(2026, 10, 2))
-    assert warned == [date(2026, 10, 2)]
-    assert editor.title.text() == "2026-10-01  週四"
+    assert editor.change_date(date(2026, 10, 2))
+    assert store.get_record(record.id).visit_date == date(2026, 10, 2)
 
 
 def test_cancelled_date_prompt_changes_nothing(qtbot, store, record, monkeypatch):
@@ -258,6 +255,23 @@ def test_compare_list_starts_at_the_nearest_earlier_visit_and_goes_back(qtbot, s
     editor = make_editor(qtbot, store, record)
     assert [a.text()[:10] for a in editor.compare_menu().actions()] == [
         "2026-09-24", "2026-09-10", "2026-10-08"]
+
+
+def test_compare_list_puts_an_earlier_session_the_same_day_first(qtbot, store, record):
+    store.update_record(record.id, start_time="13:00")
+    compare_setup(store, record)
+    morning = store.add_record(record.student_id, DAY, start_time="09:00")
+    editor = make_editor(qtbot, store, record)
+    assert editor.compare_menu().actions()[0].text().startswith("2026-10-01  週四 9:00 AM")
+    editor.compare_menu().actions()[0].trigger()
+    assert editor.compare.record_id == morning.id
+
+
+def test_booking_the_next_session_asks_the_window(qtbot, store, record):
+    editor = make_editor(qtbot, store, record)
+    with qtbot.waitSignal(editor.book_next) as booked:
+        editor.book_btn.click()
+    assert booked.args == [record.id]
 
 
 def test_compare_list_says_when_there_is_nothing_else(qtbot, store, record):
@@ -376,19 +390,40 @@ def test_a_score_box_is_shown_for_each_goal(qtbot, store, record):
 def test_goal_scores_are_saved(qtbot, store, record):
     store.set_profile(record.student_id, StudentProfile(goals=("剪直線", "扣釦子")))
     editor = make_editor(qtbot, store, record)
-    editor.scores.boxes[0].setEditText("75%")
-    editor.scores.boxes[1].setEditText("not met")
+    editor.scores.boxes[0].setCurrentText("met")
+    editor.scores.boxes[1].setCurrentText("not addressed")
     editor.flush()
-    assert store.get_record(record.id).goal_scores == ("75%", "not met")
+    assert store.get_record(record.id).goal_scores == ("met", "not addressed")
+
+
+def test_a_score_is_picked_from_met_not_met_and_not_addressed(qtbot, store, record):
+    store.set_profile(record.student_id, StudentProfile(goals=("剪直線",)))
+    editor = make_editor(qtbot, store, record)
+    box = editor.scores.boxes[0]
+    assert [box.itemText(i) for i in range(box.count())] == ["--", "met", "not met", "not addressed"]
+    assert not box.isEditable()
+
+
+def test_a_goal_without_a_score_shows_two_dashes(qtbot, store, record):
+    store.set_profile(record.student_id, StudentProfile(goals=("剪直線",)))
+    editor = make_editor(qtbot, store, record)
+    assert (editor.scores.boxes[0].currentText(), editor.scores.scores()) == ("--", ("",))
+
+
+def test_a_score_typed_before_the_choices_is_kept(qtbot, store, record):
+    store.set_profile(record.student_id, StudentProfile(goals=("剪直線",)))
+    store.update_record(record.id, goal_scores=("75%",))
+    editor = make_editor(qtbot, store, record)
+    assert (editor.scores.boxes[0].currentText(), editor.scores.scores()) == ("75%", ("75%",))
 
 
 def test_a_goal_added_to_the_profile_gets_a_score_box_and_keeps_the_scores(qtbot, store, record):
     store.set_profile(record.student_id, StudentProfile(goals=("剪直線",)))
     editor = make_editor(qtbot, store, record, debounce_ms=60_000)  # not saved while the test runs
-    editor.scores.boxes[0].setEditText("80%")
+    editor.scores.boxes[0].setCurrentText("met")
     store.set_profile(record.student_id, StudentProfile(goals=("剪直線", "扣釦子")))
     editor.show_profile()
-    assert editor.scores.scores() == ("80%", "")
+    assert editor.scores.scores() == ("met", "")
 
 
 def test_compared_chart_shows_its_session_type_and_scores(qtbot, store, record):

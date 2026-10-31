@@ -9,7 +9,6 @@ from datafuzzy.ot import APP_NAME
 from datafuzzy.ot.crypto import Cipher, DecryptionError
 from datafuzzy.ot.db import (
     DB_ENV,
-    DuplicateRecord,
     NotFound,
     Plan,
     RecordStore,
@@ -145,12 +144,65 @@ def test_student_can_have_records_on_several_dates(store):
     assert len(store.records_for_student(student.id)) == 2
 
 
-def test_second_record_on_same_day_raises_duplicate_with_existing_id(store):
+def test_student_can_have_a_morning_and_an_afternoon_record_on_one_day(store):
     student = store.add_student("王小明")
-    first = store.add_record(student.id, date(2026, 10, 1))
-    with pytest.raises(DuplicateRecord) as e:
-        store.add_record(student.id, date(2026, 10, 1))
-    assert e.value.record_id == first.id
+    afternoon = store.add_record(student.id, date(2026, 10, 1), start_time="13:00")
+    morning = store.add_record(student.id, date(2026, 10, 1), start_time="09:00")
+    assert [r.id for r in store.student_records_on(student.id, date(2026, 10, 1))] == [morning.id, afternoon.id]
+
+
+def test_a_days_records_of_a_student_are_newest_session_first(store):
+    student = store.add_student("王小明")
+    morning = store.add_record(student.id, date(2026, 10, 1), start_time="09:00")
+    afternoon = store.add_record(student.id, date(2026, 10, 1), start_time="13:00")
+    assert [r.id for r in store.records_for_student(student.id)] == [afternoon.id, morning.id]
+
+
+def test_booking_the_next_visit_makes_one_a_week_later_at_the_same_time(store):
+    student = store.add_student("王小明")
+    store.set_profile(student.id, StudentProfile(location="B校"))
+    record = store.add_record(student.id, date(2026, 10, 5), "A校", "中文", start_time="10:00",
+                              end_time="10:30", session_type="group", goal_scores=("met",))
+    booked = store.book_next_visit(record.id)
+    assert (booked.visit_date, booked.start_time, booked.end_time, booked.session_type) == (
+        date(2026, 10, 12), "10:00", "10:30", "group")
+    assert (booked.location, booked.zh_text, booked.goal_scores) == ("B校", "", ())
+
+
+def test_booking_the_next_visit_twice_makes_only_one(store):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, date(2026, 10, 5), start_time="10:00")
+    first = store.book_next_visit(record.id)
+    assert store.book_next_visit(record.id).id == first.id
+    assert len(store.records_for_student(student.id)) == 2
+
+
+def test_booking_the_next_visit_beside_another_session_that_day_adds_one(store):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, date(2026, 10, 5), start_time="10:00")
+    store.add_record(student.id, date(2026, 10, 12), start_time="14:00")
+    store.book_next_visit(record.id)
+    assert len(store.student_records_on(student.id, date(2026, 10, 12))) == 2
+
+
+def test_a_chart_book_from_before_several_records_a_day_takes_a_second_one(tmp_path):
+    path = tmp_path / "old.db"
+    with RecordStore(path, KEY) as s:
+        student = s.add_student("王小明")
+        s.add_record(student.id, date(2026, 10, 1), "A校", "中文", "English", start_time="09:00")
+    old = sqlite3.connect(path)
+    old.executescript(
+        "CREATE TABLE r2 AS SELECT * FROM record; DROP TABLE record;"
+        " CREATE TABLE record (id INTEGER PRIMARY KEY, student_id INTEGER NOT NULL REFERENCES student(id)"
+        " ON DELETE CASCADE, visit_date TEXT NOT NULL, location BLOB NOT NULL, zh_text BLOB NOT NULL,"
+        " en_text BLOB NOT NULL, updated_at TEXT NOT NULL, activity BLOB, start_time TEXT, end_time TEXT,"
+        " session_type TEXT, goal_scores BLOB, UNIQUE (student_id, visit_date));"
+        " INSERT INTO record SELECT * FROM r2; DROP TABLE r2; PRAGMA user_version = 1;")
+    old.close()
+    with RecordStore(path, KEY) as s:
+        s.add_record(student.id, date(2026, 10, 1), start_time="13:00")
+        [first, _] = s.student_records_on(student.id, date(2026, 10, 1))
+        assert (first.location, first.zh_text, first.en_text) == ("A校", "中文", "English")
 
 
 def test_two_students_can_share_a_date(store):
@@ -509,17 +561,15 @@ def test_moved_record_keeps_its_texts_on_the_new_day(store):
     moved = store.get_record(record.id)
     assert moved.visit_date == date(2026, 10, 2)
     assert (moved.zh_text, moved.en_text, moved.activity) == ("中文", "English", "剪紙")
-    assert store.find_record(student.id, date(2026, 10, 1)) is None
+    assert store.student_records_on(student.id, date(2026, 10, 1)) == []
 
 
-def test_record_cannot_move_onto_a_day_already_taken(store):
+def test_record_can_move_onto_a_day_with_another_record(store):
     student = store.add_student("王小明")
     first = store.add_record(student.id, date(2026, 10, 1))
-    other = store.add_record(student.id, date(2026, 10, 2))
-    with pytest.raises(DuplicateRecord) as e:
-        store.move_record(first.id, date(2026, 10, 2))
-    assert e.value.record_id == other.id
-    assert store.get_record(first.id).visit_date == date(2026, 10, 1)
+    store.add_record(student.id, date(2026, 10, 2))
+    store.move_record(first.id, date(2026, 10, 2))
+    assert len(store.student_records_on(student.id, date(2026, 10, 2))) == 2
 
 
 def test_start_time_is_saved_cleared_and_kept_by_other_updates(store):

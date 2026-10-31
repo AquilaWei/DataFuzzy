@@ -34,7 +34,7 @@ from ...core.models import ModelSpec
 from ...core.pipeline import Pipeline
 from ...ui.model_manager import ModelManager
 from .. import APP_NAME
-from ..db import DuplicateRecord, RecordStore, StudentProfile
+from ..db import RecordStore, StudentProfile
 from .about import AboutDialog
 from .date_view import DayRecordsView, MarkedCalendar, to_date, to_qdate
 from .editor import RecordEditor
@@ -461,37 +461,20 @@ class TheraNoteWindow(QMainWindow):
                                  location=self.current_location() if mode == LOCATION_MODE else None)
         return dialog.choice() if dialog.exec() == QDialog.DialogCode.Accepted else None
 
-    def _confirm_open_existing(self, student_name: str, day: date) -> bool:
-        answer = QMessageBox.question(
-            self, tr("已有病歷"),
-            tr("{name} 在 {day} 已經有一份病歷。要開啟它嗎？", name=student_name, day=day.isoformat()))
-        return answer == QMessageBox.StandardButton.Yes
-
     def new_record(self, student_id: int | None = None, day: date | None = None) -> int | None:
         """Start a chart for a student on a day (asking which, unless given) and open it.
         It is at the student's location (from the profile) and in the time slot of their
         latest visit on the same weekday, else at their last start time; a first chart starts
-        without one. If the student already has a chart that day,
-        offers to open it instead. Returns the record id."""
+        without one. A student may have several charts a day (a morning and an afternoon
+        session), so one already there is no reason not to. Returns the record id."""
         if student_id is None or day is None:
             picked = self._pick_new_record()
             if picked is None:
                 return None
             student_id, day = picked
-        existing = self.store.find_record(student_id, day)
-        if existing:
-            if self._confirm_open_existing(self.store.get_student(student_id).name, day):
-                self.open_record(existing.id)
-                return existing.id
-            return None
         start_time, end_time = self.store.student_default_slot(student_id, day)
-        try:
-            record = self.store.add_record(
-                student_id, day, self.store.student_location(student_id),
-                start_time=start_time, end_time=end_time)
-        except DuplicateRecord as e:  # created elsewhere between the check and now
-            self.open_record(e.record_id)
-            return e.record_id
+        record = self.store.add_record(student_id, day, self.store.student_location(student_id),
+                                       start_time=start_time, end_time=end_time)
         self.refresh_after_change()
         self.open_record(record.id)
         return record.id
@@ -522,12 +505,23 @@ class TheraNoteWindow(QMainWindow):
         self.refresh_after_change()
         return True
 
+    def book_next(self, record_id: int) -> int:
+        """Book the session a week after a record (see RecordStore.book_next_visit) and open it,
+        with the record it was booked from beside it. Returns the new record's id."""
+        self.close_editor()  # the open chart is saved before its times are copied
+        booked = self.store.book_next_visit(record_id)
+        self.refresh_after_change()
+        self.open_record(booked.id)
+        self.editor.show_compare(record_id)
+        return booked.id
+
     def open_record(self, record_id: int) -> None:
         """Show a record in the editor. Whatever was being edited is saved first."""
         self.close_editor()
         editor = RecordEditor(self.store, record_id, parent=self, **self._editor_kwargs)
         editor.saved.connect(lambda _: self.refresh_after_change())
         editor.edit_profile.connect(lambda sid: self.edit_profile(sid))
+        editor.book_next.connect(lambda rid: self.book_next(rid))
         editor.closed.connect(self._editor_closed)
         self.editor = editor
         old = self.content.widget(EDITOR_PAGE)

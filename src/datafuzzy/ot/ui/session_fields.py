@@ -15,10 +15,11 @@ from PySide6.QtWidgets import (
 )
 
 from ..db import DEFAULT_SESSION_TYPE, SESSION_TYPES
+from ..excel_export import NO_SCORE
 from .i18n import tr
 
-NOT_MET = "not met"
-SCORE_WIDTH = 9  # characters the score box shows, "not met" with room to spare
+SCORES = ("met", "not met", "not addressed")  # the choices the form takes for a goal
+SCORE_WIDTH = 13  # characters the score box shows, "not addressed" in full
 
 
 def session_type_label(session_type: str) -> str:
@@ -52,8 +53,8 @@ class SessionTypePicker(QWidget):
 
 
 class GoalScores(QWidget):
-    """A score for each of the student's goals, a row each: "Goal 1", the score ("75%",
-    "not met", or blank for not recorded) and the goal itself. `read_only` shows the scores as
+    """A score for each of the student's goals, a row each: "Goal 1", the score (one of SCORES,
+    or blank for not recorded) and the goal itself. `read_only` shows the scores as
     text, for the chart shown beside the one being edited."""
 
     changed = Signal()  # a score was edited by hand
@@ -96,24 +97,25 @@ class GoalScores(QWidget):
 
     def _score_box(self, score: str) -> QComboBox:
         box = QComboBox()
-        box.setEditable(True)
-        box.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        box.addItem(NOT_MET)
-        box.setEditText(score)
-        box.lineEdit().setPlaceholderText(tr("例如 75%"))
-        box.setToolTip(tr("留空表示沒有記錄，匯出成 --"))
+        box.addItem(NO_SCORE, "")
+        for choice in SCORES:
+            box.addItem(choice, choice)
+        if score and score not in SCORES:  # typed in by hand before the choices, e.g. "75%"
+            box.addItem(score, score)
+        box.setCurrentIndex(box.findData(score))
+        box.setToolTip(tr("-- 表示沒有記錄"))
         box.setMinimumContentsLength(SCORE_WIDTH)
-        box.editTextChanged.connect(self.changed)
+        box.currentIndexChanged.connect(self.changed)
         return box
 
     @staticmethod
     def _score_label(score: str) -> QLabel:
-        label = QLabel(score or "--")
+        label = QLabel(score or NO_SCORE)
         label.setMinimumWidth(label.fontMetrics().averageCharWidth() * SCORE_WIDTH)
         return label
 
     def scores(self) -> tuple[str, ...]:
-        """One per goal, in order, as typed ("" for none)."""
+        """One per goal, in order, as picked ("" for none)."""
         if self.read_only:
-            return tuple("" if b.text() == "--" else b.text() for b in self.boxes)
-        return tuple(box.currentText().strip() for box in self.boxes)
+            return tuple("" if b.text() == NO_SCORE else b.text() for b in self.boxes)
+        return tuple(box.currentData() for box in self.boxes)

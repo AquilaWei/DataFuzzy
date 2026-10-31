@@ -47,3 +47,9 @@ def test_location_fields_show_a_pin_icon():
     assert theme.PLACE_ICON.is_file()
     assert theme.PLACE_ICON.with_name("place@2x.png").is_file()
     assert theme.PLACE_ICON.as_posix() in theme.stylesheet()
+
+
+def test_other_drop_downs_show_a_chevron():
+    assert theme.CHEVRON_ICON.is_file()
+    assert theme.CHEVRON_ICON.with_name("chevron@2x.png").is_file()
+    assert f'QComboBox::down-arrow {{ image: url("{theme.CHEVRON_ICON.as_posix()}")' in theme.stylesheet()
