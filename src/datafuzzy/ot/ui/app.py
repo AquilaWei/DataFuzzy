@@ -33,6 +33,7 @@ from .i18n import load_language, tr
 from .main_window import TheraNoteWindow
 from .theme import apply_theme
 from .unlock import PasswordPrompter
+from .widgets import ignore_wheel_on_pickers
 
 ProviderFactory = Callable[[Path, Callable[[bool, bool], str | None]], KeyProvider]
 
@@ -155,6 +156,7 @@ def self_test() -> int:
 
     app = QApplication([])
     apply_theme(app)
+    ignore_wheel_on_pickers(app)
     specs, root = load_manifest(), models_dir()
     pipeline = Pipeline()
     pipeline.load_models(specs, root)
@@ -189,6 +191,7 @@ def main() -> int:
     app.setApplicationName(APP_NAME)
     app.setWindowIcon(QIcon(str(files("datafuzzy.ot").joinpath("icon.png"))))
     apply_theme(app)
+    ignore_wheel_on_pickers(app)
     load_language()
 
     # Qt's event loop blocks Python signal handlers; a periodic no-op timer lets them run,

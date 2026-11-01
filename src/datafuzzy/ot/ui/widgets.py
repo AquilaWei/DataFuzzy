@@ -5,10 +5,13 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 
-from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, Qt, Signal
 from PySide6.QtGui import QGuiApplication, QResizeEvent
 from PySide6.QtWidgets import (
+    QAbstractSpinBox,
+    QApplication,
     QButtonGroup,
+    QComboBox,
     QHBoxLayout,
     QMenu,
     QPlainTextEdit,
@@ -34,6 +37,23 @@ def record_menu(parent: QWidget, on_delete: Callable[[], None],
         menu.addSeparator()
     menu.addAction(tr(DELETE_RECORD)).triggered.connect(on_delete)
     return menu
+
+
+class _WheelGuard(QObject):
+    """Turns the wheel away from drop-downs and date fields: an ignored event goes on to the
+    parent, so the page scrolls instead of the value changing under a passing pointer."""
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if event.type() == QEvent.Type.Wheel and isinstance(watched, (QComboBox, QAbstractSpinBox)):
+            event.ignore()
+            return True
+        return False
+
+
+def ignore_wheel_on_pickers(app: QApplication) -> None:
+    """Make every drop-down and date field change by clicking only, never by the wheel; the
+    open list of a drop-down still scrolls. The guard lives as long as `app`."""
+    app.installEventFilter(_WheelGuard(app))
 
 
 class SegmentedControl(QWidget):
