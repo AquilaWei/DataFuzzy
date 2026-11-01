@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.33.0] - 2026-11-01
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 變更
+- 下拉選單和日期欄只能點擊修改：滑鼠滾輪滑過時改為捲動頁面，不會誤改目標表現、時間、地點或日期。打開的選單清單仍可用滾輪捲動。
+
 ## [0.7.0.32.0] - 2026-10-31
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
