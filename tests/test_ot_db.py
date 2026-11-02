@@ -90,12 +90,12 @@ def test_new_student_has_an_empty_profile(store):
 def test_profile_is_saved_trimmed(store):
     student = store.add_student("王小明")
     store.set_profile(student.id, StudentProfile(diagnosis=" ADHD, ODD ", age="8", grade="3",
-                                                 classroom="301", case_manager="Ms. Lee",
+                                                 classroom="301", case_manager="Ms. Lee", ma_billing=True,
                                                  school_year="09/2026-06/2027",
                                                  goals=(" Fine motor\n", "  ", "Self-care"),
                                                  plan_date=" 10/15/2026 "))
     assert store.get_profile(student.id) == StudentProfile(
-        diagnosis="ADHD, ODD", age="8", grade="3", classroom="301", case_manager="Ms. Lee",
+        diagnosis="ADHD, ODD", age="8", grade="3", classroom="301", case_manager="Ms. Lee", ma_billing=True,
         school_year="09/2026-06/2027", goals=("Fine motor", "Self-care"), plan_date="10/15/2026")
 
 

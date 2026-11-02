@@ -8,8 +8,8 @@ from datafuzzy.ot.ui.profile_dialog import ProfileSummary, StudentProfileDialog
 
 def test_dialog_starts_from_the_saved_profile(qtbot):
     saved = StudentProfile(diagnosis="ADHD, ODD", age="8", grade="3", classroom="301",
-                           case_manager="Ms. Lee", school_year="09/2025-06/2026", goals=("Fine motor", "Self-care"),
-                           location="新竹國小", plan_504=True, plan_date="10/15/2026")
+                           case_manager="Ms. Lee", ma_billing=True, school_year="09/2025-06/2026",
+                           goals=("Fine motor", "Self-care"), location="新竹國小", plan_504=True, plan_date="10/15/2026")
     dialog = StudentProfileDialog("王小明", saved, today=date(2026, 10, 26))
     qtbot.addWidget(dialog)
     assert dialog.profile() == saved
@@ -275,3 +275,18 @@ def test_summary_shows_the_plans_frequency(qtbot):
     qtbot.addWidget(summary)
     summary.show_profile("王小明", StudentProfile(plan_date="10/29/2026", frequency=60))
     assert summary.values["plan"].text() == "IEP 10/29/2026 · 60 mins/month"
+
+
+def test_ma_billing_is_ticked_and_shown_in_the_summary(qtbot):
+    dialog = StudentProfileDialog("王小明", StudentProfile(), today=date(2026, 10, 26))
+    qtbot.addWidget(dialog)
+    assert dialog.profile().ma_billing is False
+    dialog.ma_billing.setChecked(True)
+    profile = dialog.profile()
+    assert profile.ma_billing is True
+    summary = ProfileSummary()
+    qtbot.addWidget(summary)
+    summary.show_profile("王小明", profile)
+    assert summary.values["ma_billing"].text() == "Yes"
+    summary.show_profile("王小明", StudentProfile())
+    assert summary.values["ma_billing"].text() == "—"

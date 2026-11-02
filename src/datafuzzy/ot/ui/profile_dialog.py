@@ -391,7 +391,7 @@ class PlanEditor(QWidget):
 
 
 class StudentProfileDialog(QDialog):
-    """Location, diagnosis, age, grade, classroom, case manager, IEP or 504 date, school year
+    """Location, diagnosis, age, grade, classroom, case manager, MA billing, IEP or 504 date, school year
     and goals of one student, and their weekly session times. `locations` and `classrooms` fill the drop-downs
     of the location and of each session's 領取教室; any other can be typed."""
 
@@ -414,6 +414,8 @@ class StudentProfileDialog(QDialog):
         self.grade = QLineEdit(profile.grade)
         self.classroom = QLineEdit(profile.classroom)
         self.case_manager = QLineEdit(profile.case_manager)
+        self.ma_billing = QCheckBox()
+        self.ma_billing.setChecked(profile.ma_billing)
         start, end = parse_school_year(profile.school_year) or default_school_year(today or date.today())
         self.year_from = self._month_edit(start)
         self.year_to = self._month_edit(end)
@@ -437,6 +439,7 @@ class StudentProfileDialog(QDialog):
         form.addRow("Grade", self.grade)
         form.addRow("Classroom", self.classroom)
         form.addRow("Case manager", self.case_manager)
+        form.addRow("MA billing", self.ma_billing)
         form.addRow("IEP/504 Date", self.plans)
         form.addRow("Goals", self.goals)  # the shown plan's, so right below it
         form.addRow("School year", school_year)
@@ -475,6 +478,7 @@ class StudentProfileDialog(QDialog):
         return StudentProfile(
             diagnosis=self.diagnosis.text(), age=self.age.text(), grade=self.grade.text(),
             classroom=self.classroom.text(), case_manager=self.case_manager.text(),
+            ma_billing=self.ma_billing.isChecked(),
             school_year=format_school_year(date(start.year(), start.month(), 1),
                                            date(end.year(), end.month(), 1)),
             location=self.location.currentText(),
@@ -487,7 +491,7 @@ class ProfileSummary(QFrame):
     edit_requested = Signal()
     FIELDS = (("地點", "location"), ("Diagnosis", "diagnosis"), ("Age", "age"),
               ("Grade", "grade"), ("Classroom", "classroom"), ("Case manager", "case_manager"),
-              ("IEP/504 Date", "plan"))
+              ("MA billing", "ma_billing"), ("IEP/504 Date", "plan"))
     PER_ROW = 3
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -548,4 +552,6 @@ def summary_value(profile: StudentProfile, field: str, plan: Plan | None = None)
                                       plan.frequency_text) if t)
     if field == "goals":
         return "\n".join(f"{i}. {goal}" for i, goal in enumerate(plan.goals, start=1))
+    if field == "ma_billing":
+        return "Yes" if profile.ma_billing else ""
     return getattr(profile, field)

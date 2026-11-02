@@ -238,6 +238,7 @@ class StudentProfile:
     grade: str = ""
     classroom: str = ""
     case_manager: str = ""
+    ma_billing: bool = False  # the student's sessions are billed to Medical Assistance
     school_year: str = ""
     goals: tuple[str, ...] = ()  # Goal 1, Goal 2, …: as many as the student has
     location: str = ""
