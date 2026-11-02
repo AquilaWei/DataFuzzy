@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.34.0] - 2026-11-01
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 學生基本資訊新增「MA billing」勾選項，勾選後會顯示在病歷上方的基本資訊中。舊學生預設不勾選。
+
 ## [0.7.0.33.0] - 2026-11-01
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
