@@ -74,6 +74,13 @@ ENGLISH = {
     "匯出": "Export",
     "貼回": "Paste back",
     "Excel 匯出": "Excel export",
+    "交接模式": "Handover",
+    "Progress Report": "Progress Report",
+    "每個地點一個分頁，列出 {count} 位啟用中學生在這天的 goals；Progress 欄先填入 goal 方便編輯。":
+        "A sheet per location listing the goals of {count} active students on this day; "
+        "the Progress column starts as the goal, ready to edit.",
+    "沒有啟用中的學生。": "No active students.",
+    "略過 {path}：沒有取代既有檔案。": "Skipped {path}: the existing file was not replaced.",
     "設定": "Settings",
     "設定…": "Settings…",
     "選擇一位學生，或新增學生開始記錄。": "Pick a student, or add one to start charting.",

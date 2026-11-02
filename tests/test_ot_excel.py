@@ -6,12 +6,14 @@ from PySide6.QtCore import QDate
 
 from datafuzzy.ot.db import Plan, RecordStore, StudentProfile
 from datafuzzy.ot.excel_export import (
+    build_progress_report,
     build_workbook,
     file_name,
     goals_text,
     group_by_location,
     header_text,
     period_title,
+    progress_file_name,
     school_year_of,
     score_text,
     sheet_title,
@@ -378,3 +380,59 @@ def test_each_plans_sheet_has_that_plans_frequency(store):
     store.add_record(student.id, date(2026, 10, 29))
     old, new = build_workbook(store, store.records_for_student(student.id), today=TODAY).worksheets
     assert ("Frequency: 30 mins/month" in old["A1"].value, "Frequency: 90 mins/month" in new["A1"].value) == (True, True)
+
+
+# --- progress report ------------------------------------------------------------------
+
+@pytest.fixture
+def class_list(store):
+    ming = store.add_student("王小明")
+    store.set_profile(ming.id, StudentProfile(location="Lincoln").with_plans([OLD_PLAN, Plan(False, "10/29/2026", ("Button", "Write", "Zip"))]))
+    amy = store.add_student("Amy")
+    store.set_profile(amy.id, StudentProfile(location="新竹國小", goals=("Balance",)))
+    done = store.add_student("Done")
+    store.set_profile(done.id, StudentProfile(location="Lincoln", goals=("Old",)))
+    store.set_active(done.id, False)
+    store.add_student("Nobody")  # no location, no goals
+    return store
+
+
+def sheet_rows(ws):
+    return [tuple(c.value for c in row) for row in ws.iter_rows()]
+
+
+def test_progress_report_has_a_sheet_per_location_of_active_students(class_list):
+    wb = build_progress_report(class_list, TODAY, unassigned="未填地點")
+    assert wb.sheetnames == ["Lincoln", "新竹國小", "未填地點"]
+    assert sheet_rows(wb["新竹國小"]) == [("Name", "Goal", "Progress"), ("Amy", "Balance", "Balance")]
+    assert sheet_rows(wb["未填地點"]) == [("Name", "Goal", "Progress"), ("Nobody", None, None)]
+
+
+def test_progress_report_merges_the_name_over_the_students_goals(class_list):
+    ws = build_progress_report(class_list, date(2026, 11, 2))["Lincoln"]
+    assert sheet_rows(ws) == [("Name", "Goal", "Progress"), ("王小明", "Button", "Button"),
+                              (None, "Write", "Write"), (None, "Zip", "Zip")]
+    assert [str(r) for r in ws.merged_cells.ranges] == ["A2:A4"]
+    assert ws["C4"].border.bottom.style == "thin" and ws["A1"].font.sz == 12
+
+
+def test_progress_report_takes_the_goals_of_the_plan_on_that_day(class_list):
+    ws = build_progress_report(class_list, date(2026, 1, 5))["Lincoln"]
+    assert sheet_rows(ws)[1:] == [("王小明", "Cut", "Cut")]
+
+
+def test_progress_report_file_name_is_the_day():
+    assert progress_file_name(TODAY) == "Progress Report-2026-10-25.xlsx"
+
+
+def test_progress_mode_writes_the_report_of_the_picked_day(qtbot, class_list, tmp_path):
+    class_list.set_excel_folder(str(tmp_path))
+    dialog = make_dialog(qtbot, class_list)
+    dialog.set_mode(dialog.PROGRESS)
+    assert dialog.pages.currentIndex() == dialog.PROGRESS
+    assert "3 位啟用中學生" in dialog.status.text()
+    dialog.progress_edit.setDate(QDate(2026, 11, 2))
+    dialog.export_btn.click()
+    path = tmp_path / "Progress Report-2026-11-02.xlsx"
+    assert dialog.written == [path]
+    assert load_workbook(path).sheetnames[0] == "Lincoln"

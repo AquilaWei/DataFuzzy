@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -31,7 +32,13 @@ from PySide6.QtWidgets import (
 from ...core.pipeline import Pipeline
 from ...ui.worker import run_task
 from ..db import Record, RecordStore
-from ..excel_export import file_name, group_by_location, write_workbook
+from ..excel_export import (
+    file_name,
+    group_by_location,
+    progress_file_name,
+    write_progress_report,
+    write_workbook,
+)
 from ..exchange import (
     ExportResult,
     ImportMismatch,
@@ -42,6 +49,8 @@ from ..exchange import (
 )
 from .date_view import to_date, to_qdate
 from .i18n import tr
+from .location_view import NO_LOCATION
+from .widgets import SegmentedControl
 
 REASONS = {
     "malformed": "標頭格式不正確",
@@ -243,11 +252,13 @@ def ask_replace_file(parent: QWidget | None, path: Path) -> bool:
 
 
 class ExcelExportDialog(QDialog):
-    """Pick a date range and, location by location, the students to export. Each student gets
-    their own file of the school's Excel form with that location's visits, all in one folder
-    (remembered)."""
+    """Two modes. Handover: pick a date range and, location by location, the students to
+    export; each student gets their own file of the school's Excel form with that location's
+    visits. Progress report: pick a day; one file lists every active student's goals, a sheet
+    per location. Either way into one folder (remembered)."""
 
     LOCATION, STUDENT, COUNT = range(3)
+    HANDOVER, PROGRESS = range(2)
 
     def __init__(self, store: RecordStore, today: date | None = None,
                  confirm: Callable[[Path], bool] | None = None,
@@ -264,6 +275,11 @@ class ExcelExportDialog(QDialog):
         self._groups: dict[str, list[Record]] = {}
         self.setWindowTitle(tr("Excel 匯出"))
         self.resize(680, 500)
+
+        self.mode = SegmentedControl([tr("交接模式"), tr("Progress Report")])
+        self.progress_edit = QDateEdit(to_qdate(self.today))
+        self.progress_edit.setCalendarPopup(True)
+        self.progress_edit.setDisplayFormat("yyyy-MM-dd")
 
         self.from_edit = QDateEdit(to_qdate(self.today.replace(day=1)))
         self.to_edit = QDateEdit(to_qdate(self.today))
@@ -318,14 +334,36 @@ class ExcelExportDialog(QDialog):
         buttons.addStretch(1)
         buttons.addWidget(self.reveal_btn)
         buttons.addWidget(self.export_btn)
+        handover = QWidget()
+        handover_layout = QVBoxLayout(handover)
+        handover_layout.setContentsMargins(0, 0, 0, 0)
+        handover_layout.addLayout(dates)
+        handover_layout.addLayout(pick)
+        handover_layout.addWidget(self.table, 1)
+        progress = QWidget()
+        progress_layout = QVBoxLayout(progress)
+        progress_layout.setContentsMargins(0, 0, 0, 0)
+        progress_day = QHBoxLayout()
+        progress_day.addWidget(QLabel(tr("日期")))
+        progress_day.addWidget(self.progress_edit)
+        progress_day.addStretch(1)
+        progress_layout.addLayout(progress_day)
+        progress_layout.addStretch(1)
+        self.pages = QStackedWidget()
+        self.pages.addWidget(handover)
+        self.pages.addWidget(progress)
+        mode_row = QHBoxLayout()
+        mode_row.addWidget(self.mode)
+        mode_row.addStretch(1)
         layout = QVBoxLayout(self)
-        layout.addLayout(dates)
-        layout.addLayout(pick)
-        layout.addWidget(self.table, 1)
+        layout.addLayout(mode_row)
+        layout.addWidget(self.pages, 1)
         layout.addLayout(folder)
         layout.addWidget(self.status)
         layout.addLayout(buttons)
 
+        self.mode.changed.connect(self.set_mode)
+        self.progress_edit.dateChanged.connect(lambda _: self.refresh())
         self.from_edit.dateChanged.connect(lambda _: self.refresh())
         self.to_edit.dateChanged.connect(lambda _: self.refresh())
         self.location_box.currentIndexChanged.connect(lambda _: self._fill_students())
@@ -336,6 +374,21 @@ class ExcelExportDialog(QDialog):
         self.export_btn.clicked.connect(self.export)
         self.reveal_btn.clicked.connect(self.reveal)
         self.refresh()
+
+    def set_mode(self, mode: int) -> None:
+        """Show the handover or the progress report page."""
+        if self.mode.index() != mode:
+            self.mode.set_index(mode)  # calls back here through `changed`
+            return
+        self.pages.setCurrentIndex(mode)
+        self.remove_btn.setVisible(mode == self.HANDOVER)
+        self.refresh()
+
+    def _progress_day(self) -> date:
+        return to_date(self.progress_edit.date())
+
+    def _active_count(self) -> int:
+        return sum(s.active for s in self.store.students())
 
     def _range(self) -> tuple[date, date]:
         return to_date(self.from_edit.date()), to_date(self.to_edit.date())
@@ -354,6 +407,13 @@ class ExcelExportDialog(QDialog):
 
     def refresh(self) -> None:
         """Re-read the range: the drop-downs, the counts in the list and the note below it."""
+        if self.mode.index() == self.PROGRESS:
+            count = self._active_count()
+            note = (tr("每個地點一個分頁，列出 {count} 位啟用中學生在這天的 goals；Progress 欄先填入 goal 方便編輯。",
+                       count=count) if count else tr("沒有啟用中的學生。"))
+            self.status.setText(note)
+            self._update_buttons()
+            return
         date_from, date_to = self._range()
         records = self.store.records_between(date_from, date_to) if date_from <= date_to else []
         self._groups, unassigned = group_by_location(records)
@@ -422,6 +482,9 @@ class ExcelExportDialog(QDialog):
         self.add_btn.setEnabled(has_student)
         self.add_all_btn.setEnabled(has_student)
         self.remove_btn.setEnabled(bool(self.entries))
+        if self.mode.index() == self.PROGRESS:
+            self.export_btn.setEnabled(bool(folder) and self._active_count() > 0)
+            return
         self.export_btn.setEnabled(bool(folder) and any(self._records(*e) for e in self.entries))
 
     def choose_folder(self) -> None:
@@ -441,6 +504,9 @@ class ExcelExportDialog(QDialog):
         return paths
 
     def export(self) -> None:
+        if self.mode.index() == self.PROGRESS:
+            self.export_progress()
+            return
         folder = Path(self.store.excel_folder())
         self.written = []
         lines: list[str] = []
@@ -470,6 +536,22 @@ class ExcelExportDialog(QDialog):
             return
         self.status.setText("\n".join(lines) or tr("沒有可匯出的學生。"))
         self.reveal_btn.setEnabled(bool(self.written))
+
+    def export_progress(self) -> None:
+        """Write the progress report of the picked day."""
+        path = Path(self.store.excel_folder()) / progress_file_name(self._progress_day())
+        self.written = []
+        if path.exists() and not self._confirm(path):
+            self.status.setText(tr("略過 {path}：沒有取代既有檔案。", path=path.name))
+            return
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            write_progress_report(self.store, self._progress_day(), path, tr(NO_LOCATION))
+        except OSError as e:
+            self.status.setText(tr("{label}寫入失敗：{error}", label=path.name, error=e.strerror or e))
+            return
+        self.written.append(path)
+        self.accept()
 
     def reveal(self) -> None:
         if self.written:

@@ -1,6 +1,9 @@
 """Writing charts into the school's Excel form: one workbook per student and location, a
 sheet per school year and IEP or 504 plan, each visit a row of the template: date, time,
-session type, activity, English chart and a score for each goal of the plan."""
+session type, activity, English chart and a score for each goal of the plan.
+
+Also the progress report: on one day, a sheet per location listing each active student's
+goals, the progress column starting as a copy of the goal for the therapist to edit."""
 
 from __future__ import annotations
 
@@ -14,7 +17,7 @@ from importlib.resources import as_file, files
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Alignment
+from openpyxl.styles import Alignment, Border, Font, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
@@ -284,3 +287,71 @@ def build_workbook(store: RecordStore, records: Iterable[Record], today: date | 
 
 def write_workbook(store: RecordStore, records: Iterable[Record], path: Path) -> None:
     build_workbook(store, records).save(path)
+
+
+# --- progress report ------------------------------------------------------------------
+
+PROGRESS_HEADINGS = ("Name", "Goal", "Progress")
+PROGRESS_WIDTHS = (22, 60, 60)
+
+
+def progress_file_name(day: date) -> str:
+    return f"Progress Report-{day.isoformat()}.xlsx"
+
+
+def progress_rows(store: RecordStore, day: date) -> dict[str, list[tuple[str, tuple[str, ...]]]]:
+    """Location (from the profile; "" for none) -> (name, goals of the plan in effect on `day`)
+    of each active student there, by name; locations by name, "" last. Reads only names,
+    profiles and whether a student is active, none of the charts."""
+    groups: dict[str, list[tuple[str, tuple[str, ...]]]] = {}
+    for student in store.students():
+        if not student.active:
+            continue
+        location = store.student_location(student.id).strip()
+        goals = store.get_profile(student.id).plan_on(day).goals
+        groups.setdefault(location, []).append((student.name, goals))
+    return {loc: groups[loc] for loc in sorted(groups, key=lambda loc: (loc == "", loc.casefold()))}
+
+
+def build_progress_report(store: RecordStore, day: date, unassigned: str = "No location") -> Workbook:
+    """A sheet per location (`unassigned` naming the one of students without), a row per goal:
+    the student's name in a cell merged over their goals, the goal and the same goal again
+    as the progress to be edited. A student without goals still gets a row."""
+    wb = Workbook()
+    wb.remove(wb.active)
+    side = Side(style="thin")
+    border = Border(left=side, right=side, top=side, bottom=side)
+    font = Font(name="Calibri", size=12)
+    align = Alignment(horizontal="left", vertical="top", wrap_text=True)
+    used: set[str] = set()
+    groups = progress_rows(store, day) or {"": []}
+    for location, students in groups.items():
+        ws = wb.create_sheet(sheet_title(location or unassigned, used))
+        for col, (heading, width) in enumerate(zip(PROGRESS_HEADINGS, PROGRESS_WIDTHS), start=1):
+            ws.cell(1, col).value = heading
+            ws.column_dimensions[get_column_letter(col)].width = width
+        ws.freeze_panes = "A2"
+        row = 2
+        for name, goals in students:
+            first = row
+            for goal in goals or ("",):
+                ws.cell(row, 2).value = goal or None
+                ws.cell(row, 3).value = goal or None
+                lines = _lines(goal, PROGRESS_WIDTHS[1])
+                if lines > 1:
+                    ws.row_dimensions[row].height = LINE_HEIGHT * lines
+                row += 1
+            ws.cell(first, 1).value = name
+            if row - first > 1:
+                ws.merge_cells(start_row=first, start_column=1, end_row=row - 1, end_column=1)
+        for cells in ws.iter_rows(min_row=1, max_row=row - 1, max_col=len(PROGRESS_HEADINGS)):
+            for cell in cells:
+                cell.font = font
+                cell.alignment = align
+                cell.border = border
+    wb.active = 0
+    return wb
+
+
+def write_progress_report(store: RecordStore, day: date, path: Path, unassigned: str = "No location") -> None:
+    build_progress_report(store, day, unassigned).save(path)
