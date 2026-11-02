@@ -94,5 +94,6 @@ class StudentRecordsView(QWidget):
         self.rename_btn.setVisible(True)
         self.profile_btn.setVisible(True)
         self.count.setText(tr("{count} 份病歷", count=len(records)))
-        self.stack.set_records(records)
+        profile = self.store.get_profile(self.student_id)
+        self.stack.set_records(records, lambda day: profile.plan_on(day).goals)
         self.empty.setVisible(not records)

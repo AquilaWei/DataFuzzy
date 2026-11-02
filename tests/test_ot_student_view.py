@@ -3,7 +3,7 @@ from datetime import date
 import pytest
 from PySide6.QtCore import Qt
 
-from datafuzzy.ot.db import RecordStore
+from datafuzzy.ot.db import RecordStore, StudentProfile
 from datafuzzy.ot.ui.cards import date_label, preview_text, session_label
 from datafuzzy.ot.ui.student_view import StudentRecordsView
 
@@ -152,3 +152,19 @@ def test_preview_of_empty_record_says_so():
 
 def test_preview_is_cut_with_ellipsis_when_long():
     assert preview_text("字" * 200, "") == "字" * 140 + "…"
+
+
+def test_cards_show_how_the_chart_did_on_each_goal(qtbot, store):
+    student = store.add_student("Amy")
+    store.set_profile(student.id, StudentProfile(goals=("Cut", "Button", "Write")))
+    store.add_record(student.id, date(2026, 10, 5), goal_scores=("met", "not met"))
+    view = StudentRecordsView(store)
+    qtbot.addWidget(view)
+    view.show_student(student.id)
+    chips = view.stack.cards[0].score_chips
+    assert [c.text() for c in chips] == ["G1 met", "G2 not met", "G3 --"]
+    assert chips[1].toolTip() == "Button"
+
+
+def test_cards_show_no_results_without_goals(view):
+    assert all(card.score_chips == [] for card in view.stack.cards)

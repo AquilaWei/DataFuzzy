@@ -4,6 +4,7 @@ pointer is over it, when it lifts and unfolds to preview its content."""
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from datetime import date
 
 from PySide6.QtCore import (
@@ -25,9 +26,10 @@ from PySide6.QtGui import (
     QPixmap,
     QPixmapCache,
 )
-from PySide6.QtWidgets import QLabel, QMenu, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QMenu, QVBoxLayout, QWidget
 
 from ..db import Record
+from ..excel_export import NO_SCORE, score_text
 from .i18n import WEEKDAYS_EN, language, tr
 from .widgets import record_menu
 
@@ -44,6 +46,12 @@ SHADOW_LAYER_ALPHA = 2  # per layer; the layers add up toward the card
 PREVIEW_LINES = 3
 PREVIEW_CHARS = 140
 WEEKDAYS = "一二三四五六日"
+# A goal's score on a card: (text colour, background), translucent so it suits light and dark.
+SCORE_COLORS = {
+    "met": ("#28a745", "rgba(52, 199, 89, 0.16)"),
+    "not met": ("#e5484d", "rgba(255, 69, 58, 0.14)"),
+}
+NEUTRAL_SCORE = ("#8e8e93", "rgba(142, 142, 147, 0.16)")
 
 
 def weekday_label(weekday: int) -> str:
@@ -109,6 +117,25 @@ def preview_text(zh_text: str, en_text: str) -> str:
     return joined if len(joined) <= PREVIEW_CHARS else joined[:PREVIEW_CHARS].rstrip() + "…"
 
 
+def goal_results(record: Record, goals: tuple[str, ...]) -> list[tuple[str, str]]:
+    """("G1 met", goal text) for each goal of the plan the chart was scored on, "--" where it
+    has no score; nothing for a plan without goals."""
+    scores = list(record.goal_scores[:len(goals)]) + [""] * (len(goals) - len(record.goal_scores))
+    return [(f"G{i} {score_text(score)}", goal) for i, (score, goal) in enumerate(zip(scores, goals), start=1)]
+
+
+def score_chip(text: str, tooltip: str) -> QLabel:
+    """A small rounded label for one goal's result, coloured by how it went."""
+    score = text.split(" ", 1)[1]
+    color, background = SCORE_COLORS.get(score, NEUTRAL_SCORE)
+    chip = QLabel(text)
+    chip.setToolTip(tooltip)
+    weight = 400 if score == NO_SCORE else 600
+    chip.setStyleSheet(f"color: {color}; background: {background}; border-radius: 8px;"
+                       f" padding: 1px 7px; font-size: 12px; font-weight: {weight};")
+    return chip
+
+
 def shadow_pixmap(size: QSize, dpr: float) -> QPixmap:
     """The soft shadow of a card of `size`, SHADOW_SPREAD larger on every side. Drawn once per
     size and kept in QPixmapCache: a QGraphicsDropShadowEffect re-blurs on every repaint, which
@@ -156,7 +183,9 @@ class RecordCard(QWidget):
     entered = Signal(int)   # index in the stack
     left = Signal(int)
 
-    def __init__(self, record: Record, index: int, parent: QWidget | None = None) -> None:
+    def __init__(self, record: Record, index: int, parent: QWidget | None = None,
+                 goals: tuple[str, ...] = ()) -> None:
+        """`goals`: those of the plan the chart was scored on, each shown with its result."""
         super().__init__(parent)
         self.record_id = record.id
         self.index = index
@@ -173,7 +202,14 @@ class RecordCard(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 12, 18, 12)
         layout.setSpacing(2)
-        layout.addWidget(self.date_label)
+        self.score_chips = [score_chip(text, goal) for text, goal in goal_results(record, goals)]
+        top = QHBoxLayout()
+        top.setSpacing(6)
+        top.addWidget(self.date_label)
+        top.addStretch(1)
+        for chip in self.score_chips:
+            top.addWidget(chip)
+        layout.addLayout(top)
         layout.addWidget(self.location_label)
         layout.addSpacing(6)
         layout.addWidget(self.preview_label, 1)
@@ -227,8 +263,10 @@ class CardStack(QWidget):
         self._animation.setEndValue(1.0)
         self._animation.valueChanged.connect(self._step)
 
-    def set_records(self, records: list[Record]) -> None:
-        """Replace the cards, in the order given (the first is at the top)."""
+    def set_records(self, records: list[Record],
+                    goals_for: Callable[[date], tuple[str, ...]] | None = None) -> None:
+        """Replace the cards, in the order given (the first is at the top); `goals_for` gives
+        the goals in effect on a day, shown on each card with the chart's results."""
         self._animation.stop()
         for widget in self.cards + self._shadows:
             widget.deleteLater()
@@ -239,7 +277,8 @@ class CardStack(QWidget):
             shadow = CardShadow(self)  # created first, so it stacks under its card
             shadow.show()
             self._shadows.append(shadow)
-            card = RecordCard(record, i, self)
+            goals = goals_for(record.visit_date) if goals_for else ()
+            card = RecordCard(record, i, self, goals)
             card.clicked.connect(self.clicked)
             card.delete_requested.connect(self.delete_requested)
             card.entered.connect(self.set_hovered)
