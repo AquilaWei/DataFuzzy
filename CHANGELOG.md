@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.35.0] - 2026-11-02
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- Excel 匯出新增「Progress Report」模式：選一個日期，依基本資訊的地點每個地點一個分頁，列出所有啟用中學生當天計畫的每個 goal；名字合併成一格，Progress 欄先填入 goal 原文方便編輯。原本的匯出改稱「交接模式」，行為不變。
+- 學生頁的病歷卡片標出當次每個目標的表現（met、not met、not addressed、--），以顏色區分，滑鼠停留可看目標全文。
+
 ## [0.7.0.34.0] - 2026-11-01
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
