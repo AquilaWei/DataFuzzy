@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.36.0] - 2026-11-07
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 修正
+- 學生姓名分成「名」（必填）和「姓」（選填，用來區分同名的學生）。匯出翻譯時以名為主換代號：病歷只寫名字的地方，貼回後不會再被換成全名；寫了全名的地方仍還原成全名。同名的兩位學生在貼回預覽中以全名區分。舊學生的姓名會整個留在「名」欄，按 ✎ 把姓移到「姓」欄後才會套用新的方式。
+
 ## [0.7.0.35.0] - 2026-11-02
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
