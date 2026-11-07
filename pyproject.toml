@@ -1,6 +1,6 @@
 [project]
 name = "datafuzzy"
-version = "0.7.0.36.0"
+version = "0.7.0.37.0"
 description = "Local-first text obfuscation: replace sensitive data with reversible codes."
 readme = "README.md"
 license = "GPL-3.0-or-later"

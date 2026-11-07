@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.0] - 2026-11-07
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 修正
+- 中文句子裡英文名字後面接著小寫英文時（例如「Anna copy letter 後，完成了…」），只把名字換成代號，後面的英文動作保留原文，不再整段被當成人名。
+
 ## [0.7.0.36.0] - 2026-11-07
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
