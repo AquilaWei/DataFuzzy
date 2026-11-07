@@ -205,6 +205,13 @@ def test_privacy_filter_spans_are_cut_at_chinese_characters():
         "李建宏 警員：車牌 [ID_A] 對吧？轉診：家醫科 [PERSON_A]，[DATE_A]　分機 [DATE_B]\n弟弟 郭志明 住在台中市西屯區")
 
 
+def test_lowercase_english_after_a_name_in_chinese_text_is_not_part_of_the_name():
+    p = Pipeline()
+    p.pii = FindNer([("Anna copy letter 後", "PERSON")])
+    assert p.obfuscate("Anna copy letter 後，完成了描寫。", Session(label="t"), scope="names").text \
+        == "[PERSON_A] copy letter 後，完成了描寫。"
+
+
 def test_unmarked_name_is_not_coded_again():
     p = Pipeline()
     p.models["en"] = FakeNer(["Apple"])

@@ -51,12 +51,18 @@ LOC = "LOC"
 CJK_RUN = re.compile(r"[\u3000-\u303f\u3400-\u9fff\uf900-\ufaff\uff00-\uffef]+")
 
 
+# Capitalized Latin words in a row ("Dr. Kevin Lee", "O'Neil"): the name part of a
+# person piece. Lowercase words after it are the English the sentence goes on with.
+NAME_WORDS = re.compile(r"[A-Z][A-Za-z'’-]*\.?(?: [A-Z][A-Za-z'’-]*\.?)*")
+
+
 def latin_parts(text: str, spans: list[Span]) -> list[Span]:
     """The privacy filter finds personal data in Chinese text but not where it starts and
-    ends ("李建宏 警", "ARK-5821 對吧？"). A span with Chinese characters is cut at them and
-    keeps its pieces with a digit (numbers, dates, codes) or, for a person, with Latin
-    letters ("Dr. Kevin Lee"). Chinese names come from the Chinese model, Taiwan
-    addresses from the address rule."""
+    ends ("李建宏 警", "ARK-5821 對吧？", "Anna copy letter 後"). A span with Chinese
+    characters is cut at them and keeps its pieces with a digit (numbers, dates, codes)
+    or, for a person, its capitalized Latin words ("Dr. Kevin Lee", but only "Anna" of
+    "Anna copy letter"). Chinese names come from the Chinese model, Taiwan addresses
+    from the address rule."""
     out: list[Span] = []
     for s in spans:
         if not CJK_RUN.search(s.text):
@@ -64,14 +70,21 @@ def latin_parts(text: str, spans: list[Span]) -> list[Span]:
             continue
         if s.label == LOC:
             continue
-        keep = re.compile(r"[A-Za-z]{2}" if s.label == PERSON else r"\d")
         start = 0
         for piece in CJK_RUN.split(s.text):
             at = s.text.index(piece, start)
             start = at + len(piece)
+            base = s.start + at
+            if s.label == PERSON:
+                for m in NAME_WORDS.finditer(piece):
+                    core = m.group().rstrip(".")
+                    if len(core) > 1:
+                        out.append(Span(base + m.start(), base + m.start() + len(core),
+                                        s.label, core, s.score))
+                continue
             core = piece.strip(" \t:;,.")
-            if keep.search(core):
-                begin = s.start + at + piece.index(core)
+            if re.search(r"\d", core):
+                begin = base + piece.index(core)
                 out.append(Span(begin, begin + len(core), s.label, core, s.score))
     return out
 
