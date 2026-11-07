@@ -39,24 +39,34 @@ def export_range(store: RecordStore, date_from: date, date_to: date,
                  pipeline: Pipeline) -> ExportResult:
     """Export every record from `date_from` to `date_to` (inclusive), oldest first.
 
-    Only people's names are coded ("names" scope). Every student's name in the store is marked
+    Only people's names are coded ("names" scope). Every student's name in the store is coded
     before any text is processed, so it is coded even where no model finds it, and also where
-    another student's chart mentions them, whether or not they have a record in the range. One session covers the batch: the same person gets the
-    same code in every chart. The mapping is saved encrypted; it may block while a model
-    runs, so call it from a worker for a large range."""
+    another student's chart mentions them, whether or not they have a record in the range.
+    One session covers the batch: the same person gets the same code in every chart.
+
+    The code stands for the student's given name, and a full name with a family name gets a
+    code of its own, so each restores to what the chart wrote ("Emma" stays "Emma", not
+    "Emma Wang"). Two students of one given name share its code, which restores the same.
+    The mapping is saved encrypted; it may block while a model runs, so call it from a
+    worker for a large range."""
     records = store.records_between(date_from, date_to)
     if not records:
         return ExportResult("", None, 0)
-    names = {s.id: s.name for s in store.students()}
+    students = {s.id: s for s in store.students()}
     session = Session(label=f"{APP_NAME} {date_from.isoformat()} ~ {date_to.isoformat()}")
     # Students in the range first, so codes follow record order; then everyone else, because
-    # a chart may mention a child who has no record in the range.
-    for name in [names[r.student_id] for r in records] + list(names.values()):
-        session.mark(name, PERSON)
+    # a chart may mention a child who has no record in the range. Given names before full
+    # names, all unlinked: otherwise a full name would take over its given name's code.
+    order = [students[r.student_id] for r in records] + list(students.values())
+    for student in order:
+        session.code_for(student.given_name, PERSON, link=False)
+    for student in order:
+        if student.family_name:
+            session.code_for(student.name, PERSON, link=False)
     blocks: list[str] = []
     entries: list[dict] = []
     for record in records:
-        code = session.to_code[names[record.student_id]]
+        code = session.to_code[students[record.student_id].given_name]
         body = pipeline.obfuscate(record.zh_text, session, scope="names").text
         header = HEADER_FORMAT.format(record_id=record.id, code=code, visit_date=record.visit_date.isoformat())
         blocks.append(f"{header}\n{body}\n")
@@ -144,7 +154,7 @@ def find_batch(store: RecordStore, text: str, blocks: list[PastedBlock]) -> Expo
 class ImportItem:
     """One chart that can be written back."""
     record_id: int
-    student_name: str         # the header's code turned back into a name
+    student_name: str         # the full name of the record's student
     visit_date: date
     en_text: str              # the pasted text with names restored
     overwrites: bool          # the record already has a different English text
@@ -218,11 +228,21 @@ def preview_import(store: RecordStore, text: str, batch_id: int | None = None) -
                 continue
             restored = session.restore(block.body)
             items.append(ImportItem(
-                block.record_id, session.restore(block.code).text, record.visit_date, restored.text,
-                bool(record.en_text) and record.en_text != restored.text, restored.unknown))
-    missing = [MissingRecord(e.record_id, session.restore(e.code).text, date.fromisoformat(e.visit_date))
+                block.record_id, store.get_student(record.student_id).name, record.visit_date,
+                restored.text, bool(record.en_text) and record.en_text != restored.text,
+                restored.unknown))
+    missing = [MissingRecord(e.record_id, _student_name(store, e, session), date.fromisoformat(e.visit_date))
                for e in batch.entries.values() if e.record_id not in seen]
     return ImportPreview(batch.id, items, missing, unrecognized)
+
+
+def _student_name(store: RecordStore, entry: BatchEntry, session: Session) -> str:
+    """The full name of the exported record's student, to tell two of one given name apart;
+    the header code restored (the given name) if the record has been deleted since."""
+    try:
+        return store.get_student(store.get_record(entry.record_id).student_id).name
+    except NotFound:
+        return session.restore(entry.code).text
 
 
 def apply_import(store: RecordStore, preview: ImportPreview,

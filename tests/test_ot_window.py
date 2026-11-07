@@ -16,6 +16,7 @@ from datafuzzy.ot.ui.main_window import (
     DATE_MODE,
     LOCATION_MODE,
     STUDENT_MODE,
+    StudentNameDialog,
     TheraNoteWindow,
 )
 
@@ -65,14 +66,14 @@ def test_empty_student_name_adds_nobody(qtbot, store):
 
 def test_add_student_asks_for_the_name_when_none_given(qtbot, store, monkeypatch):
     window = make_window(qtbot, store)
-    monkeypatch.setattr(window, "_ask_student_name", lambda: "陳美玲")
+    monkeypatch.setattr(window, "_ask_student_name", lambda: ("陳美玲", ""))
     window.add_student()
     assert student_names(window) == ["陳美玲"]
 
 
 def test_cancelled_name_prompt_adds_nobody(qtbot, store, monkeypatch):
     window = make_window(qtbot, store)
-    monkeypatch.setattr(window, "_ask_student_name", lambda: "")
+    monkeypatch.setattr(window, "_ask_student_name", lambda: ("", ""))
     window.add_student()
     assert store.students() == []
 
@@ -502,7 +503,7 @@ def test_day_list_has_no_menu_below_the_rows(qtbot, store):
 def test_pencil_renames_the_student_everywhere(qtbot, store, monkeypatch):
     window = make_window(qtbot, store)
     student_id = window.add_student("王小名")
-    monkeypatch.setattr(window, "_ask_new_name", lambda current: "王小明")
+    monkeypatch.setattr(window, "_ask_new_name", lambda current: ("王小明", ""))
     assert window.student_view.rename_btn.isVisible()
     window.student_view.rename_btn.click()
     assert student_names(window) == ["王小明"]
@@ -510,11 +511,34 @@ def test_pencil_renames_the_student_everywhere(qtbot, store, monkeypatch):
     assert window.student_view.title.text() == "王小明"
 
 
+def test_name_dialog_needs_a_given_name_but_not_a_family_name(qtbot):
+    dialog = StudentNameDialog("新增學生")
+    qtbot.addWidget(dialog)
+    dialog.family_edit.setText("Wang")
+    assert not dialog.ok_button.isEnabled()
+    dialog.given_edit.setText("Emma")
+    assert dialog.ok_button.isEnabled()
+
+
+def test_rename_dialog_starts_with_both_names(qtbot, store):
+    student = store.add_student("Emma", "Wang")
+    dialog = StudentNameDialog("修改姓名", student)
+    qtbot.addWidget(dialog)
+    assert dialog.names() == ("Emma", "Wang")
+
+
+def test_rename_can_add_a_family_name(qtbot, store):
+    window = make_window(qtbot, store)
+    student_id = window.add_student("Emma")
+    assert window.rename_student(student_id, "Emma", "Wang")
+    assert student_names(window) == ["Emma Wang"]
+
+
 def test_empty_or_cancelled_rename_keeps_the_name(qtbot, store, monkeypatch):
     window = make_window(qtbot, store)
     student_id = window.add_student("王小明")
     assert not window.rename_student(student_id, "  ")
-    monkeypatch.setattr(window, "_ask_new_name", lambda current: "")
+    monkeypatch.setattr(window, "_ask_new_name", lambda current: ("", ""))
     assert not window.rename_student(student_id)
     assert store.get_student(student_id).name == "王小明"
 

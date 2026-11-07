@@ -67,6 +67,46 @@ def test_renamed_student_keeps_id(store):
     assert store.get_student(student.id).name == "王小明"
 
 
+def test_student_with_a_family_name_shows_given_name_first(store):
+    student = store.add_student(" Emma ", " Wang ")
+    assert store.get_student(student.id).name == "Emma Wang"
+
+
+def test_chinese_student_with_a_family_name_shows_family_name_first_without_a_space(store):
+    student = store.add_student("小明", "王")
+    assert store.get_student(student.id).name == "王小明"
+
+
+def test_family_name_is_optional(store):
+    student = store.add_student("Emma")
+    assert store.get_student(student.id).family_name == ""
+
+
+def test_renaming_with_a_blank_family_name_removes_it(store):
+    student = store.add_student("Emma", "Wang")
+    store.rename_student(student.id, "Emma")
+    assert store.get_student(student.id).name == "Emma"
+
+
+def test_family_name_is_not_plaintext_in_database_file(tmp_path):
+    path = tmp_path / "t.db"
+    with RecordStore(path, KEY) as store:
+        store.add_student("Emma", "Zebulonova")
+    assert b"Zebulonova" not in path.read_bytes()
+
+
+def test_chart_book_from_before_family_names_opens_with_none(tmp_path):
+    path = tmp_path / "t.db"
+    with RecordStore(path, KEY) as store:
+        student = store.add_student("Emma Wang")
+    old = sqlite3.connect(path)
+    old.execute("ALTER TABLE student DROP COLUMN family_name")
+    old.commit()
+    old.close()
+    with RecordStore(path, KEY) as again:
+        assert again.get_student(student.id).name == "Emma Wang"
+
+
 def test_deleting_a_student_removes_their_records(store):
     wang = store.add_student("王小明")
     chen = store.add_student("陳美玲")

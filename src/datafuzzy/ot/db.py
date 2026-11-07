@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS {name} (
 """
 RECORD_COLUMNS = ("id, student_id, visit_date, location, zh_text, en_text, updated_at,"
                   " activity, start_time, end_time, session_type, goal_scores")
+STUDENT_COLUMNS = "id, name, active, family_name"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -54,7 +55,8 @@ CREATE TABLE IF NOT EXISTS meta (
 );
 CREATE TABLE IF NOT EXISTS student (
     id      INTEGER PRIMARY KEY,
-    name    BLOB NOT NULL,
+    name    BLOB NOT NULL,  -- the given name
+    family_name BLOB,  -- optional; NULL for none
     profile BLOB,  -- StudentProfile as JSON; NULL until first filled in
     active  INTEGER NOT NULL DEFAULT 1  -- 0 once their plan is done; they leave the timetable
 );
@@ -87,6 +89,8 @@ def connect(path: Path, check_same_thread: bool = True) -> sqlite3.Connection:
         db.execute("ALTER TABLE student ADD COLUMN profile BLOB")  # from before profiles
     if "active" not in student_columns:  # from before students could be made inactive
         db.execute("ALTER TABLE student ADD COLUMN active INTEGER NOT NULL DEFAULT 1")
+    if "family_name" not in student_columns:  # from before family names were kept apart
+        db.execute("ALTER TABLE student ADD COLUMN family_name BLOB")
     columns = {row[1] for row in db.execute("PRAGMA table_info(record)")}
     if "activity" not in columns:  # a chart book from before activities
         db.execute("ALTER TABLE record ADD COLUMN activity BLOB")
@@ -159,11 +163,27 @@ def write_meta(path: Path, name: str, value: bytes) -> None:
         db.close()
 
 
+CJK_CHAR_RE = re.compile(r"[㐀-鿿]")
+
+
 @dataclass(frozen=True)
 class Student:
+    """`given_name` is what charts call the student and the only part a translation export
+    codes; `family_name` is optional and only tells two students of one given name apart."""
     id: int
-    name: str
+    given_name: str
     active: bool = True  # False once their plan is done
+    family_name: str = ""
+
+    @property
+    def name(self) -> str:
+        """The full name to show: "Emma Wang", or "王小明" (family name first, no space) when
+        both parts are Chinese; just the given name without a family name."""
+        if not self.family_name:
+            return self.given_name
+        if CJK_CHAR_RE.match(self.family_name[-1]) and CJK_CHAR_RE.match(self.given_name[0]):
+            return self.family_name + self.given_name
+        return f"{self.given_name} {self.family_name}"
 
 
 @dataclass(frozen=True)
@@ -399,31 +419,36 @@ class RecordStore:
 
     # --- students -------------------------------------------------------------------
 
-    def add_student(self, name: str) -> Student:
-        """Two students may share a name (it is encrypted, so it cannot be UNIQUE)."""
-        name = name.strip()
-        if not name:
+    def _name_blobs(self, given_name: str, family_name: str) -> tuple[bytes, bytes | None]:
+        """Both names encrypted, trimmed; the family name None when blank. Raises ValueError
+        for a blank given name."""
+        given_name, family_name = given_name.strip(), family_name.strip()
+        if not given_name:
             raise ValueError("student name is empty")
+        family = self._enc(family_name, "student.family_name") if family_name else None
+        return self._enc(given_name, "student.name"), family
+
+    def add_student(self, given_name: str, family_name: str = "") -> Student:
+        """Two students may share a name (it is encrypted, so it cannot be UNIQUE)."""
+        blobs = self._name_blobs(given_name, family_name)
         with self._lock, self._db:
-            cur = self._db.execute("INSERT INTO student(name) VALUES (?)",
-                                   (self._enc(name, "student.name"),))
-        return Student(cur.lastrowid, name)
+            cur = self._db.execute("INSERT INTO student(name, family_name) VALUES (?, ?)", blobs)
+        return Student(cur.lastrowid, given_name.strip(), family_name=family_name.strip())
 
     def get_student(self, student_id: int) -> Student:
         with self._lock:
-            row = self._db.execute("SELECT id, name, active FROM student WHERE id = ?",
+            row = self._db.execute(f"SELECT {STUDENT_COLUMNS} FROM student WHERE id = ?",
                                    (student_id,)).fetchone()
         if row is None:
             raise NotFound(f"student {student_id}")
         return self._student(row)
 
-    def rename_student(self, student_id: int, name: str) -> Student:
-        name = name.strip()
-        if not name:
-            raise ValueError("student name is empty")
+    def rename_student(self, student_id: int, given_name: str, family_name: str = "") -> Student:
+        """Set both names; a blank `family_name` removes it."""
+        blobs = self._name_blobs(given_name, family_name)
         with self._lock, self._db:
-            cur = self._db.execute("UPDATE student SET name = ? WHERE id = ?",
-                                   (self._enc(name, "student.name"), student_id))
+            cur = self._db.execute("UPDATE student SET name = ?, family_name = ? WHERE id = ?",
+                                   (*blobs, student_id))
         if cur.rowcount == 0:
             raise NotFound(f"student {student_id}")
         return self.get_student(student_id)
@@ -484,11 +509,12 @@ class RecordStore:
     def students(self) -> list[Student]:
         """Everyone, sorted by name."""
         with self._lock:
-            rows = self._db.execute("SELECT id, name, active FROM student").fetchall()
+            rows = self._db.execute(f"SELECT {STUDENT_COLUMNS} FROM student").fetchall()
         return sorted((self._student(r) for r in rows), key=lambda s: (s.name.casefold(), s.id))
 
     def _student(self, row: tuple) -> Student:
-        return Student(row[0], self._dec(row[1], "student.name"), bool(row[2]))
+        family = self._dec(row[3], "student.family_name") if row[3] is not None else ""
+        return Student(row[0], self._dec(row[1], "student.name"), bool(row[2]), family)
 
     # --- records --------------------------------------------------------------------
 

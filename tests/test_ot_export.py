@@ -43,6 +43,20 @@ def test_english_student_name_is_masked_in_chinese_text(store, pipeline):
     assert "Kevin" not in result.text and "Lee" not in result.text
 
 
+def test_header_carries_the_given_names_code(store, pipeline):
+    student = store.add_student("Emma", "Wang")
+    store.add_record(student.id, date(2026, 10, 1), zh_text="Emma 剪紙")
+    result = export_range(store, date(2026, 10, 1), date(2026, 10, 1), pipeline)
+    assert result.text == "=== REC-1 | [PERSON_A] | 2026-10-01 ===\n[PERSON_A] 剪紙\n"
+
+
+def test_family_name_in_the_full_name_is_masked(store, pipeline):
+    student = store.add_student("Emma", "Wang")
+    store.add_record(student.id, date(2026, 10, 1), zh_text="Emma Wang 剪紙")
+    result = export_range(store, date(2026, 10, 1), date(2026, 10, 1), pipeline)
+    assert "Wang" not in result.text
+
+
 def test_only_names_are_coded_other_details_stay_readable(store, pipeline):
     student = store.add_student("王小明")
     store.add_record(student.id, date(2026, 10, 1), zh_text="王小明 家長信箱 mom@example.com")

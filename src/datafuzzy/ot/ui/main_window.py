@@ -16,8 +16,8 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGridLayout,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
@@ -34,7 +34,7 @@ from ...core.models import ModelSpec
 from ...core.pipeline import Pipeline
 from ...ui.model_manager import ModelManager
 from .. import APP_NAME
-from ..db import RecordStore, StudentProfile
+from ..db import RecordStore, Student, StudentProfile
 from .about import AboutDialog
 from .date_view import DayRecordsView, MarkedCalendar, to_date, to_qdate
 from .editor import RecordEditor
@@ -54,6 +54,33 @@ TIMETABLE_MODE = 3
 
 # Content pages
 PLACEHOLDER, STUDENT_PAGE, DAY_PAGE, EDITOR_PAGE, LOCATION_PAGE, TIMETABLE_PAGE = range(6)
+
+
+class StudentNameDialog(QDialog):
+    """Asks for a student's given name (required: charts call them by it, and only it is
+    coded for translation) and family name (optional: to tell two of one given name apart)."""
+
+    def __init__(self, title: str, student: Student | None = None, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.given_edit = QLineEdit(student.given_name if student else "")
+        self.family_edit = QLineEdit(student.family_name if student else "")
+        self.family_edit.setPlaceholderText(tr("選填，用來區分同名的學生"))
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        self.ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        self.given_edit.textChanged.connect(
+            lambda text: self.ok_button.setEnabled(bool(text.strip())))
+        self.ok_button.setEnabled(bool(self.given_edit.text().strip()))
+        form = QFormLayout(self)
+        form.addRow(tr("名"), self.given_edit)
+        form.addRow(tr("姓"), self.family_edit)
+        form.addRow(buttons)
+
+    def names(self) -> tuple[str, str]:
+        """(given name, family name), trimmed."""
+        return self.given_edit.text().strip(), self.family_edit.text().strip()
 
 
 class NewRecordDialog(QDialog):
@@ -268,33 +295,39 @@ class TheraNoteWindow(QMainWindow):
         item = self.student_list.currentItem()
         return item.data(Qt.ItemDataRole.UserRole) if item else None
 
-    def _ask_student_name(self) -> str:
-        name, ok = QInputDialog.getText(self, tr("新增學生"), tr("學生姓名"))
-        return name.strip() if ok else ""
+    def _ask_student_name(self) -> tuple[str, str]:
+        """(given name, family name), or blanks if cancelled."""
+        dialog = StudentNameDialog(tr("新增學生"), parent=self)
+        return dialog.names() if dialog.exec() else ("", "")
 
-    def add_student(self, name: str | None = None) -> int | None:
-        """Add and select a student, asking for the name unless given. Returns the id, or None
-        if the name was empty or the dialog cancelled."""
-        name = self._ask_student_name() if name is None else name.strip()
-        if not name:
+    def add_student(self, given_name: str | None = None, family_name: str = "") -> int | None:
+        """Add and select a student, asking for the names unless given. Returns the id, or None
+        if the given name was empty or the dialog cancelled."""
+        if given_name is None:
+            given_name, family_name = self._ask_student_name()
+        if not given_name.strip():
             return None
-        student = self.store.add_student(name)
+        student = self.store.add_student(given_name, family_name)
         self.set_mode(STUDENT_MODE)
         self.refresh_students(select_id=student.id)
         return student.id
 
-    def _ask_new_name(self, current: str) -> str:
-        name, ok = QInputDialog.getText(self, tr("修改姓名"), tr("學生姓名"), text=current)
-        return name.strip() if ok else ""
+    def _ask_new_name(self, current: Student) -> tuple[str, str]:
+        """(given name, family name), or blanks if cancelled."""
+        dialog = StudentNameDialog(tr("修改姓名"), current, parent=self)
+        return dialog.names() if dialog.exec() else ("", "")
 
-    def rename_student(self, student_id: int, name: str | None = None) -> bool:
-        """Correct a student's name, asking for it unless given. False if the name was empty,
-        unchanged or the dialog cancelled."""
-        current = self.store.get_student(student_id).name
-        name = self._ask_new_name(current) if name is None else name.strip()
-        if not name or name == current:
+    def rename_student(self, student_id: int, given_name: str | None = None, family_name: str = "") -> bool:
+        """Correct a student's names, asking for them unless given (a blank family name
+        removes it). False if the given name was empty, nothing changed or the dialog was
+        cancelled."""
+        current = self.store.get_student(student_id)
+        if given_name is None:
+            given_name, family_name = self._ask_new_name(current)
+        given_name, family_name = given_name.strip(), family_name.strip()
+        if not given_name or (given_name, family_name) == (current.given_name, current.family_name):
             return False
-        self.store.rename_student(student_id, name)
+        self.store.rename_student(student_id, given_name, family_name)
         self.refresh_students(select_id=student_id)
         self.day_view.refresh()
         self.refresh_timetable()

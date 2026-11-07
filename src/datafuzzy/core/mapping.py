@@ -169,9 +169,13 @@ class Session:
                       and not any(name_parts(o) for o in originals[self.to_code[part]])}
         return candidates.pop() if len(candidates) == 1 else None
 
-    def code_for(self, original: str, label: str) -> str:
+    def code_for(self, original: str, label: str, link: bool = True) -> str:
+        """The value's code, issuing one if new. With `link`, a new part or full form of a
+        person already coded reuses that person's code (see `linked_person_code`); without it
+        a new value always gets its own code, so "Emma" and "Emma Wang" each restore to
+        exactly what was written."""
         if original not in self.to_code:
-            code = self.linked_person_code(original) if label == PERSON else None
+            code = self.linked_person_code(original) if link and label == PERSON else None
             if code is None:
                 n = self.counters.get(label, 0)
                 self.counters[label] = n + 1

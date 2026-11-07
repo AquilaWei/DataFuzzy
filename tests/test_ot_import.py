@@ -238,6 +238,43 @@ def test_export_translate_import_round_trip_with_classmate_in_text(store, pipeli
     ]
 
 
+def test_given_name_alone_is_restored_without_the_family_name(store, pipeline):
+    student = store.add_student("Emma", "Wang")
+    store.add_record(student.id, OCT_1, zh_text="Emma 今天練習剪紙")
+    exported = export_range(store, OCT_1, OCT_1, pipeline)
+    pasted = exported.text.replace("今天練習剪紙", "practiced cutting today")
+    apply_import(store, preview_import(store, pasted))
+    assert store.get_record(1).en_text == "Emma practiced cutting today"
+
+
+def test_full_name_in_the_text_is_restored_as_the_full_name(store, pipeline):
+    student = store.add_student("Emma", "Wang")
+    store.add_record(student.id, OCT_1, zh_text="Emma Wang 今天和 Emma 的哥哥一起")
+    exported = export_range(store, OCT_1, OCT_1, pipeline)
+    pasted = exported.text.replace(" 今天和 ", " came with ").replace(" 的哥哥一起", "'s brother")
+    apply_import(store, preview_import(store, pasted))
+    assert store.get_record(1).en_text == "Emma Wang came with Emma's brother"
+
+
+def test_chinese_given_name_alone_is_restored_without_the_family_name(store, pipeline):
+    student = store.add_student("小明", "王")
+    store.add_record(student.id, OCT_1, zh_text="小明今天練習剪紙")
+    exported = export_range(store, OCT_1, OCT_1, pipeline)
+    pasted = exported.text.replace("今天練習剪紙", " practiced cutting today")
+    apply_import(store, preview_import(store, pasted))
+    assert store.get_record(1).en_text == "小明 practiced cutting today"
+
+
+def test_preview_tells_two_students_of_one_given_name_apart(store, pipeline):
+    wang = store.add_student("Emma", "Wang")
+    lee = store.add_student("Emma", "Lee")
+    store.add_record(wang.id, OCT_1, zh_text="Emma 剪紙")
+    store.add_record(lee.id, OCT_1, zh_text="Emma 畫畫")
+    exported = export_range(store, OCT_1, OCT_1, pipeline)
+    preview = preview_import(store, exported.text)
+    assert [i.student_name for i in preview.items] == ["Emma Wang", "Emma Lee"]
+
+
 def test_record_deleted_after_export_is_reported_not_written(store, two_visits):
     store.delete_record(1)
     preview = preview_import(store, FIRST + "one\n\n" + SECOND + "two\n")

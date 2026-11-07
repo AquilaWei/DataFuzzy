@@ -38,6 +38,9 @@ uv run theranote
 - **匯出 → 貼回**：選日期區間匯出，學生姓名會強制換成代號，其他人名由本機偵測器處理；
   複製文字後保留分隔標頭，將修正或翻譯的文字貼回。程式檢查標頭、還原姓名並存為英文版，
   覆蓋前會確認。代號對應表隨病歷加密保存，重開仍可貼回。
+- **學生姓名**：新增學生時分成「名」（必填）和「姓」（選填，用來區分同名的學生）。
+  匯出時以名為主換代號，病歷寫「Emma」貼回就是「Emma」，寫全名「Emma Wang」才還原成全名。
+  舊學生的姓名整個存在「名」欄，按 ✎ 把姓移到「姓」欄後才會照這個方式處理。
 - **資料位置**：macOS 為 `~/Library/Application Support/TheraNote/theranote.db`，
   Linux 為 `~/.local/share/TheraNote/theranote.db`（遵循 `XDG_DATA_HOME`）。
   可用 `THERANOTE_DB=/path/to/charts.db uv run theranote` 指定其他資料庫。
