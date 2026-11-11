@@ -38,7 +38,12 @@ from ..db import RecordStore, Student, StudentProfile
 from .about import AboutDialog
 from .date_view import DayRecordsView, MarkedCalendar, to_date, to_qdate
 from .editor import RecordEditor
-from .exchange_dialogs import ExcelExportDialog, ExportDialog, ImportDialog
+from .exchange_dialogs import (
+    AceExportDialog,
+    ExcelExportDialog,
+    ExportDialog,
+    ImportDialog,
+)
 from .followup_dialog import offer_followup_review
 from .i18n import language, mode_names, save_language, tr
 from .location_view import NO_LOCATION, LocationRecordsView
@@ -167,6 +172,7 @@ class TheraNoteWindow(QMainWindow):
         self.export_btn = QPushButton(tr("匯出"))
         self.import_btn = QPushButton(tr("貼回"))
         self.excel_btn = QPushButton(tr("Excel 匯出"))
+        self.ace_btn = QPushButton(tr("ACE 填寫檔"))
         self.settings_btn = QPushButton(tr("設定"))
         self.settings_btn.setObjectName("flat")
         self.student_list = QListWidget()
@@ -209,7 +215,8 @@ class TheraNoteWindow(QMainWindow):
         actions.addWidget(self.add_record_btn, 0, 1)
         actions.addWidget(self.export_btn, 1, 0)
         actions.addWidget(self.import_btn, 1, 1)
-        actions.addWidget(self.excel_btn, 2, 0, 1, 2)
+        actions.addWidget(self.excel_btn, 2, 0)
+        actions.addWidget(self.ace_btn, 2, 1)
         side = QVBoxLayout(sidebar)
         side.setContentsMargins(14, 16, 14, 12)
         side.setSpacing(10)
@@ -249,6 +256,7 @@ class TheraNoteWindow(QMainWindow):
         self.export_btn.clicked.connect(self.open_export)
         self.import_btn.clicked.connect(self.open_import)
         self.excel_btn.clicked.connect(self.open_excel_export)
+        self.ace_btn.clicked.connect(self.open_ace_export)
         self.settings_btn.clicked.connect(lambda: self.open_settings())
 
         self.refresh_students()
@@ -602,6 +610,10 @@ class TheraNoteWindow(QMainWindow):
     def open_excel_export(self) -> None:
         self.flush()
         ExcelExportDialog(self.store, parent=self).exec()
+
+    def open_ace_export(self) -> None:
+        self.flush()
+        AceExportDialog(self.store, parent=self).exec()
 
     def open_import(self) -> None:
         self.flush()

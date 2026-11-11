@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 
 from ...core.pipeline import Pipeline
 from ...ui.worker import run_task
+from ..ace_export import ace_cells, to_json
 from ..db import Record, RecordStore
 from ..excel_export import (
     file_name,
@@ -558,3 +559,73 @@ class ExcelExportDialog(QDialog):
     def reveal(self) -> None:
         if self.written:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.written[-1].parent)))
+
+
+class AceExportDialog(QDialog):
+    """Pick a week, save its charts as the ACE fill-in file the browser extension enters into
+    ACE Portal (see ace_export.py). The file is not encrypted, which the dialog says."""
+
+    def __init__(self, store: RecordStore, today: date | None = None,
+                 choose: Callable[[str], str] | None = None, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.store = store
+        self.written: Path | None = None
+        self._choose = choose or (lambda start: QFileDialog.getSaveFileName(
+            self, tr("ACE 填寫檔"), start, "JSON (*.json)")[0])
+        today = today or date.today()
+        monday = today - timedelta(days=today.weekday())  # ACE's grid shows Monday to Sunday
+        self.setWindowTitle(tr("ACE 填寫檔"))
+        self.resize(520, 220)
+
+        self.from_edit = QDateEdit(to_qdate(monday))
+        self.to_edit = QDateEdit(to_qdate(monday + timedelta(days=6)))
+        for edit in (self.from_edit, self.to_edit):
+            edit.setCalendarPopup(True)
+            edit.setDisplayFormat("yyyy-MM-dd")
+        self.save_btn = QPushButton(tr("存檔…"))
+        self.save_btn.setObjectName("primary")
+        warning = QLabel(tr("檔案裡有學生姓名和英文病歷，沒有加密。在 ACE 填完後請刪除。"))
+        warning.setWordWrap(True)
+        self.status = QLabel("")
+        self.status.setObjectName("subtle")
+        self.status.setWordWrap(True)
+
+        row = QHBoxLayout()
+        row.addWidget(QLabel(tr("從")))
+        row.addWidget(self.from_edit)
+        row.addWidget(QLabel(tr("到")))
+        row.addWidget(self.to_edit)
+        row.addStretch(1)
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        buttons.addWidget(self.save_btn)
+        layout = QVBoxLayout(self)
+        layout.addLayout(row)
+        layout.addWidget(warning)
+        layout.addWidget(self.status, 1)
+        layout.addLayout(buttons)
+        self.save_btn.clicked.connect(self.save)
+
+    def save(self) -> None:
+        date_from, date_to = to_date(self.from_edit.date()), to_date(self.to_edit.date())
+        if date_from > date_to:
+            self.status.setText(tr("開始日期晚於結束日期。"))
+            return
+        cells = ace_cells(self.store, date_from, date_to)
+        if not cells:
+            self.status.setText(tr("這段期間沒有病歷。"))
+            return
+        start = Path.home() / "Downloads" / f"TheraNote-ACE-{date_from.isoformat()}.json"
+        chosen = self._choose(str(start))
+        if not chosen:
+            return
+        path = Path(chosen)
+        try:
+            path.write_text(to_json(cells, date_from, date_to), encoding="utf-8")
+        except OSError as e:
+            self.status.setText(tr("{label}寫入失敗：{error}", label=path.name, error=e.strerror or e))
+            return
+        self.written = path
+        manual = sum(bool(cell.problems) for cell in cells)
+        self.status.setText(tr("已存 {count} 格到 {path}；其中 {manual} 格要手動填。",
+                               count=len(cells), path=path, manual=manual))
