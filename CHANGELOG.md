@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.3] - 2026-11-11
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 側邊欄「ACE 填寫檔」：把一週的病歷存成 ACE Portal 填寫檔，每位學生每天一格，列出要填的 Direct／Group／Indirect 內容；Consult、缺英文或缺時間的格子標為要手動填。
+- Chrome 擴充功能（`chrome-extension/`）：在 ACE 週表逐格打開 Edit Therapist Time 並填好，停下來讓你檢查、自己按 Save Changes 後才換下一格。
+
 ## [0.7.0.37.2] - 2026-11-11
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
