@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..db import RecordStore
+from ..db import RecordStore, session_label
 from .cards import date_label, preview_text, time_label
 from .i18n import tr
 from .theme import ACCENT
@@ -81,6 +81,7 @@ NAME_ROLE = Qt.ItemDataRole.UserRole + 1
 PLACE_ROLE = Qt.ItemDataRole.UserRole + 2  # the tag: the location, or the date in the by-location list
 PREVIEW_ROLE = Qt.ItemDataRole.UserRole + 3
 TIME_ROLE = Qt.ItemDataRole.UserRole + 4  # (start, end) as shown, e.g. ("9:30 AM", "10:00 AM"), or ("", "")
+SESSION_ROLE = Qt.ItemDataRole.UserRole + 5  # "Individual - Direct Therapy Time", shown at the right of the name; optional
 
 
 class DayRecordDelegate(QStyledItemDelegate):
@@ -162,6 +163,11 @@ class DayRecordDelegate(QStyledItemDelegate):
         painter.setPen(text)
         painter.drawText(QRect(r.left(), r.top(), r.width(), name_h),
                          Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, index.data(NAME_ROLE))
+        if index.data(SESSION_ROLE):
+            painter.setFont(tag_font)
+            painter.setPen(grey)
+            painter.drawText(QRect(r.left(), r.top(), r.width(), name_h),
+                             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, index.data(SESSION_ROLE))
 
         place = index.data(PLACE_ROLE)
         tag_rect = QRect(r.left(), top, tag_fm.horizontalAdvance(place) + 2 * self.TAG_PAD, tag_fm.height() + 4)
@@ -267,6 +273,7 @@ class DayRecordsView(QWidget):
             item.setData(PLACE_ROLE, place)
             item.setData(PREVIEW_ROLE, first_line)
             item.setData(TIME_ROLE, (time_label(record.start_time), time_label(record.end_time)))
+            item.setData(SESSION_ROLE, session_label(record.session_mode, record.session_type))
             self.list.addItem(item)
         self.empty.setVisible(not records)
         self.list.setVisible(bool(records))

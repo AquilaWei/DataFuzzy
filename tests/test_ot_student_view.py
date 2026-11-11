@@ -68,6 +68,10 @@ def test_card_shows_date_location_and_first_lines(view):
         "2026-10-05  週一", "新竹國小", "第二次\n練習剪紙")
 
 
+def test_card_shows_the_mode_and_service_type(view):
+    assert view.stack.cards[1].session_label.text() == "Individual - Direct Therapy Time"
+
+
 def test_clicking_a_card_opens_that_record(qtbot, view):
     with qtbot.waitSignal(view.open_record, timeout=1000) as opened:
         qtbot.mouseClick(view.stack.cards[2], Qt.MouseButton.LeftButton)

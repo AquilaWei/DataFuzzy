@@ -29,6 +29,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QMenu, QVBoxLayout, QWidget
 
 from ..db import DIRECT_THERAPY, Record
+from ..db import session_label as session_combo
 from ..excel_export import NO_SCORE, score_text
 from .i18n import WEEKDAYS_EN, language, tr
 from .widgets import record_menu
@@ -199,6 +200,8 @@ class RecordCard(QWidget):
         self.date_label.setStyleSheet("font-size: 15px; font-weight: 600;")
         self.location_label = QLabel(record.location or tr("未填地點"))
         self.location_label.setObjectName("subtle")
+        self.session_label = QLabel(session_combo(record.session_mode, record.session_type))
+        self.session_label.setObjectName("subtle")
         self.preview_label = QLabel(preview_text(record))
         self.preview_label.setWordWrap(True)
         self.preview_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
@@ -213,7 +216,13 @@ class RecordCard(QWidget):
         for chip in self.score_chips:
             top.addWidget(chip)
         layout.addLayout(top)
-        layout.addWidget(self.location_label)
+        place = QHBoxLayout()
+        place.setSpacing(6)
+        place.addWidget(self.location_label)
+        place.addWidget(QLabel("·"))
+        place.addWidget(self.session_label)
+        place.addStretch(1)
+        layout.addLayout(place)
         layout.addSpacing(6)
         layout.addWidget(self.preview_label, 1)
 

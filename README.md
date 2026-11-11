@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml/badge.svg)](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/AquilaWei/DataFuzzy/graph/badge.svg)](https://codecov.io/gh/AquilaWei/DataFuzzy)
-![Version](https://img.shields.io/badge/version-0.7.0.37.1-blue)
+![Version](https://img.shields.io/badge/version-0.7.0.37.2-blue)
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
@@ -31,7 +31,7 @@
 | Evaluation、Re-Evaluation、Screen、Student Observation、Unavailable Student、Collaboration | 只有中英文記錄 |
 | 其他 | 不顯示 |
 
-已經有內容的欄位不會因為換類型而被藏起來；清空後游標離開，才依目前的類型隱藏。記錄框按右鍵「移到追蹤」可把選取的文字搬到追蹤。舊版病歷會自動轉換：individual、group 變成該模式的 Direct Therapy Time，consult、collaboration、make up 變成 Individual 的同名類型。第一次開啟新版時，記錄裡以 `Follow-up:`、`* **Follow-up:**`、`F/U:`、`追蹤：`、`Plan:`、`Next session`、`下次` 等開頭的段落會列成清單，勾選後才搬到追蹤（之後可從 TheraNote 選單「重新檢查 Follow-up…」再做一次）。
+學生模式的病歷卡片（地點旁）和日曆模式的清單（名字右側）都會顯示這份病歷的模式＋服務類型，例如 `Individual - Direct Therapy Time`。已經有內容的欄位不會因為換類型而被藏起來；清空後游標離開，才依目前的類型隱藏。記錄框按右鍵「移到追蹤」可把選取的文字搬到追蹤。舊版病歷會自動轉換：individual、group 變成該模式的 Direct Therapy Time，consult、collaboration、make up 變成 Individual 的同名類型。第一次開啟新版時，記錄裡以 `Follow-up:`、`* **Follow-up:**`、`F/U:`、`追蹤：`、`Plan:`、`Next session`、`下次` 等開頭的段落會列成清單，勾選後才搬到追蹤（之後可從 TheraNote 選單「重新檢查 Follow-up…」再做一次）。
 學生頁姓名旁或病歷上方的「基本資訊」可填地點、Diagnosis、Age、Grade、Classroom、Case manager、MA billing（勾選表示這位學生的治療走 MA billing）、IEP/504 Date（預設 IEP，勾選 504 則匯出 504 Date）、School year 與 Goals（一個目標一列，可自行新增或移除），匯出時自動填入表頭。每份計畫另有 Frequency（每月治療分鐘數，以 30 分鐘為單位選，匯出成 `30 mins/month`）。IEP/504 快到期時按「＋ 新的計畫」填入新的日期、Frequency 與目標，舊的計畫連同目標都會保留，可從下拉選單切換顯示；每份病歷依它的日期使用當時有效的計畫目標。
 
 ```bash
