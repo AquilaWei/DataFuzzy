@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml/badge.svg)](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/AquilaWei/DataFuzzy/graph/badge.svg)](https://codecov.io/gh/AquilaWei/DataFuzzy)
-![Version](https://img.shields.io/badge/version-0.7.0.37.2-blue)
+![Version](https://img.shields.io/badge/version-0.7.0.37.3-blue)
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
@@ -51,6 +51,17 @@ uv run theranote
 - **學生姓名**：新增學生時分成「名」（必填）和「姓」（選填，用來區分同名的學生）。
   匯出時以名為主換代號，病歷寫「Emma」貼回就是「Emma」，寫全名「Emma Wang」才還原成全名。
   舊學生的姓名整個存在「名」欄，按 ✎ 把姓移到「姓」欄後才會照這個方式處理。
+- **ACE 自動填寫**：側邊欄「ACE 填寫檔」選一週（預設本週一到週日），存成 `TheraNote-ACE-<週一>.json`。
+  再用 Chrome 擴充功能（repo 的 `chrome-extension/`）在 ACE Portal 的 Therapist's Accountability 週表逐格填寫：
+  面板按「填這一格」會打開該學生那天的 Edit Therapist Time 視窗並填好 Direct／Group／Indirect，
+  **由你檢查後自己按 Save Changes**（按 Cancel 會標記為跳過），存好才換下一格。
+  依服務類型填的內容與 `src/datafuzzy/ot/ace_mapping.py` 一致：Direct Therapy Time／Make-Up 填分鐘、時間、
+  Comments on Log（英文追蹤）、Data Towards Goals（英文記錄）、Underlying Deficits，Group 另填 Group（A、B…）與 Group Size；
+  每份病歷加 Documentation 5 分，MA billing 學生的治療再加 MA ACCESS Billing 5 分。
+  Consult、缺英文、缺時間的格子會標「要手動」，不自動填；ACE 那格已有資料、週次不對、名單找不到學生時也會停下。
+  安裝：Chrome 開 `chrome://extensions` → 開啟「開發人員模式」→「載入未封裝項目」→ 選 `chrome-extension/` 資料夾。
+  擴充功能只在 acestudentcare.com 上執行、不連線到其他地方；填寫檔與進度只放在瀏覽器記憶體，關掉 Chrome 就清除。
+  **填寫檔含學生姓名與英文病歷且未加密，填完請刪除。**
 - **資料位置**：macOS 為 `~/Library/Application Support/TheraNote/theranote.db`，
   Linux 為 `~/.local/share/TheraNote/theranote.db`（遵循 `XDG_DATA_HOME`）。
   可用 `THERANOTE_DB=/path/to/charts.db uv run theranote` 指定其他資料庫。

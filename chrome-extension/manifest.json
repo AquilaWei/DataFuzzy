@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "TheraNote ACE Filler",
+  "version": "0.1.0",
+  "description": "Fills ACE Portal time entries from a TheraNote ACE fill-in file, one cell at a time, for you to check and save.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://www.acestudentcare.com/*", "https://acestudentcare.com/*"],
+  "background": {"service_worker": "background.js"},
+  "content_scripts": [
+    {
+      "matches": ["https://www.acestudentcare.com/*", "https://acestudentcare.com/*"],
+      "js": ["page.js"],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.acestudentcare.com/*", "https://acestudentcare.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
