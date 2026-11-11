@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.6] - 2026-11-11
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 基本資料的 Grade 改成下拉選單（Pre-School、K、1–12）。舊資料依內容自動對應，例如 `Pre-K` → Pre-School、`Kindergarten` → K、`3rd` → 3；認不出的保留原文。
+- Grade 是 Pre-School 的學生，Individual 多一個服務類型 No-Show；ACE 填寫時放在 Direct Time，分鐘數是結束減開始，另加 Documentation 5 分。
+
+### 變更
+- ACE 填寫：Collaboration、Home Program、IEP Meeting/Meeting、Progress Report、Scheduling 不再加 Documentation 5 分。同一位學生同一天有兩份病歷時，其他類型仍各加一份 Documentation。
+
 ## [0.7.0.37.5] - 2026-11-11
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
