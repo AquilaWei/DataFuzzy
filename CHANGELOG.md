@@ -3,6 +3,22 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.1] - 2026-11-11
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 病歷在時間下方選模式（Individual／Group）和 ACE 的服務類型；Group 只列出兩種模式共有的 12 項。下方欄位依類型顯示：Direct Therapy Time、Make-Up 是完整版本，Evaluation 這一類和 Collaboration 只有中英文記錄，其他類型不顯示。
+- 中英文病歷各分成「記錄」與「追蹤」兩格，記錄框右鍵可「移到追蹤」。
+- 新增 Underlying deficit 下拉（Visual Motor Coordination、Sensory Processing），只在 Direct Therapy Time、Make-Up 時顯示。
+- 匯出翻譯時記錄與追蹤之間加一行 `--- FOLLOW-UP ---`，貼回時依它拆回兩格；Excel 交接表的 Comment 欄仍是一格，追蹤以 `* **Follow-up:**` 接在記錄後面。
+
+### 變更
+- 舊病歷自動轉換：individual、group 變成該模式的 Direct Therapy Time，consult、collaboration、make up 變成 Individual 的同名類型；舊病歷的 Underlying deficit 視為 Visual Motor Coordination。
+- 第一次開啟時列出記錄裡找到 follow-up 的舊病歷，勾選後才搬到追蹤；之後可從 TheraNote 選單「重新檢查 Follow-up…」再做一次。
+- Excel 交接表的 Session Type 欄改填「模式＋服務類型」，例如 `Individual - Direct Therapy Time`。
+- 沒有記錄也沒有追蹤的病歷不再匯出給翻譯。
+
 ## [0.7.0.37.0] - 2026-11-07
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
