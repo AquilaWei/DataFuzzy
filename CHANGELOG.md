@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.2] - 2026-11-11
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 學生模式的病歷卡片與日曆模式的病歷清單，會顯示每份病歷的模式＋服務類型（例如 `Group - Make-Up`）。
+
 ## [0.7.0.37.1] - 2026-11-11
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
