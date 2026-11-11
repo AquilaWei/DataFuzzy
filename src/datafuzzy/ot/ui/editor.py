@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..db import RecordStore, default_end_time
+from ..db import PRESCHOOL, RecordStore, default_end_time
 from ..followup import excel_comment
 from .cards import TIME_CHOICES, date_label, normal_time, time_label
 from .compare_panel import ComparePanel, candidate_label, compare_candidates
@@ -71,7 +71,8 @@ class RecordEditor(QWidget):
         self.compare: ComparePanel | None = None
         self.visit_date = record.visit_date
         self._dirty: set[str] = set()
-        self.session = SessionPicker(record.session_mode, record.session_type)
+        self.session = SessionPicker(record.session_mode, record.session_type,
+                                     store.get_profile(record.student_id).grade == PRESCHOOL)
         self.deficit = DeficitPicker(record.deficit)
         # The goals of the plan in effect on the visit's day; show_profile follows later edits
         # of them, keeping the scores typed so far.
@@ -327,6 +328,7 @@ class RecordEditor(QWidget):
         self.student_name = self.store.get_student(self.student_id).name
         profile = self.store.get_profile(self.student_id)
         self.scores.set_goals(profile.plan_on(self.visit_date).goals)
+        self.session.set_preschool(profile.grade == PRESCHOOL)
         self.profile.show_profile(self.student_name,
                                   replace(profile, location=self.store.student_location(self.student_id)),
                                   self.visit_date)

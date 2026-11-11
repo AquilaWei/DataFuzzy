@@ -1092,3 +1092,37 @@ def test_each_plan_keeps_its_frequency(store):
     store.set_profile(student.id, StudentProfile().with_plans(
         [Plan(False, "10/29/2025", frequency=30), Plan(False, "10/29/2026", frequency=60)]))
     assert [p.frequency for p in store.get_profile(student.id).plans] == [30, 60]
+
+
+@pytest.mark.parametrize(("typed", "grade"), [
+    ("Pre-K", "Pre-School"), ("preschool", "Pre-School"), ("PK", "Pre-School"), ("K", "K"),
+    ("Kindergarten", "K"), ("3rd", "3"), ("Grade 10", "10"), ("12", "12"), ("3年級", "3"), ("", ""),
+])
+def test_an_older_grade_reads_as_the_grade_it_names(typed, grade):
+    from datafuzzy.ot.db import grade_choice
+
+    assert grade_choice(typed) == grade
+
+
+def test_an_older_grade_that_names_no_grade_is_kept():
+    from datafuzzy.ot.db import grade_choice
+
+    assert grade_choice("Senior") == "Senior"
+
+
+def test_a_profile_saved_with_a_typed_grade_reads_back_converted(store):
+    student = store.add_student("王小明")
+    store.set_profile(student.id, StudentProfile(grade="2nd grade"))
+    assert store.get_profile(student.id).grade == "2"
+
+
+def test_an_individual_session_can_be_a_no_show(store):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, date(2026, 10, 1), session_type="No-Show")
+    assert store.get_record(record.id).session_type == "No-Show"
+
+
+def test_a_group_session_cannot_be_a_no_show(store):
+    student = store.add_student("王小明")
+    with pytest.raises(ValueError):
+        store.add_record(student.id, date(2026, 10, 1), session_mode="group", session_type="No-Show")

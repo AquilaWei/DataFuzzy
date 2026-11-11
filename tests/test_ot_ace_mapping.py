@@ -56,12 +56,31 @@ def test_a_group_absence_goes_under_group_time():
 
 def test_collaboration_is_indirect_with_its_comments():
     rows = ace_rows(chart(session_type="Collaboration", mode="group"), ma_billing=False)
-    assert rows == [AceRow("indirect", "Collaboration", 30, comments_on_log="Comments."), DOCUMENTATION]
+    assert rows == [AceRow("indirect", "Collaboration", 30, comments_on_log="Comments.")]
 
 
 def test_scheduling_is_indirect_without_comments():
     rows = ace_rows(chart(session_type="Scheduling", start="10:00", end="10:15"), ma_billing=False)
-    assert rows == [AceRow("indirect", "Scheduling", 15), DOCUMENTATION]
+    assert rows == [AceRow("indirect", "Scheduling", 15)]
+
+
+def test_home_program_takes_no_documentation():
+    assert ace_rows(chart(session_type="Home Program"), ma_billing=True) == [AceRow("indirect", "Home Program", 30)]
+
+
+def test_an_iep_meeting_takes_no_documentation():
+    rows = ace_rows(chart(session_type="IEP Meeting/Meeting"), ma_billing=False)
+    assert rows == [AceRow("indirect", "IEP Meeting/Meeting", 30)]
+
+
+def test_a_progress_report_takes_no_documentation():
+    rows = ace_rows(chart(session_type="Progress Report"), ma_billing=False)
+    assert rows == [AceRow("indirect", "Progress Report", 30)]
+
+
+def test_a_no_show_takes_its_minutes_and_documentation():
+    rows = ace_rows(chart(session_type="No-Show"), ma_billing=True)
+    assert rows == [AceRow("direct", "No Show", 30), DOCUMENTATION]  # as ACE spells it
 
 
 def test_consult_is_left_to_be_entered_by_hand():

@@ -93,9 +93,12 @@
     return until(() => entryRows(section).find((r) => !before.includes(r)), `a new ${SECTIONS[section]} Time row`);
   }
 
+  // Letters and digits only, so "No-Show" finds ACE's "No Show".
+  const key = (text) => norm(text).replace(/[^a-z0-9]/g, "");
+
   function pick(combo, display, label) {
     const field = combo.displayField;
-    const index = combo.store.findBy((r) => norm(r.get(field)) === norm(display));
+    const index = combo.store.findBy((r) => key(r.get(field)) === key(display));
     if (index < 0) throw new Error(`${label} has no choice "${display}"`);
     const record = combo.store.getAt(index);
     combo.setValue(record.get(combo.valueField));

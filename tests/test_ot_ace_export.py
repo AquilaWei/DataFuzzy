@@ -47,7 +47,15 @@ def test_two_charts_of_one_student_on_one_day_share_a_cell(store):
     therapy(store, todd)
     therapy(store, todd, session_type="Scheduling", start_time="15:00", end_time="15:10")
     [cell] = week(store)
-    assert [row.type for row in cell.rows] == ["Direct Therapy Time", "Documentation", "Scheduling", "Documentation"]
+    assert [row.type for row in cell.rows] == ["Direct Therapy Time", "Documentation", "Scheduling"]
+
+
+def test_two_therapy_charts_on_one_day_log_documentation_twice(store):
+    todd = store.add_student("Todd", "Lane").id
+    therapy(store, todd)
+    therapy(store, todd, start_time="15:00", end_time="15:30")
+    [cell] = week(store)
+    assert [row.type for row in cell.rows].count("Documentation") == 2
 
 
 def test_one_student_on_two_days_has_two_cells(store):
@@ -105,6 +113,11 @@ def test_a_therapy_chart_without_times_is_a_problem(store):
 def test_an_absence_needs_no_times(store):
     therapy(store, store.add_student("Todd", "Lane").id, session_type="Absent Student", start_time="", end_time="")
     assert week(store)[0].problems == []
+
+
+def test_a_no_show_without_times_is_a_problem(store):
+    therapy(store, store.add_student("Todd", "Lane").id, session_type="No-Show", start_time="", end_time="")
+    assert week(store)[0].problems == [NO_TIMES]
 
 
 def test_a_group_absence_without_a_start_time_has_no_group(store):

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml/badge.svg)](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/AquilaWei/DataFuzzy/graph/badge.svg)](https://codecov.io/gh/AquilaWei/DataFuzzy)
-![Version](https://img.shields.io/badge/version-0.7.0.37.5-blue)
+![Version](https://img.shields.io/badge/version-0.7.0.37.6-blue)
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
@@ -23,7 +23,7 @@
 在病歷卡片或日期清單上按右鍵可刪除病歷（警告視窗預設是「取消」，要按「刪除」才會刪掉），日期清單的右鍵選單也能「複製英文病歷」；在學生名單上按右鍵可刪除學生與其所有病歷（都會先警告，無法復原）。學生姓名、病歷日期填錯時，按旁邊的 ✎ 修改。點兩下「中文」或「English」分頁可複製該語言的記錄與追蹤。編輯病歷時按「對照其他病歷」，可從最近的上一次往前挑一份同一位學生的病歷，並排顯示在右邊；學生基本資訊仍留在最上方，兩份病歷的日期、時間、活動與內容逐列對齊。同一位學生同一天可以有多份病歷（例如上午、下午各一次）。按「預約下次治療」會新增七天後同一時段的病歷（例如這週一 10:00 → 下週一 10:00，沿用模式與服務類型），並和原本那份左右對照；重複按不會多出第二份。下拉選單和日期欄只能點擊修改，滑鼠滾輪滑過時會捲動頁面，不會誤改選項。
 **Excel 匯出**有兩種模式。**交接模式**依學校表單格式產生檔案：選日期區間後，用「地點 → 學生」下拉選單把要匯出的學生加入名單（或「加入此地點全部」），
 每位學生一個檔案（`姓名-開始日期至結束日期.xlsx`），只含所選地點的病歷，每次一列：日期、時段（如 9:30-10:00）、Session Type（模式＋服務類型，如 `Individual - Direct Therapy Time`）、活動、Comment（英文記錄；有追蹤時空一行接 `* **Follow-up:** …`），以及每個目標一欄的分數（Goal 1、Goal 2…，欄數依學生的目標數量增減；從 met、not met、not addressed 選一個，沒選的顯示 --）。期間內跨了新的 IEP/504 日期或新學年時，同一個檔案會分成多個頁籤，各用當時的計畫日期與目標，頁籤名稱如 `2026-2027_IEP 10∕29∕26`。**Progress Report 模式**選一個日期，產生 `Progress Report-日期.xlsx`：每個地點（依基本資訊的地點）一個分頁，列出所有啟用中學生在那天有效計畫的每個 goal（Name、Goal、Progress 三欄，有三個 goal 就三列，名字合併成一格），Progress 欄先填入 goal 原文方便直接修改。匯出資料夾設定一次即會記住。
-每份病歷在時間下方選 **模式**（Individual 對應 ACE 的 Direct Time、Group 對應 Group Time）和 **服務類型**（ACE 的名稱，預設 Direct Therapy Time）。兩種模式都有 Absent Student、Direct Therapy Time、Make-Up、School Not in Session、Therapist Absent、Unavailable Student、Consult、Collaboration、Home Program、IEP Meeting/Meeting、Progress Report、Scheduling；只有 Individual 有 Annual IEP Report、Evaluation、Re-Evaluation、Screen、Student Observation。下方顯示哪些欄位依服務類型而定：
+每份病歷在時間下方選 **模式**（Individual 對應 ACE 的 Direct Time、Group 對應 Group Time）和 **服務類型**（ACE 的名稱，預設 Direct Therapy Time）。兩種模式都有 Absent Student、Direct Therapy Time、Make-Up、School Not in Session、Therapist Absent、Unavailable Student、Consult、Collaboration、Home Program、IEP Meeting/Meeting、Progress Report、Scheduling；只有 Individual 有 Annual IEP Report、Evaluation、Re-Evaluation、Screen、Student Observation；Grade 是 Pre-School 的學生，Individual 另有 No-Show（之後 Grade 改了，已經是 No-Show 的病歷仍保留）。下方顯示哪些欄位依服務類型而定：
 
 | 服務類型 | 下方顯示 |
 |---|---|
@@ -32,7 +32,7 @@
 | 其他 | 不顯示 |
 
 學生模式的病歷卡片（地點旁）和日曆模式的清單（名字右側）都會顯示這份病歷的模式＋服務類型，例如 `Individual - Direct Therapy Time`。已經有內容的欄位不會因為換類型而被藏起來；清空後游標離開，才依目前的類型隱藏。記錄框按右鍵「移到追蹤」可把選取的文字搬到追蹤。舊版病歷會自動轉換：individual、group 變成該模式的 Direct Therapy Time，consult、collaboration、make up 變成 Individual 的同名類型。第一次開啟新版時，記錄裡以 `Follow-up:`、`* **Follow-up:**`、`F/U:`、`追蹤：`、`Plan:`、`Next session`、`下次` 等開頭的段落會列成清單，勾選後才搬到追蹤（之後可從 TheraNote 選單「重新檢查 Follow-up…」再做一次）。
-學生頁姓名旁或病歷上方的「基本資訊」可填地點、Diagnosis、Age、Grade、Classroom、Case manager、MA billing（勾選表示這位學生的治療走 MA billing）、IEP/504 Date（預設 IEP，勾選 504 則匯出 504 Date）、School year 與 Goals（一個目標一列，可自行新增或移除），匯出時自動填入表頭。每份計畫另有 Frequency（每月治療分鐘數，以 30 分鐘為單位選，匯出成 `30 mins/month`）。IEP/504 快到期時按「＋ 新的計畫」填入新的日期、Frequency 與目標，舊的計畫連同目標都會保留，可從下拉選單切換顯示；每份病歷依它的日期使用當時有效的計畫目標。
+學生頁姓名旁或病歷上方的「基本資訊」可填地點、Diagnosis、Age、Grade（下拉選 Pre-School、K、1–12；舊資料依內容自動對應，例如 `Pre-K` → Pre-School、`3rd` → 3，認不出的保留原文）、Classroom、Case manager、MA billing（勾選表示這位學生的治療走 MA billing）、IEP/504 Date（預設 IEP，勾選 504 則匯出 504 Date）、School year 與 Goals（一個目標一列，可自行新增或移除），匯出時自動填入表頭。每份計畫另有 Frequency（每月治療分鐘數，以 30 分鐘為單位選，匯出成 `30 mins/month`）。IEP/504 快到期時按「＋ 新的計畫」填入新的日期、Frequency 與目標，舊的計畫連同目標都會保留，可從下拉選單切換顯示；每份病歷依它的日期使用當時有效的計畫目標。
 
 ```bash
 uv sync
@@ -57,7 +57,9 @@ uv run theranote
   **由你檢查後自己按 Save Changes**（按 Cancel 會標記為跳過），存好才換下一格。
   依服務類型填的內容與 `src/datafuzzy/ot/ace_mapping.py` 一致：Direct Therapy Time／Make-Up 填分鐘、時間、
   Comments on Log（英文追蹤）、Data Towards Goals（英文記錄）、Underlying Deficits，Group 另填 Group（A、B…）與 Group Size；
-  每份病歷加 Documentation 5 分，MA billing 學生的治療再加 MA ACCESS Billing 5 分。
+  Collaboration、Home Program、IEP Meeting/Meeting、Progress Report、Scheduling 只填 Indirect 該類型一列（分鐘數＝結束減開始），不加 Documentation；
+  其他類型每份病歷加 Documentation 5 分（同一天兩份病歷就兩列），MA billing 學生的治療再加 MA ACCESS Billing 5 分。
+  No-Show 填在 Direct Time（ACE 名稱 `No Show`），分鐘數＝結束減開始。
   Consult、缺英文、缺時間的格子會標「要手動」，不自動填；ACE 那格已有資料、週次不對、名單找不到學生時也會停下。
   安裝：Chrome 開 `chrome://extensions` → 開啟「開發人員模式」→「載入未封裝項目」→ 選 `chrome-extension/` 資料夾
   （Chrome 直接使用這個資料夾，請勿搬動；更新後在 `chrome://extensions` 按重新載入）。擴充功能的圖示和版本號與 TheraNote 相同。

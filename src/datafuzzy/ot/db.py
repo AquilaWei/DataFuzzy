@@ -288,7 +288,7 @@ class StudentProfile:
     `school_year` reads like "09/2026-06/2027"."""
     diagnosis: str = ""
     age: str = ""
-    grade: str = ""
+    grade: str = ""  # one of GRADES, or "" (or an older grade grade_choice could not read)
     classroom: str = ""
     case_manager: str = ""
     ma_billing: bool = False  # the student's sessions are billed to Medical Assistance
@@ -369,6 +369,7 @@ COMMON_TYPES = ("Absent Student", DIRECT_THERAPY, "Make-Up", "School Not in Sess
                 "Unavailable Student", "Consult", "Collaboration", "Home Program", "IEP Meeting/Meeting",
                 "Progress Report", "Scheduling")
 INDIVIDUAL_ONLY_TYPES = ("Annual IEP Report", "Evaluation", "Re-Evaluation", "Screen", "Student Observation")
+NO_SHOW = "No-Show"  # individual sessions of pre-school students only
 DEFAULT_SESSION_TYPE = DIRECT_THERAPY
 # What the chart asks for below the times: everything (goal scores, activities, comments and a
 # follow-up, the deficit) for a therapy session; only the comments for these; nothing otherwise.
@@ -380,11 +381,36 @@ DEFICITS = ("Visual Motor Coordination", "Sensory Processing")
 DEFAULT_DEFICIT = DEFICITS[0]
 
 
-def types_for(mode: str) -> tuple[str, ...]:
-    """The service types a chart of `mode` can have. Raises ValueError for an unknown mode."""
+def types_for(mode: str, preschool: bool = False) -> tuple[str, ...]:
+    """The service types a chart of `mode` can have; an individual one of a `preschool` student
+    also No-Show. Raises ValueError for an unknown mode."""
     if mode not in SESSION_MODES:
         raise ValueError(f"unknown session mode {mode!r}")
-    return COMMON_TYPES + INDIVIDUAL_ONLY_TYPES if mode == "individual" else COMMON_TYPES
+    if mode == "group":
+        return COMMON_TYPES
+    return COMMON_TYPES + INDIVIDUAL_ONLY_TYPES + ((NO_SHOW,) if preschool else ())
+
+
+PRESCHOOL = "Pre-School"
+GRADES = (PRESCHOOL, "K", *(str(n) for n in range(1, 13)))  # the grades a student can be in
+_PRESCHOOL_RE = re.compile(r"pre|\bp-?k\b|幼", re.IGNORECASE)
+_KINDERGARTEN_RE = re.compile(r"^\s*(k|kg|kinder(garten)?)\s*$|幼稚園大班", re.IGNORECASE)
+_GRADE_NUMBER_RE = re.compile(r"(?<!\d)(1[0-2]|[1-9])(?!\d)")
+
+
+def grade_choice(text: str) -> str:
+    """`text` (a grade typed in before they were picked from GRADES) as one of GRADES:
+    "Pre-K" -> "Pre-School", "Kindergarten" -> "K", "3rd" or "Grade 3" -> "3". Blank stays
+    blank, and anything else is kept as it is, so nothing typed is lost."""
+    text = text.strip()
+    if not text or text in GRADES:
+        return text
+    if _KINDERGARTEN_RE.search(text):
+        return "K"
+    if _PRESCHOOL_RE.search(text):
+        return PRESCHOOL
+    number = _GRADE_NUMBER_RE.search(text)
+    return number[1] if number else text
 
 
 def session_label(mode: str, session_type: str) -> str:
@@ -426,7 +452,7 @@ CHART_TEXT_FIELDS = ("zh_text", "zh_followup", "en_text", "en_followup")
 
 
 def _check_session(mode: str, session_type: str, deficit: str) -> None:
-    if session_type not in types_for(mode):
+    if session_type not in types_for(mode, preschool=True):  # whether to offer No-Show is the screen's to say
         raise ValueError(f"service type {session_type!r} is not for a {mode} session")
     if deficit not in DEFICITS:
         raise ValueError(f"unknown deficit {deficit!r}")
@@ -557,6 +583,8 @@ class RecordStore:
         goals = split_goals(goals) if isinstance(goals, str) else tuple(goals)
         past = tuple(Plan(p["plan_504"], p["plan_date"], tuple(p["goals"]), p.get("frequency", 0))
                      for p in fields.pop("past_plans", []))  # none before plans were kept; no frequency before it was asked
+        # Typed in before it was picked from GRADES: read as the grade it names; stored so on the next save.
+        fields["grade"] = grade_choice(fields.get("grade", ""))
         return StudentProfile(**fields, goals=goals, sessions=sessions, past_plans=past)
 
     def set_profile(self, student_id: int, profile: StudentProfile) -> None:

@@ -546,3 +546,38 @@ def test_compared_chart_names_its_scores_by_its_own_plan(qtbot, store, record):
     editor = make_editor(qtbot, store, record)
     editor.show_compare(other.id)
     assert len(editor.compare.scores.boxes) == 2
+
+
+def type_choices(editor):
+    return [editor.session.type_box.itemText(i) for i in range(editor.session.type_box.count())]
+
+
+def test_a_pre_school_student_s_chart_offers_a_no_show(qtbot, store, record):
+    store.set_profile(record.student_id, StudentProfile(grade="Pre-School"))
+    assert "No-Show" in type_choices(make_editor(qtbot, store, record))
+
+
+def test_an_older_student_s_chart_offers_no_no_show(qtbot, store, record):
+    store.set_profile(record.student_id, StudentProfile(grade="3"))
+    assert "No-Show" not in type_choices(make_editor(qtbot, store, record))
+
+
+def test_a_group_session_of_a_pre_school_student_offers_no_no_show(qtbot, store, record):
+    store.set_profile(record.student_id, StudentProfile(grade="Pre-School"))
+    editor = make_editor(qtbot, store, record)
+    editor.session.set_mode("group")
+    editor.flush()  # the switch is saved now, not after the store is closed
+    assert "No-Show" not in type_choices(editor)
+
+
+def test_a_no_show_stays_after_the_student_leaves_pre_school(qtbot, store, record):
+    store.update_record(record.id, session_type="No-Show")
+    store.set_profile(record.student_id, StudentProfile(grade="K"))
+    assert make_editor(qtbot, store, record).session.session_type() == "No-Show"
+
+
+def test_editing_the_grade_to_pre_school_offers_a_no_show(qtbot, store, record):
+    editor = make_editor(qtbot, store, record)
+    store.set_profile(record.student_id, StudentProfile(grade="Pre-School"))
+    editor.show_profile()
+    assert "No-Show" in type_choices(editor)

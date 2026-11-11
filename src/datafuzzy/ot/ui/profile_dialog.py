@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 from ..db import (
     FREQUENCY_MAX,
     FREQUENCY_STEP,
+    GRADES,
     Plan,
     Session,
     StudentProfile,
@@ -411,7 +412,11 @@ class StudentProfileDialog(QDialog):
         self.diagnosis = QLineEdit(profile.diagnosis)
         self.diagnosis.setPlaceholderText("ADHD, ODD")
         self.age = QLineEdit(profile.age)
-        self.grade = QLineEdit(profile.grade)
+        self.grade = QComboBox()
+        self.grade.addItems(["", *GRADES])
+        if profile.grade not in GRADES and profile.grade:  # an older grade grade_choice could not read: kept
+            self.grade.addItem(profile.grade)
+        self.grade.setCurrentText(profile.grade)
         self.classroom = QLineEdit(profile.classroom)
         self.case_manager = QLineEdit(profile.case_manager)
         self.ma_billing = QCheckBox()
@@ -476,7 +481,7 @@ class StudentProfileDialog(QDialog):
     def profile(self) -> StudentProfile:
         start, end = (e.date() for e in (self.year_from, self.year_to))
         return StudentProfile(
-            diagnosis=self.diagnosis.text(), age=self.age.text(), grade=self.grade.text(),
+            diagnosis=self.diagnosis.text(), age=self.age.text(), grade=self.grade.currentText(),
             classroom=self.classroom.text(), case_manager=self.case_manager.text(),
             ma_billing=self.ma_billing.isChecked(),
             school_year=format_school_year(date(start.year(), start.month(), 1),

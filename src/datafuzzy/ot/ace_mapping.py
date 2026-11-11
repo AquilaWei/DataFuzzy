@@ -9,16 +9,18 @@ from dataclasses import dataclass
 from string import ascii_uppercase
 from typing import Literal
 
-from .db import COMMENT_TYPES, FULL_TYPES, Record
+from .db import COMMENT_TYPES, FULL_TYPES, NO_SHOW, Record
 
-DOCUMENTATION_MINUTES = 5  # every chart's Documentation (Indirect Time)
+DOCUMENTATION_MINUTES = 5  # every chart's Documentation (Indirect Time), save the Indirect-only types
 MA_BILLING_MINUTES = 5  # a therapy session's MA ACCESS Billing, for a student billed to MA
-# Types ACE keeps under Indirect Time only, whichever the mode.
+# Types ACE keeps under Indirect Time only, whichever the mode; they take no Documentation.
 INDIRECT_TYPES = frozenset({"Collaboration", "Home Program", "IEP Meeting/Meeting", "Progress Report", "Scheduling"})
 # Types with no ACE counterpart: left for the user to enter by hand.
 UNMAPPED_TYPES = frozenset({"Consult"})
-# Of the types ACE asks no time for, the one that still takes minutes.
-TIMED_WITHOUT_TIMES = frozenset({"Annual IEP Report"})
+# TheraNote's names that ACE's drop-down spells otherwise.
+ACE_NAMES = {NO_SHOW: "No Show"}
+# Of the types ACE asks no time for, those that still take minutes.
+TIMED_WITHOUT_TIMES = frozenset({"Annual IEP Report", NO_SHOW})
 
 
 @dataclass(frozen=True)
@@ -80,7 +82,7 @@ def ace_rows(record: Record, ma_billing: bool, group: tuple[str, int] = ("", 0))
     documentation = AceRow("indirect", "Documentation", DOCUMENTATION_MINUTES)
     if kind in INDIRECT_TYPES:
         comments = record.en_text if kind in COMMENT_TYPES else ""
-        return [AceRow("indirect", kind, minutes, comments_on_log=comments), documentation]
+        return [AceRow("indirect", kind, minutes, comments_on_log=comments)]
     section = "group" if record.session_mode == "group" else "direct"
     name, size = group if section == "group" else ("", 0)
     if kind in FULL_TYPES:
@@ -91,6 +93,7 @@ def ace_rows(record: Record, ma_billing: bool, group: tuple[str, int] = ("", 0))
         return [main, documentation, *billing]
     if kind in COMMENT_TYPES:
         main = AceRow(section, kind, minutes, comments_on_log=record.en_text, group=name, group_size=size)
-    else:  # Absent Student, School Not in Session, …: no time, save for an Annual IEP Report's minutes
-        main = AceRow(section, kind, minutes if kind in TIMED_WITHOUT_TIMES else None, group=name, group_size=size)
+    else:  # Absent Student, School Not in Session, …: no time, save for the minutes of TIMED_WITHOUT_TIMES
+        main = AceRow(section, ACE_NAMES.get(kind, kind), minutes if kind in TIMED_WITHOUT_TIMES else None,
+                      group=name, group_size=size)
     return [main, documentation]

@@ -54,13 +54,16 @@ def shown_parts(record: Record) -> set[str]:
 
 class SessionPicker(QWidget):
     """The session's mode (Individual or Group) and its service type, whose choices follow the
-    mode (see types_for): a type the new mode does not have falls back to Direct Therapy Time."""
+    mode (see types_for): a type the new mode does not have falls back to Direct Therapy Time.
+    No-Show is offered for a `preschool` student, and kept for a chart that has it even when the
+    student is no longer one, so a later grade never changes a chart's type."""
 
     changed = Signal()  # the mode or the type was changed by hand
 
     def __init__(self, mode: str = DEFAULT_SESSION_MODE, session_type: str = DEFAULT_SESSION_TYPE,
-                 parent: QWidget | None = None) -> None:
+                 preschool: bool = False, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.preschool = preschool
         self.mode_control = SegmentedControl(list(MODE_LABELS))
         self.mode_control.set_index(SESSION_MODES.index(mode))
         self.type_box = QComboBox()
@@ -76,15 +79,23 @@ class SessionPicker(QWidget):
         self.type_box.currentIndexChanged.connect(self.changed)
 
     def _fill_types(self, mode: str, session_type: str) -> None:
+        choices = list(types_for(mode, self.preschool))
+        if session_type not in choices and session_type in types_for(mode, preschool=True):
+            choices.append(session_type)  # No-Show of a student no longer in pre-school
         self.type_box.blockSignals(True)  # refilling is not a pick
         self.type_box.clear()
-        self.type_box.addItems(types_for(mode))
-        self.type_box.setCurrentText(session_type if session_type in types_for(mode) else DIRECT_THERAPY)
+        self.type_box.addItems(choices)
+        self.type_box.setCurrentText(session_type if session_type in choices else DIRECT_THERAPY)
         self.type_box.blockSignals(False)
 
     def _mode_changed(self) -> None:
         self._fill_types(self.mode(), self.session_type())
         self.changed.emit()
+
+    def set_preschool(self, preschool: bool) -> None:
+        """Offer No-Show or not, e.g. after the student's grade was edited; the type stays."""
+        self.preschool = preschool
+        self._fill_types(self.mode(), self.session_type())
 
     def mode(self) -> str:
         return SESSION_MODES[self.mode_control.index()]

@@ -290,3 +290,16 @@ def test_ma_billing_is_ticked_and_shown_in_the_summary(qtbot):
     assert summary.values["ma_billing"].text() == "Yes"
     summary.show_profile("王小明", StudentProfile())
     assert summary.values["ma_billing"].text() == "—"
+
+
+def test_grade_is_picked_from_pre_school_k_and_1_to_12(qtbot):
+    dialog = StudentProfileDialog("王小明", StudentProfile(), today=date(2026, 10, 26))
+    qtbot.addWidget(dialog)
+    choices = [dialog.grade.itemText(i) for i in range(dialog.grade.count())]
+    assert choices == ["", "Pre-School", "K", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]
+
+
+def test_an_older_grade_naming_no_grade_is_kept_as_a_choice(qtbot):
+    dialog = StudentProfileDialog("王小明", StudentProfile(grade="Senior"), today=date(2026, 10, 26))
+    qtbot.addWidget(dialog)
+    assert dialog.profile().grade == "Senior"
