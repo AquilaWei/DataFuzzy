@@ -1,8 +1,14 @@
 {
   "manifest_version": 3,
   "name": "TheraNote ACE Filler",
-  "version": "0.1.0",
+  "version": "0.7.0.37",
+  "version_name": "0.7.0.37.5",
   "description": "Fills ACE Portal time entries from a TheraNote ACE fill-in file, one cell at a time, for you to check and save.",
+  "icons": {"16": "icons/icon-16.png", "32": "icons/icon-32.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png"},
+  "action": {
+    "default_title": "TheraNote → ACE",
+    "default_icon": {"16": "icons/icon-16.png", "32": "icons/icon-32.png", "48": "icons/icon-48.png"}
+  },
   "permissions": ["storage"],
   "host_permissions": ["https://www.acestudentcare.com/*", "https://acestudentcare.com/*"],
   "background": {"service_worker": "background.js"},

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml/badge.svg)](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/AquilaWei/DataFuzzy/graph/badge.svg)](https://codecov.io/gh/AquilaWei/DataFuzzy)
-![Version](https://img.shields.io/badge/version-0.7.0.37.4-blue)
+![Version](https://img.shields.io/badge/version-0.7.0.37.5-blue)
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
@@ -59,7 +59,9 @@ uv run theranote
   Comments on Log（英文追蹤）、Data Towards Goals（英文記錄）、Underlying Deficits，Group 另填 Group（A、B…）與 Group Size；
   每份病歷加 Documentation 5 分，MA billing 學生的治療再加 MA ACCESS Billing 5 分。
   Consult、缺英文、缺時間的格子會標「要手動」，不自動填；ACE 那格已有資料、週次不對、名單找不到學生時也會停下。
-  安裝：Chrome 開 `chrome://extensions` → 開啟「開發人員模式」→「載入未封裝項目」→ 選 `chrome-extension/` 資料夾。
+  安裝：Chrome 開 `chrome://extensions` → 開啟「開發人員模式」→「載入未封裝項目」→ 選 `chrome-extension/` 資料夾
+  （Chrome 直接使用這個資料夾，請勿搬動；更新後在 `chrome://extensions` 按重新載入）。擴充功能的圖示和版本號與 TheraNote 相同。
+  面板平常不顯示，在 ACE 頁面點工具列上的 TheraNote 圖示才打開，再點一次或按 ✕ 關閉。
   擴充功能只在 acestudentcare.com 上執行、不連線到其他地方；填寫檔與進度只放在瀏覽器記憶體，關掉 Chrome 就清除。
   **填寫檔含學生姓名與英文病歷且未加密，填完請刪除。**
 - **資料位置**：macOS 為 `~/Library/Application Support/TheraNote/theranote.db`，

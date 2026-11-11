@@ -1,7 +1,8 @@
-// The panel at the right of ACE Portal: load a TheraNote ACE fill-in file, then fill its cells
-// one at a time. Each fill stops with ACE's own window open for the user to check and save
-// (or cancel); nothing is saved without them. The file and the progress stay in
-// chrome.storage.session, in memory only, until "Clear" or the browser quits.
+// The panel at the right of ACE Portal, shown and hidden by the toolbar button: load a
+// TheraNote ACE fill-in file, then fill its cells one at a time. Each fill stops with ACE's own
+// window open for the user to check and save (or cancel); nothing is saved without them. The
+// file and the progress stay in chrome.storage.session, in memory only, until "Clear" or the
+// browser quits.
 (() => {
   "use strict";
   const FORMAT = "theranote-ace/1";
@@ -71,7 +72,7 @@
   // --- panel -------------------------------------------------------------------------
 
   const host = document.createElement("div");
-  host.style.cssText = "position:fixed;top:120px;right:12px;z-index:2147483000;";
+  host.style.cssText = "position:fixed;top:120px;right:12px;z-index:2147483000;display:none;"; // until the toolbar button
   const root = host.attachShadow({mode: "closed"});
   root.innerHTML = `<style>
     :host{all:initial}
@@ -101,7 +102,7 @@
     .hidden{display:none}
   </style>
   <div class="panel">
-    <header><span>TheraNote → ACE</span><button id="fold" title="收合">▾</button></header>
+    <header><span>TheraNote → ACE</span><button id="close" title="關閉（點工具列的圖示再打開）">✕</button></header>
     <div class="body" id="body">
       <div class="msg" id="msg"></div>
       <div class="actions">
@@ -268,10 +269,10 @@
     await save();
     render();
   });
-  $("fold").addEventListener("click", () => {
-    const body = $("body");
-    body.classList.toggle("hidden");
-    $("fold").textContent = body.classList.contains("hidden") ? "▸" : "▾";
+  const show = (on) => { host.style.display = on ? "block" : "none"; };
+  $("close").addEventListener("click", () => show(false));
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg && msg.theranoteAce === "toggle") show(host.style.display === "none");
   });
 
   document.documentElement.append(host);
