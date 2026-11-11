@@ -1,12 +1,12 @@
 import ast
 import importlib
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
 
 from datafuzzy.core.pipeline import Pipeline
-from datafuzzy.ot.db import RecordStore
+from datafuzzy.ot.db import Record, RecordStore
 from datafuzzy.ot.ui import i18n
 from datafuzzy.ot.ui.cards import date_label, preview_text
 from datafuzzy.ot.ui.i18n import (
@@ -19,6 +19,12 @@ from datafuzzy.ot.ui.i18n import (
 )
 from datafuzzy.ot.ui.main_window import TheraNoteWindow
 from datafuzzy.ot.ui.settings_dialog import SettingsDialog
+
+
+def chart(zh_text: str, en_text: str, **fields) -> Record:
+    """A chart with just the texts a preview reads."""
+    return Record(1, 1, date(2026, 10, 1), "", zh_text, en_text, datetime(2026, 10, 1), **fields)
+
 
 UI = Path(i18n.__file__).parent
 KEY = bytes(range(32))
@@ -76,17 +82,17 @@ def test_an_unknown_language_is_refused():
 
 
 def test_preview_shows_chinese_first_in_chinese():
-    assert preview_text("中文內容", "English text") == "中文內容"
+    assert preview_text(chart("中文內容", "English text")) == "中文內容"
 
 
 def test_preview_shows_english_first_in_english():
     set_language("en")
-    assert preview_text("中文內容", "English text") == "English text"
+    assert preview_text(chart("中文內容", "English text")) == "English text"
 
 
 def test_preview_in_english_falls_back_to_chinese_without_an_english_version():
     set_language("en")
-    assert preview_text("中文內容", "") == "中文內容"
+    assert preview_text(chart("中文內容", "")) == "中文內容"
 
 
 def test_weekday_follows_the_language():

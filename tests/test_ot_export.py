@@ -25,7 +25,7 @@ def test_export_wraps_each_record_in_a_header_with_id_code_and_date(store, pipel
     student = store.add_student("王小明")
     store.add_record(student.id, date(2026, 10, 1), zh_text="今天王小明在教室練習剪紙")
     result = export_range(store, date(2026, 10, 1), date(2026, 10, 1), pipeline)
-    assert result.text == "=== REC-1 | [PERSON_A] | 2026-10-01 ===\n今天[PERSON_A]在教室練習剪紙\n"
+    assert result.text == "=== REC-1 | [PERSON_A] | 2026-10-01 ===\n今天[PERSON_A]在教室練習剪紙\n--- FOLLOW-UP ---\n"
 
 
 def test_students_name_is_masked_without_any_model(store, pipeline):
@@ -47,7 +47,7 @@ def test_header_carries_the_given_names_code(store, pipeline):
     student = store.add_student("Emma", "Wang")
     store.add_record(student.id, date(2026, 10, 1), zh_text="Emma 剪紙")
     result = export_range(store, date(2026, 10, 1), date(2026, 10, 1), pipeline)
-    assert result.text == "=== REC-1 | [PERSON_A] | 2026-10-01 ===\n[PERSON_A] 剪紙\n"
+    assert result.text == "=== REC-1 | [PERSON_A] | 2026-10-01 ===\n[PERSON_A] 剪紙\n--- FOLLOW-UP ---\n"
 
 
 def test_family_name_in_the_full_name_is_masked(store, pipeline):
@@ -105,7 +105,7 @@ def test_codes_follow_record_order_even_when_other_students_are_marked(store, pi
     store.add_student("陳美玲")
     store.add_record(a.id, date(2026, 10, 1), zh_text="王小明剪紙")
     result = export_range(store, date(2026, 10, 1), date(2026, 10, 1), pipeline)
-    assert result.text == "=== REC-1 | [PERSON_A] | 2026-10-01 ===\n[PERSON_A]剪紙\n"
+    assert result.text == "=== REC-1 | [PERSON_A] | 2026-10-01 ===\n[PERSON_A]剪紙\n--- FOLLOW-UP ---\n"
 
 
 def test_only_records_in_range_are_exported_oldest_first(store, pipeline):
@@ -115,8 +115,8 @@ def test_only_records_in_range_are_exported_oldest_first(store, pipeline):
     store.add_record(student.id, date(2026, 10, 5), zh_text="第二")
     result = export_range(store, date(2026, 10, 1), date(2026, 10, 5), pipeline)
     assert result.text == (
-        "=== REC-2 | [PERSON_A] | 2026-10-01 ===\n第一\n\n"
-        "=== REC-3 | [PERSON_A] | 2026-10-05 ===\n第二\n"
+        "=== REC-2 | [PERSON_A] | 2026-10-01 ===\n第一\n--- FOLLOW-UP ---\n\n"
+        "=== REC-3 | [PERSON_A] | 2026-10-05 ===\n第二\n--- FOLLOW-UP ---\n"
     )
 
 
@@ -155,3 +155,16 @@ def test_activity_is_not_exported(store, pipeline):
     store.add_record(student.id, date(2026, 10, 1), zh_text="剪紙", activity="感覺統合鞦韆")
     result = export_range(store, date(2026, 10, 1), date(2026, 10, 1), pipeline)
     assert "感覺統合鞦韆" not in result.text
+
+
+def test_export_puts_the_follow_up_after_the_marker(store):
+    student = store.add_student("王小明")
+    store.add_record(student.id, date(2026, 10, 1), zh_text="剪紙", zh_followup="練拉鍊")
+    result = export_range(store, date(2026, 10, 1), date(2026, 10, 1), Pipeline())
+    assert result.text == "=== REC-1 | [PERSON_A] | 2026-10-01 ===\n剪紙\n--- FOLLOW-UP ---\n練拉鍊\n"
+
+
+def test_a_chart_without_comments_or_follow_up_is_not_exported(store):
+    student = store.add_student("王小明")
+    store.add_record(student.id, date(2026, 10, 1), session_type="Absent Student")
+    assert export_range(store, date(2026, 10, 1), date(2026, 10, 1), Pipeline()).record_count == 0

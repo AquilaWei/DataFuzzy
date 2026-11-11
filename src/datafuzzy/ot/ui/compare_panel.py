@@ -15,10 +15,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..db import Record
+from ..db import Record, session_label
 from .cards import date_label, preview_text, time_label
 from .i18n import language, tr
-from .session_fields import GoalScores, session_type_label
+from .session_fields import GoalScores, shown_parts
 from .widgets import GrowingTextEdit
 
 
@@ -39,7 +39,7 @@ def compare_candidates(records: list[Record], current: Record) -> list[Record]:
 
 def candidate_label(record: Record) -> str:
     """One line of the pick list: date, start time, location and the start of the chart."""
-    first_line = preview_text(record.zh_text, record.en_text).splitlines()[0]
+    first_line = preview_text(record).splitlines()[0]
     when = " ".join(part for part in (date_label(record.visit_date), time_label(record.start_time)) if part)
     return f"{when} · {record.location or tr('未填地點')} · {first_line}"
 
@@ -64,9 +64,12 @@ class ComparePanel(QWidget):
         self.activity = GrowingTextEdit(record.activity)
         self.activity.setReadOnly(True)
         self.activity.setPlaceholderText(tr("（沒有記錄活動）"))
+        parts = shown_parts(record)  # as the editor would show this chart
+        self.text_boxes: dict[str, QPlainTextEdit] = {}  # by Record field, e.g. "zh_text"
         self.tabs = QTabWidget()
-        self.tabs.addTab(self._read_only(record.zh_text, tr("（沒有中文病歷）")), tr("中文"))
-        self.tabs.addTab(self._read_only(record.en_text, tr("（沒有英文病歷）")), "English")
+        self.tabs.addTab(self._chart_page(record, "zh", parts, tr("（沒有中文記錄）"), tr("（沒有中文追蹤）")), tr("中文"))
+        self.tabs.addTab(self._chart_page(record, "en", parts, tr("（沒有英文記錄）"), tr("（沒有英文追蹤）")), "English")
+        self.tabs.setVisible(bool(parts & {"comments", "followup"}))
         self.tabs.setCurrentIndex(1 if language() == "en" else 0)  # as in the editor
         self.tabs.setMinimumHeight(280)  # the editor's CHART_MIN_HEIGHT
 
@@ -96,7 +99,7 @@ class ComparePanel(QWidget):
         type_line = QHBoxLayout(self.type_row)
         type_line.setContentsMargins(0, 0, 0, 0)
         type_line.addWidget(QLabel("Session type"))
-        self.session_type = QLabel(session_type_label(record.session_type))
+        self.session_type = QLabel(session_label(record.session_mode, record.session_type))
         type_line.addWidget(self.session_type, 1)
         self.scores_row = QWidget()
         scores = QVBoxLayout(self.scores_row)
@@ -111,10 +114,31 @@ class ComparePanel(QWidget):
         layout.addWidget(self.times_row)
         layout.addWidget(self.type_row)
         layout.addWidget(self.scores_row)
-        layout.addWidget(QLabel(tr("活動")))
+        activity_label = QLabel(tr("活動"))
+        layout.addWidget(activity_label)
         layout.addWidget(self.activity)
+        self.scores_row.setVisible("scores" in parts)
+        activity_label.setVisible("activity" in parts)
+        self.activity.setVisible("activity" in parts)
         layout.addWidget(self.tabs, 1)
+        if "deficit" in parts:
+            layout.addWidget(QLabel(f"Underlying deficit: {record.deficit}"))
         self.close_btn.clicked.connect(self.closed)
+
+    def _chart_page(self, record: Record, lang: str, parts: set[str],
+                    no_comments: str, no_followup: str) -> QWidget:
+        """One language's tab: the comments above the follow-up, each only if shown."""
+        page = QWidget()
+        column = QVBoxLayout(page)
+        column.setContentsMargins(8, 8, 8, 8)
+        for part, field, label, placeholder, stretch in (
+                ("comments", f"{lang}_text", tr("記錄"), no_comments, 3),
+                ("followup", f"{lang}_followup", tr("追蹤"), no_followup, 1)):
+            if part in parts:
+                box = self.text_boxes[field] = self._read_only(getattr(record, field), placeholder)
+                column.addWidget(QLabel(label))
+                column.addWidget(box, stretch)
+        return page
 
     @staticmethod
     def _read_only(text: str, placeholder: str) -> QPlainTextEdit:

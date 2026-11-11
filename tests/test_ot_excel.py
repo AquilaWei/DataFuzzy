@@ -146,9 +146,10 @@ def test_visit_row_has_time_session_type_and_a_score_per_goal(store):
     student = store.add_student("王小明")
     store.set_profile(student.id, StudentProfile(goals=("Cut", "Write", "Button")))
     store.add_record(student.id, date(2026, 10, 1), start_time="09:30", end_time="10:00",
-                     session_type="group", goal_scores=("75", "not met"))
+                     session_mode="group", goal_scores=("75", "not met"))
     ws = build_workbook(store, store.records_for_student(student.id), today=TODAY).worksheets[0]
-    assert [ws.cell(4, c).value for c in (2, 3, 13, 14, 15)] == ["9:30-10:00", "group", "75%", "not met", "--"]
+    assert [ws.cell(4, c).value for c in (2, 3, 13, 14, 15)] == [
+        "9:30-10:00", "Group - Direct Therapy Time", "75%", "not met", "--"]
 
 
 def test_each_goal_gets_a_column(store):
@@ -170,11 +171,25 @@ def test_one_goal_leaves_one_goal_column(store):
     assert "A1:M1" in {str(r) for r in ws.merged_cells.ranges}
 
 
-def test_record_from_before_session_types_exports_as_individual(store):
+def test_a_new_record_exports_as_individual_direct_therapy(store):
     student = store.add_student("王小明")
     store.add_record(student.id, date(2026, 10, 1))
     ws = build_workbook(store, store.records_for_student(student.id), today=TODAY).worksheets[0]
-    assert (ws["C4"].value, ws["M4"].value) == ("individual", "--")
+    assert (ws["C4"].value, ws["M4"].value) == ("Individual - Direct Therapy Time", "--")
+
+
+def test_the_comment_cell_has_the_follow_up_after_the_comments(store):
+    student = store.add_student("王小明")
+    store.add_record(student.id, date(2026, 10, 1), en_text="Did well.", en_followup="Practise zippers.")
+    ws = build_workbook(store, store.records_for_student(student.id), today=TODAY).worksheets[0]
+    assert ws["G4"].value == "Did well.\n\n* **Follow-up:** Practise zippers."
+
+
+def test_the_comment_cell_has_only_the_comments_without_a_follow_up(store):
+    student = store.add_student("王小明")
+    store.add_record(student.id, date(2026, 10, 1), en_text="Did well.")
+    ws = build_workbook(store, store.records_for_student(student.id), today=TODAY).worksheets[0]
+    assert ws["G4"].value == "Did well."
 
 
 def test_a_long_comment_makes_its_row_taller(store):

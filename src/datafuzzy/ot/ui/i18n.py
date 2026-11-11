@@ -128,9 +128,10 @@ ENGLISH = {
     "例如 10:00 AM": "e.g. 10:00 AM",
     "今天的治療活動與手段（只留在本機，不會匯出）":
         "Today's activities and methods (kept on this computer, never exported)",
-    "中文病歷（可中英夾雜）": "Chinese chart (may mix in English)",
+    "中文記錄（可中英夾雜）": "Chinese comments (may mix in English)",
+    "中文追蹤（下次的計畫）": "Chinese follow-up (the plan for next time)",
     "中文": "Chinese",
-    "點兩下「中文」或「English」複製整份病歷": "Double-click a tab to copy the whole chart",
+    "點兩下「中文」或「English」複製記錄與追蹤": "Double-click a tab to copy its comments and follow-up",
     "開始時間": "Start",
     "結束時間": "End",
     "活動": "Activities",
@@ -145,8 +146,10 @@ ENGLISH = {
     "對照": "Compare",
     "關閉對照": "Close comparison",
     "（沒有記錄活動）": "(no activities recorded)",
-    "（沒有中文病歷）": "(no Chinese chart)",
-    "（沒有英文病歷）": "(no English chart)",
+    "（沒有中文記錄）": "(no Chinese comments)",
+    "（沒有英文記錄）": "(no English comments)",
+    "（沒有中文追蹤）": "(no Chinese follow-up)",
+    "（沒有英文追蹤）": "(no English follow-up)",
     # student, date and location views
     "基本資訊": "Profile",
     "Diagnosis、Grade、Goals 等，Excel 匯出時填入表頭":
@@ -308,6 +311,18 @@ ENGLISH = {
     "{label}寫入失敗：{error}": "{label} could not be written: {error}",
     "已匯出：{path}": "Exported: {path}",
     "沒有可匯出的學生。": "No students to export.",
+    # comments and follow-ups
+    "記錄": "Comments",
+    "追蹤": "Follow-up",
+    "移到追蹤": "Move to follow-up",
+    "\u3000⚠ 沒有追蹤段落，全部放進記錄": "  ⚠ no follow-up part; all of it goes to the comments",
+    "拆分 Follow-up": "Split off follow-ups",
+    "這些舊病歷的記錄裡找到 follow-up。勾選要把它移到「追蹤」的病歷，點一筆可以看拆分後的樣子。":
+        "A follow-up was found in the comments of these older charts. Tick the charts whose follow-up"
+        " should move to its own box; click one to see it split.",
+    "都不要搬": "Move none",
+    "沒有找到需要拆分的 follow-up。": "No follow-ups were found to split off.",
+    "重新檢查 Follow-up…": "Check for follow-ups again…",
 }
 
 WEEKDAYS_EN = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")

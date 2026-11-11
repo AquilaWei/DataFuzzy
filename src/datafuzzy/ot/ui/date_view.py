@@ -260,7 +260,7 @@ class DayRecordsView(QWidget):
         self.list.clear()
         for record in records:
             place = record.location or tr("未填地點")
-            first_line = preview_text(record.zh_text, record.en_text).splitlines()[0]
+            first_line = preview_text(record).splitlines()[0]
             item = QListWidgetItem(f"{names[record.student_id]}\n{place} · {first_line}")
             item.setData(Qt.ItemDataRole.UserRole, record.id)
             item.setData(NAME_ROLE, names[record.student_id])

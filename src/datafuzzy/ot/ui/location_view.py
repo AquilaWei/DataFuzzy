@@ -237,7 +237,7 @@ class LocationRecordsView(QWidget):
         self.title.setText(names[self.student_id])
         self.count.setText(tr("{count} 份病歷（所有地點）", count=len(records)))
         for record in records:
-            first_line = preview_text(record.zh_text, record.en_text).splitlines()[0]
+            first_line = preview_text(record).splitlines()[0]
             item = QListWidgetItem(f"{record.visit_date.isoformat()}\n{record.location} · {first_line}")
             item.setData(Qt.ItemDataRole.UserRole, record.id)
             item.setData(NAME_ROLE, date_label(record.visit_date))

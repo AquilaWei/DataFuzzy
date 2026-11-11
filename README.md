@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml/badge.svg)](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/AquilaWei/DataFuzzy/graph/badge.svg)](https://codecov.io/gh/AquilaWei/DataFuzzy)
-![Version](https://img.shields.io/badge/version-0.7.0.1.0-blue)
+![Version](https://img.shields.io/badge/version-0.7.0.37.1-blue)
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
@@ -20,10 +20,18 @@
 **設定**（側邊欄左下角，或 macOS 選單 TheraNote → 設定…，⌘,）可切換介面語言：中文或 English，切換後視窗立即換成新語言，下次開啟也沿用。
 病歷預覽跟著介面語言：中文介面優先顯示中文病歷，English 介面優先顯示英文病歷（沒有該語言版本時顯示另一種），開啟病歷時也先停在該語言的分頁。
 每份病歷另有「活動」欄記錄當天的治療活動與手段，只留在本機、不參與匯出與貼回。活動欄會隨內容自動長高，整頁（基本資訊、活動、病歷）可上下捲動，內容再多也不會擠壓下方的病歷；對照兩份病歷時，兩邊的活動欄同高。
-在病歷卡片或日期清單上按右鍵可刪除病歷（警告視窗預設是「取消」，要按「刪除」才會刪掉），日期清單的右鍵選單也能「複製英文病歷」；在學生名單上按右鍵可刪除學生與其所有病歷（都會先警告，無法復原）。學生姓名、病歷日期填錯時，按旁邊的 ✎ 修改。點兩下「中文」或「English」分頁可複製整份病歷。編輯病歷時按「對照其他病歷」，可從最近的上一次往前挑一份同一位學生的病歷，並排顯示在右邊；學生基本資訊仍留在最上方，兩份病歷的日期、時間、活動與內容逐列對齊。同一位學生同一天可以有多份病歷（例如上午、下午各一次）。按「預約下次治療」會新增七天後同一時段的病歷（例如這週一 10:00 → 下週一 10:00，沿用 Session type），並和原本那份左右對照；重複按不會多出第二份。下拉選單和日期欄只能點擊修改，滑鼠滾輪滑過時會捲動頁面，不會誤改選項。
+在病歷卡片或日期清單上按右鍵可刪除病歷（警告視窗預設是「取消」，要按「刪除」才會刪掉），日期清單的右鍵選單也能「複製英文病歷」；在學生名單上按右鍵可刪除學生與其所有病歷（都會先警告，無法復原）。學生姓名、病歷日期填錯時，按旁邊的 ✎ 修改。點兩下「中文」或「English」分頁可複製該語言的記錄與追蹤。編輯病歷時按「對照其他病歷」，可從最近的上一次往前挑一份同一位學生的病歷，並排顯示在右邊；學生基本資訊仍留在最上方，兩份病歷的日期、時間、活動與內容逐列對齊。同一位學生同一天可以有多份病歷（例如上午、下午各一次）。按「預約下次治療」會新增七天後同一時段的病歷（例如這週一 10:00 → 下週一 10:00，沿用模式與服務類型），並和原本那份左右對照；重複按不會多出第二份。下拉選單和日期欄只能點擊修改，滑鼠滾輪滑過時會捲動頁面，不會誤改選項。
 **Excel 匯出**有兩種模式。**交接模式**依學校表單格式產生檔案：選日期區間後，用「地點 → 學生」下拉選單把要匯出的學生加入名單（或「加入此地點全部」），
-每位學生一個檔案（`姓名-開始日期至結束日期.xlsx`），只含所選地點的病歷，每次一列：日期、時段（如 9:30-10:00）、Session Type、活動、英文病歷（Comment），以及每個目標一欄的分數（Goal 1、Goal 2…，欄數依學生的目標數量增減；從 met、not met、not addressed 選一個，沒選的顯示 --）。期間內跨了新的 IEP/504 日期或新學年時，同一個檔案會分成多個頁籤，各用當時的計畫日期與目標，頁籤名稱如 `2026-2027_IEP 10∕29∕26`。**Progress Report 模式**選一個日期，產生 `Progress Report-日期.xlsx`：每個地點（依基本資訊的地點）一個分頁，列出所有啟用中學生在那天有效計畫的每個 goal（Name、Goal、Progress 三欄，有三個 goal 就三列，名字合併成一格），Progress 欄先填入 goal 原文方便直接修改。匯出資料夾設定一次即會記住。
-每份病歷可勾選 Session type（group、individual、consult、collaboration、make up，預設 individual），並為每個目標填入當次表現。
+每位學生一個檔案（`姓名-開始日期至結束日期.xlsx`），只含所選地點的病歷，每次一列：日期、時段（如 9:30-10:00）、Session Type（模式＋服務類型，如 `Individual - Direct Therapy Time`）、活動、Comment（英文記錄；有追蹤時空一行接 `* **Follow-up:** …`），以及每個目標一欄的分數（Goal 1、Goal 2…，欄數依學生的目標數量增減；從 met、not met、not addressed 選一個，沒選的顯示 --）。期間內跨了新的 IEP/504 日期或新學年時，同一個檔案會分成多個頁籤，各用當時的計畫日期與目標，頁籤名稱如 `2026-2027_IEP 10∕29∕26`。**Progress Report 模式**選一個日期，產生 `Progress Report-日期.xlsx`：每個地點（依基本資訊的地點）一個分頁，列出所有啟用中學生在那天有效計畫的每個 goal（Name、Goal、Progress 三欄，有三個 goal 就三列，名字合併成一格），Progress 欄先填入 goal 原文方便直接修改。匯出資料夾設定一次即會記住。
+每份病歷在時間下方選 **模式**（Individual 對應 ACE 的 Direct Time、Group 對應 Group Time）和 **服務類型**（ACE 的名稱，預設 Direct Therapy Time）。兩種模式都有 Absent Student、Direct Therapy Time、Make-Up、School Not in Session、Therapist Absent、Unavailable Student、Consult、Collaboration、Home Program、IEP Meeting/Meeting、Progress Report、Scheduling；只有 Individual 有 Annual IEP Report、Evaluation、Re-Evaluation、Screen、Student Observation。下方顯示哪些欄位依服務類型而定：
+
+| 服務類型 | 下方顯示 |
+|---|---|
+| Direct Therapy Time、Make-Up | 目標表現、活動、中英文**記錄**與**追蹤**、Underlying deficit（Visual Motor Coordination 或 Sensory Processing） |
+| Evaluation、Re-Evaluation、Screen、Student Observation、Unavailable Student、Collaboration | 只有中英文記錄 |
+| 其他 | 不顯示 |
+
+已經有內容的欄位不會因為換類型而被藏起來；清空後游標離開，才依目前的類型隱藏。記錄框按右鍵「移到追蹤」可把選取的文字搬到追蹤。舊版病歷會自動轉換：individual、group 變成該模式的 Direct Therapy Time，consult、collaboration、make up 變成 Individual 的同名類型。第一次開啟新版時，記錄裡以 `Follow-up:`、`* **Follow-up:**`、`F/U:`、`追蹤：`、`Plan:`、`Next session`、`下次` 等開頭的段落會列成清單，勾選後才搬到追蹤（之後可從 TheraNote 選單「重新檢查 Follow-up…」再做一次）。
 學生頁姓名旁或病歷上方的「基本資訊」可填地點、Diagnosis、Age、Grade、Classroom、Case manager、MA billing（勾選表示這位學生的治療走 MA billing）、IEP/504 Date（預設 IEP，勾選 504 則匯出 504 Date）、School year 與 Goals（一個目標一列，可自行新增或移除），匯出時自動填入表頭。每份計畫另有 Frequency（每月治療分鐘數，以 30 分鐘為單位選，匯出成 `30 mins/month`）。IEP/504 快到期時按「＋ 新的計畫」填入新的日期、Frequency 與目標，舊的計畫連同目標都會保留，可從下拉選單切換顯示；每份病歷依它的日期使用當時有效的計畫目標。
 
 ```bash
@@ -36,6 +44,8 @@ uv run theranote
   未公證的 App 首次取用鑰匙圈時可能另有系統提示。Linux 使用 Secret Service；新資料庫在
   沒有可用鑰匙圈時改由使用者設定密碼。取消或驗證失敗不會開啟病歷；請保管密碼與系統鑰匙圈。
 - **匯出 → 貼回**：選日期區間匯出，學生姓名會強制換成代號，其他人名由本機偵測器處理；
+  每份病歷的記錄與追蹤之間有一行 `--- FOLLOW-UP ---`，翻譯時請保留，貼回時依它拆回兩格（找不到時整段放進記錄並提醒）。
+  沒有記錄也沒有追蹤的病歷（例如 Absent Student）不會匯出。
   複製文字後保留分隔標頭，將修正或翻譯的文字貼回。程式檢查標頭、還原姓名並存為英文版，
   覆蓋前會確認。代號對應表隨病歷加密保存，重開仍可貼回。
 - **學生姓名**：新增學生時分成「名」（必填）和「姓」（選填，用來區分同名的學生）。

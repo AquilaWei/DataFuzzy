@@ -281,3 +281,48 @@ def test_record_deleted_after_export_is_reported_not_written(store, two_visits):
     assert [i.record_id for i in preview.items] == [2]
     assert preview.unrecognized == [UnrecognizedHeader(FIRST.strip(), "deleted")]
     assert preview.missing == []
+
+
+def test_pasted_follow_up_goes_to_its_own_box(store, pipeline):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, OCT_1, zh_text="剪紙", zh_followup="練拉鍊")
+    text = export_range(store, OCT_1, OCT_1, pipeline).text
+    header = text.splitlines()[0]
+    apply_import(store, preview_import(store, f"{header}\nCut paper.\n--- FOLLOW-UP ---\nZippers.\n"))
+    again = store.get_record(record.id)
+    assert (again.en_text, again.en_followup) == ("Cut paper.", "Zippers.")
+
+
+def test_a_follow_up_marker_in_another_case_still_splits(store, pipeline):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, OCT_1, zh_text="剪紙")
+    header = export_range(store, OCT_1, OCT_1, pipeline).text.splitlines()[0]
+    apply_import(store, preview_import(store, f"{header}\nCut paper.\n-- Follow up --\nZippers.\n"))
+    assert store.get_record(record.id).en_followup == "Zippers."
+
+
+def test_without_the_marker_all_of_the_text_goes_to_the_comments(store, pipeline):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, OCT_1, zh_text="剪紙")
+    header = export_range(store, OCT_1, OCT_1, pipeline).text.splitlines()[0]
+    preview = preview_import(store, f"{header}\nCut paper.\nZippers.\n")
+    apply_import(store, preview)
+    again = store.get_record(record.id)
+    assert (preview.items[0].has_marker, again.en_text, again.en_followup) == (False, "Cut paper.\nZippers.", "")
+
+
+def test_names_are_restored_in_the_follow_up_too(store, pipeline):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, OCT_1, zh_text="王小明剪紙", zh_followup="王小明練拉鍊")
+    text = export_range(store, OCT_1, OCT_1, pipeline).text
+    header, code = text.splitlines()[0], "[PERSON_A]"
+    apply_import(store, preview_import(store, f"{header}\n{code} cut.\n--- FOLLOW-UP ---\n{code} zips.\n"))
+    assert store.get_record(record.id).en_followup == "王小明 zips."
+
+
+def test_a_changed_follow_up_counts_as_overwriting(store, pipeline):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, OCT_1, zh_text="剪紙", en_text="Cut.", en_followup="Old")
+    header = export_range(store, OCT_1, OCT_1, pipeline).text.splitlines()[0]
+    preview = preview_import(store, f"{header}\nCut.\n--- FOLLOW-UP ---\nNew\n")
+    assert [i.record_id for i in preview.overwriting] == [record.id]

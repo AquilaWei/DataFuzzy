@@ -1,5 +1,8 @@
 """Sending charts out for translation and taking the corrected English text back in.
 
+Each chart goes out as its comments and its follow-up, FOLLOW_UP_MARKER between them (see
+followup.py), and is split at the marker again when it comes back.
+
 `export_range` replaces people's names in the Chinese texts with codes (the student's own
 name always, even with no model installed) and keeps the code mapping encrypted in the
 database. The text that comes back has the same headers, so it can be split into charts
@@ -17,6 +20,7 @@ from typing import TYPE_CHECKING, Literal
 from ..core.mapping import PERSON, Session
 from . import APP_NAME
 from .db import NotFound, RecordStore, StoredBatch
+from .followup import join_chart, split_chart
 
 if TYPE_CHECKING:
     from ..core.pipeline import Pipeline
@@ -49,7 +53,8 @@ def export_range(store: RecordStore, date_from: date, date_to: date,
     "Emma Wang"). Two students of one given name share its code, which restores the same.
     The mapping is saved encrypted; it may block while a model runs, so call it from a
     worker for a large range."""
-    records = store.records_between(date_from, date_to)
+    # A chart with neither comments nor a follow-up (an absence, say) has nothing to translate.
+    records = [r for r in store.records_between(date_from, date_to) if r.zh_text.strip() or r.zh_followup.strip()]
     if not records:
         return ExportResult("", None, 0)
     students = {s.id: s for s in store.students()}
@@ -67,7 +72,7 @@ def export_range(store: RecordStore, date_from: date, date_to: date,
     entries: list[dict] = []
     for record in records:
         code = session.to_code[students[record.student_id].given_name]
-        body = pipeline.obfuscate(record.zh_text, session, scope="names").text
+        body = pipeline.obfuscate(join_chart(record.zh_text, record.zh_followup), session, scope="names").text
         header = HEADER_FORMAT.format(record_id=record.id, code=code, visit_date=record.visit_date.isoformat())
         blocks.append(f"{header}\n{body}\n")
         entries.append({"record_id": record.id, "code": code, "date": record.visit_date.isoformat()})
@@ -156,8 +161,10 @@ class ImportItem:
     record_id: int
     student_name: str         # the full name of the record's student
     visit_date: date
-    en_text: str              # the pasted text with names restored
-    overwrites: bool          # the record already has a different English text
+    en_text: str              # the pasted comments with names restored
+    en_followup: str          # the pasted follow-up, likewise; "" when the text had no marker
+    has_marker: bool          # False: the marker was lost, so all of the text went to the comments
+    overwrites: bool          # the record already has different English comments or follow-up
     unknown_codes: list[str]  # codes in the text that this export never issued
 
 
@@ -227,10 +234,13 @@ def preview_import(store: RecordStore, text: str, batch_id: int | None = None) -
                 unrecognized.append(UnrecognizedHeader(block.header, "deleted"))
                 continue
             restored = session.restore(block.body)
+            parts = split_chart(restored.text)
+            comments, followup = parts if parts is not None else (restored.text, "")
+            overwrites = any(old and old != new for old, new in ((record.en_text, comments),
+                                                                 (record.en_followup, followup)))
             items.append(ImportItem(
                 block.record_id, store.get_student(record.student_id).name, record.visit_date,
-                restored.text, bool(record.en_text) and record.en_text != restored.text,
-                restored.unknown))
+                comments, followup, parts is not None, overwrites, restored.unknown))
     missing = [MissingRecord(e.record_id, _student_name(store, e, session), date.fromisoformat(e.visit_date))
                for e in batch.entries.values() if e.record_id not in seen]
     return ImportPreview(batch.id, items, missing, unrecognized)
@@ -247,10 +257,10 @@ def _student_name(store: RecordStore, entry: BatchEntry, session: Session) -> st
 
 def apply_import(store: RecordStore, preview: ImportPreview,
                  record_ids: Collection[int] | None = None) -> int:
-    """Write the previewed English texts, all of them or only those in `record_ids`, in one
-    transaction. Returns how many records were written. Raises NotFound if a record has
+    """Write the previewed English comments and follow-ups, all of them or only those in
+    `record_ids`, in one transaction. Returns how many records were written. Raises NotFound if a record has
     disappeared since the preview, in which case nothing is written."""
-    texts = {i.record_id: i.en_text for i in preview.items
+    texts = {i.record_id: {"en_text": i.en_text, "en_followup": i.en_followup} for i in preview.items
              if record_ids is None or i.record_id in record_ids}
-    store.set_en_texts(texts)
+    store.set_chart_texts(texts)
     return len(texts)

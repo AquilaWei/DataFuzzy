@@ -21,7 +21,16 @@ from openpyxl.styles import Alignment, Border, Font, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
-from .db import Plan, Record, RecordStore, Student, StudentProfile, parse_plan_date
+from .db import (
+    Plan,
+    Record,
+    RecordStore,
+    Student,
+    StudentProfile,
+    parse_plan_date,
+    session_label,
+)
+from .followup import excel_comment
 from .school_year import default_school_year, format_school_year, parse_school_year
 
 TEMPLATE_SHEET = "blank"
@@ -237,8 +246,9 @@ def _fill(ws: Worksheet, records: list[Record], goal_count: int, last: int) -> N
         scores = [score_text(s) for s in record.goal_scores[:goal_count]]
         scores += [NO_SCORE] * (max(goal_count, 1) - len(scores))
         cells = [(DATE_COL, record.visit_date), (TIME_COL, time_text(record.start_time, record.end_time)),
-                 (TYPE_COL, record.session_type), (ACTIVITY_COL, record.activity),
-                 (COMMENT_COL, record.en_text)]
+                 (TYPE_COL, session_label(record.session_mode, record.session_type)),
+                 (ACTIVITY_COL, record.activity),
+                 (COMMENT_COL, excel_comment(record.en_text, record.en_followup))]
         cells += [(FIRST_GOAL_COL + i, score) for i, score in enumerate(scores)]
         lines = 1
         for col, value in cells:

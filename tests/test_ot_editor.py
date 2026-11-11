@@ -1,6 +1,8 @@
 from datetime import date, datetime
 
 import pytest
+from PySide6.QtCore import QEvent
+from PySide6.QtGui import QFocusEvent, QGuiApplication, QTextCursor
 
 from datafuzzy.ot.db import Plan, RecordStore, StudentProfile
 from datafuzzy.ot.ui.editor import RecordEditor
@@ -112,7 +114,7 @@ def test_opening_the_editor_does_not_write_anything(qtbot, store, record):
 
 def test_reload_shows_english_text_written_elsewhere(qtbot, store, record):
     editor = make_editor(qtbot, store, record, debounce_ms=60000)
-    store.set_en_texts({record.id: "From import"})
+    store.set_chart_texts({record.id: {"en_text": "From import"}})
     editor.reload()
     assert editor.en_edit.toPlainText() == "From import"
 
@@ -286,8 +288,8 @@ def test_picking_a_visit_shows_it_beside_the_chart(qtbot, store, record):
     editor.compare_menu().actions()[0].trigger()
     panel = editor.compare
     assert panel.record_id == nearer.id
-    assert (panel.activity.toPlainText(), panel.tabs.widget(0).toPlainText()) == ("串珠", "上一次")
-    assert panel.tabs.widget(0).isReadOnly()
+    assert (panel.activity.toPlainText(), panel.text_boxes["zh_text"].toPlainText()) == ("串珠", "上一次")
+    assert panel.text_boxes["zh_text"].isReadOnly()
     assert editor.splitter.indexOf(panel) == 1
 
 
@@ -369,16 +371,103 @@ def test_closing_the_comparison_leaves_the_chart_alone(qtbot, store, record):
     assert editor.compare is None
 
 
-def test_a_chart_starts_as_an_individual_session(qtbot, store, record):
+def test_a_chart_starts_as_individual_direct_therapy(qtbot, store, record):
     editor = make_editor(qtbot, store, record)
-    assert editor.session_type.button("individual").isChecked()
+    assert (editor.session.mode(), editor.session.session_type()) == ("individual", "Direct Therapy Time")
 
 
-def test_picking_a_session_type_is_saved(qtbot, store, record):
-    editor = make_editor(qtbot, store, record)
-    editor.session_type.button("make up").click()
+def test_picking_a_service_type_is_saved(qtbot, store, record):
+    editor = make_editor(qtbot, store, record, debounce_ms=60000)
+    editor.session.set_session_type("Make-Up")
     editor.flush()
-    assert store.get_record(record.id).session_type == "make up"
+    assert store.get_record(record.id).session_type == "Make-Up"
+
+
+def test_picking_group_is_saved(qtbot, store, record):
+    editor = make_editor(qtbot, store, record, debounce_ms=60000)
+    editor.session.mode_control.button(1).click()
+    editor.flush()
+    assert store.get_record(record.id).session_mode == "group"
+
+
+def test_group_offers_no_individual_only_types(qtbot, store, record):
+    editor = make_editor(qtbot, store, record, debounce_ms=60000)
+    editor.session.set_mode("group")
+    choices = [editor.session.type_box.itemText(i) for i in range(editor.session.type_box.count())]
+    assert "Evaluation" not in choices and len(choices) == 12
+
+
+def test_switching_an_evaluation_to_group_falls_back_to_direct_therapy(qtbot, store, record):
+    editor = make_editor(qtbot, store, record, debounce_ms=60000)
+    editor.session.set_session_type("Evaluation")
+    editor.session.set_mode("group")
+    assert editor.session.session_type() == "Direct Therapy Time"
+
+
+def test_direct_therapy_shows_every_part(qtbot, store, record):
+    editor = make_editor(qtbot, store, record)
+    assert [editor.shown(p) for p in ("scores", "activity", "comments", "followup", "deficit")] == [True] * 5
+
+
+def test_an_evaluation_shows_only_the_comments(qtbot, store, record):
+    editor = make_editor(qtbot, store, record, debounce_ms=60000)
+    editor.session.set_session_type("Evaluation")
+    assert [editor.shown(p) for p in ("scores", "activity", "comments", "followup", "deficit")] == [
+        False, False, True, False, False]
+
+
+def test_scheduling_shows_nothing_below_the_times(qtbot, store, record):
+    store.update_record(record.id, zh_text="", en_text="")
+    editor = make_editor(qtbot, store, record, debounce_ms=60000)
+    editor.session.set_session_type("Scheduling")
+    assert editor.tabs.isHidden() and not editor.shown("activity")
+
+
+def test_an_older_activity_stays_shown_for_a_type_without_one(qtbot, store, record):
+    store.update_record(record.id, session_type="Scheduling", activity="串珠")
+    editor = make_editor(qtbot, store, record)
+    assert editor.shown("activity") and not editor.shown("scores")
+
+
+def test_an_emptied_activity_is_hidden_when_the_cursor_leaves(qtbot, store, record):
+    store.update_record(record.id, session_type="Scheduling", activity="串珠")
+    editor = make_editor(qtbot, store, record, debounce_ms=60000)
+    editor.activity_edit.setPlainText("")
+    editor.eventFilter(editor.activity_edit, QFocusEvent(QEvent.Type.FocusOut))
+    assert not editor.shown("activity")
+
+
+def test_follow_up_is_saved(qtbot, store, record):
+    editor = make_editor(qtbot, store, record, debounce_ms=60000)
+    editor.en_followup_edit.setPlainText("Practise zippers")
+    editor.flush()
+    assert store.get_record(record.id).en_followup == "Practise zippers"
+
+
+def test_picking_a_deficit_is_saved(qtbot, store, record):
+    editor = make_editor(qtbot, store, record, debounce_ms=60000)
+    editor.deficit.setCurrentText("Sensory Processing")
+    editor.flush()
+    assert store.get_record(record.id).deficit == "Sensory Processing"
+
+
+def test_moving_selected_comments_to_the_follow_up(qtbot, store, record):
+    editor = make_editor(qtbot, store, record, debounce_ms=60000)
+    editor.en_edit.setPlainText("Did well.\nNext: zippers")
+    cursor = editor.en_edit.textCursor()
+    cursor.setPosition(10)
+    cursor.movePosition(QTextCursor.MoveOperation.End, QTextCursor.MoveMode.KeepAnchor)
+    editor.en_edit.setTextCursor(cursor)
+    editor.move_to_followup(editor.en_edit, editor.en_followup_edit)
+    assert (editor.en_edit.toPlainText(), editor.en_followup_edit.toPlainText()) == ("Did well.\n", "Next: zippers")
+
+
+def test_copying_a_tab_puts_comments_and_follow_up_on_the_clipboard(qtbot, store, record):
+    editor = make_editor(qtbot, store, record, debounce_ms=60000)
+    editor.en_edit.setPlainText("Did well.")
+    editor.en_followup_edit.setPlainText("Zippers")
+    editor.copy_tab(1)
+    assert QGuiApplication.clipboard().text() == "Did well.\n\n* **Follow-up:** Zippers"
 
 
 def test_a_score_box_is_shown_for_each_goal(qtbot, store, record):
@@ -428,10 +517,10 @@ def test_a_goal_added_to_the_profile_gets_a_score_box_and_keeps_the_scores(qtbot
 
 def test_compared_chart_shows_its_session_type_and_scores(qtbot, store, record):
     store.set_profile(record.student_id, StudentProfile(goals=("剪直線", "扣釦子")))
-    other = store.add_record(record.student_id, date(2026, 9, 24), session_type="consult", goal_scores=("60%",))
+    other = store.add_record(record.student_id, date(2026, 9, 24), session_type="Make-Up", goal_scores=("60%",))
     editor = make_editor(qtbot, store, record)
     editor.show_compare(other.id)
-    assert editor.compare.session_type.text() == "Consult"
+    assert editor.compare.session_type.text() == "Individual - Make-Up"
     assert [box.text() for box in editor.compare.scores.boxes] == ["60%", "--"]
 
 

@@ -53,7 +53,7 @@ def test_export_dialog_defaults_to_the_last_seven_days(qtbot, store):
 
 def test_export_dialog_shows_text_with_names_replaced_by_codes(qtbot, charts):
     dialog = run_export(qtbot, charts, (2026, 10, 1), (2026, 10, 1))
-    assert dialog.text.toPlainText() == "=== REC-1 | [PERSON_A] | 2026-10-01 ===\n[PERSON_A]今天練習剪紙\n"
+    assert dialog.text.toPlainText() == "=== REC-1 | [PERSON_A] | 2026-10-01 ===\n[PERSON_A]今天練習剪紙\n--- FOLLOW-UP ---\n"
 
 
 def test_export_dialog_reports_how_many_charts_were_exported(qtbot, charts):
@@ -83,7 +83,7 @@ def test_export_dialog_rejects_reversed_range_without_exporting(qtbot, charts):
 def test_copy_button_puts_the_exported_text_on_the_clipboard(qtbot, qapp, charts):
     dialog = run_export(qtbot, charts, (2026, 10, 1), (2026, 10, 1))
     dialog.copy_btn.click()
-    assert qapp.clipboard().text() == "=== REC-1 | [PERSON_A] | 2026-10-01 ===\n[PERSON_A]今天練習剪紙\n"
+    assert qapp.clipboard().text() == "=== REC-1 | [PERSON_A] | 2026-10-01 ===\n[PERSON_A]今天練習剪紙\n--- FOLLOW-UP ---\n"
 
 
 def test_copy_button_confirms_it_copied(qtbot, charts):
@@ -100,7 +100,8 @@ def test_apply_is_disabled_before_anything_is_checked(qtbot, charts):
 
 def test_import_dialog_lists_the_charts_found_in_pasted_text(qtbot, charts):
     export_range(charts, date(2026, 10, 1), date(2026, 10, 8), Pipeline())
-    dialog = make_import(qtbot, charts, FIRST + "[PERSON_A] cut paper.\n\n" + SECOND + "[PERSON_A] drew.\n")
+    dialog = make_import(qtbot, charts, FIRST + "[PERSON_A] cut paper.\n--- FOLLOW-UP ---\n\n"
+                         + SECOND + "[PERSON_A] drew.\n--- FOLLOW-UP ---\n")
     assert [dialog.items.item(i).text() for i in range(dialog.items.count())] == [
         "王小明 · 2026-10-01", "王小明 · 2026-10-08"]
 
@@ -141,8 +142,14 @@ def test_import_dialog_keeps_old_english_text_when_overwrite_is_declined(qtbot, 
 def test_import_dialog_marks_charts_that_would_overwrite(qtbot, charts):
     export_range(charts, date(2026, 10, 1), date(2026, 10, 8), Pipeline())
     charts.update_record(1, en_text="old version")
-    dialog = make_import(qtbot, charts, FIRST + "new version\n")
+    dialog = make_import(qtbot, charts, FIRST + "new version\n--- FOLLOW-UP ---\n")
     assert dialog.items.item(0).text() == "王小明 · 2026-10-01　⚠ 會覆蓋既有英文版"
+
+
+def test_import_dialog_marks_charts_that_lost_the_follow_up_marker(qtbot, charts):
+    export_range(charts, date(2026, 10, 1), date(2026, 10, 8), Pipeline())
+    dialog = make_import(qtbot, charts, FIRST + "no marker\n")
+    assert dialog.items.item(0).text() == "王小明 · 2026-10-01　⚠ 沒有追蹤段落，全部放進記錄"
 
 
 def test_import_dialog_does_not_ask_when_nothing_is_overwritten(qtbot, charts):

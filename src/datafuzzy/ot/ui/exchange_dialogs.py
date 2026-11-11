@@ -205,6 +205,8 @@ class ImportDialog(QDialog):
         self.preview = preview
         for item in preview.items:
             warning = tr("　⚠ 會覆蓋既有英文版") if item.overwrites else ""
+            if not item.has_marker:  # the translator dropped the marker line
+                warning += tr("　⚠ 沒有追蹤段落，全部放進記錄")
             row = QListWidgetItem(f"{item.student_name} · {item.visit_date.isoformat()}{warning}")
             row.setData(Qt.ItemDataRole.UserRole, item.record_id)
             row.setFlags(row.flags() | Qt.ItemFlag.ItemIsUserCheckable)

@@ -1,11 +1,16 @@
-from datetime import date
+from datetime import date, datetime
 
 import pytest
 from PySide6.QtCore import Qt
 
-from datafuzzy.ot.db import RecordStore, StudentProfile
+from datafuzzy.ot.db import Record, RecordStore, StudentProfile
 from datafuzzy.ot.ui.cards import date_label, preview_text, session_label
 from datafuzzy.ot.ui.student_view import StudentRecordsView
+
+
+def chart(zh_text: str, en_text: str, **fields) -> Record:
+    """A chart with just the texts a preview reads."""
+    return Record(1, 1, date(2026, 10, 1), "", zh_text, en_text, datetime(2026, 10, 1), **fields)
 
 KEY = bytes(range(32))
 
@@ -139,19 +144,19 @@ def test_date_label_includes_weekday():
 
 
 def test_preview_keeps_first_three_lines():
-    assert preview_text("一\n二\n\n三\n四", "") == "一\n二\n三"
+    assert preview_text(chart("一\n二\n\n三\n四", "")) == "一\n二\n三"
 
 
 def test_preview_falls_back_to_english_text():
-    assert preview_text("", "English only") == "English only"
+    assert preview_text(chart("", "English only")) == "English only"
 
 
 def test_preview_of_empty_record_says_so():
-    assert preview_text("  ", "") == "（尚無內容）"
+    assert preview_text(chart("  ", "")) == "（尚無內容）"
 
 
 def test_preview_is_cut_with_ellipsis_when_long():
-    assert preview_text("字" * 200, "") == "字" * 140 + "…"
+    assert preview_text(chart("字" * 200, "")) == "字" * 140 + "…"
 
 
 def test_cards_show_how_the_chart_did_on_each_goal(qtbot, store):

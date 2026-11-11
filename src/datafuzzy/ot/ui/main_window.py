@@ -39,6 +39,7 @@ from .about import AboutDialog
 from .date_view import DayRecordsView, MarkedCalendar, to_date, to_qdate
 from .editor import RecordEditor
 from .exchange_dialogs import ExcelExportDialog, ExportDialog, ImportDialog
+from .followup_dialog import offer_followup_review
 from .i18n import language, mode_names, save_language, tr
 from .location_view import NO_LOCATION, LocationRecordsView
 from .profile_dialog import StudentProfileDialog
@@ -263,6 +264,9 @@ class TheraNoteWindow(QMainWindow):
         app_menu = self.menuBar().addMenu(APP_NAME)
         app_menu.addAction(models_action)
         app_menu.addAction(settings_action)
+        followup_action = QAction(tr("重新檢查 Follow-up…"), self)
+        followup_action.triggered.connect(lambda: self.review_followups(again=True))
+        app_menu.addAction(followup_action)
         about_action = QAction(tr("關於 {app}", app=APP_NAME), self)
         about_action.setMenuRole(QAction.MenuRole.AboutRole)  # macOS: app menu
         about_action.triggered.connect(lambda: AboutDialog(self).exec())
@@ -609,6 +613,14 @@ class TheraNoteWindow(QMainWindow):
         self.refresh_after_change()
         if self.editor is not None:
             self.editor.reload()
+
+    def review_followups(self, again: bool = False) -> None:
+        """Offer to move the follow-ups found in older comments (see offer_followup_review)."""
+        self.flush()
+        if offer_followup_review(self.store, self, again):
+            self._imported()  # the texts may have changed, as after an import
+        elif again:
+            QMessageBox.information(self, tr("拆分 Follow-up"), tr("沒有找到需要拆分的 follow-up。"))
 
     def open_model_manager(self) -> None:
         if self.models_root is None:

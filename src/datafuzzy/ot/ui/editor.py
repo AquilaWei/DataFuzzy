@@ -1,12 +1,13 @@
-"""Editor for one student's chart on one day: times, session type, goal scores, activities,
-Chinese and English text."""
+"""Editor for one student's chart on one day: times, mode and service type, goal scores,
+activities, Chinese and English comments and follow-ups, and the deficit addressed. Which of
+the parts below the times show depends on the service type (see session_fields.shown_parts)."""
 
 from __future__ import annotations
 
 from dataclasses import replace
 from datetime import date, datetime
 
-from PySide6.QtCore import QPoint, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QTimer, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QComboBox,
@@ -28,12 +29,19 @@ from PySide6.QtWidgets import (
 )
 
 from ..db import RecordStore, default_end_time
+from ..followup import excel_comment
 from .cards import TIME_CHOICES, date_label, normal_time, time_label
 from .compare_panel import ComparePanel, candidate_label, compare_candidates
 from .date_view import to_date, to_qdate
 from .i18n import language, tr
 from .profile_dialog import ProfileSummary
-from .session_fields import GoalScores, SessionTypePicker
+from .session_fields import (
+    DeficitPicker,
+    GoalScores,
+    SessionPicker,
+    needed_parts,
+    shown_parts,
+)
 from .widgets import GrowingTextEdit
 
 AUTOSAVE_MS = 800
@@ -63,7 +71,8 @@ class RecordEditor(QWidget):
         self.compare: ComparePanel | None = None
         self.visit_date = record.visit_date
         self._dirty: set[str] = set()
-        self.session_type = SessionTypePicker(record.session_type)
+        self.session = SessionPicker(record.session_mode, record.session_type)
+        self.deficit = DeficitPicker(record.deficit)
         # The goals of the plan in effect on the visit's day; show_profile follows later edits
         # of them, keeping the scores typed so far.
         self.scores = GoalScores(store.get_profile(record.student_id).plan_on(record.visit_date).goals,
@@ -113,14 +122,20 @@ class RecordEditor(QWidget):
         self.activity_edit.setPlaceholderText(tr("今天的治療活動與手段（只留在本機，不會匯出）"))
 
         self.zh_edit = QPlainTextEdit(record.zh_text)
-        self.zh_edit.setPlaceholderText(tr("中文病歷（可中英夾雜）"))
+        self.zh_edit.setPlaceholderText(tr("中文記錄（可中英夾雜）"))
         self.en_edit = QPlainTextEdit(record.en_text)
-        self.en_edit.setPlaceholderText("English version (only the latest is kept)")
+        self.en_edit.setPlaceholderText("English comments (only the latest is kept)")
+        self.zh_followup_edit = QPlainTextEdit(record.zh_followup)
+        self.zh_followup_edit.setPlaceholderText(tr("中文追蹤（下次的計畫）"))
+        self.en_followup_edit = QPlainTextEdit(record.en_followup)
+        self.en_followup_edit.setPlaceholderText("English follow-up")
+        # Each part's widgets, to show or hide together (see _show_parts).
+        self.parts: dict[str, list[QWidget]] = {"comments": [], "followup": []}
         self.tabs = QTabWidget()
-        self.tabs.addTab(self.zh_edit, tr("中文"))
-        self.tabs.addTab(self.en_edit, "English")
+        self.tabs.addTab(self._chart_page(self.zh_edit, self.zh_followup_edit), tr("中文"))
+        self.tabs.addTab(self._chart_page(self.en_edit, self.en_followup_edit), "English")
         self.tabs.setCurrentIndex(1 if language() == "en" else 0)  # the interface language first
-        self.tabs.setToolTip(tr("點兩下「中文」或「English」複製整份病歷"))
+        self.tabs.setToolTip(tr("點兩下「中文」或「English」複製記錄與追蹤"))
         self.tabs.setMinimumHeight(CHART_MIN_HEIGHT)
 
         top = QHBoxLayout()
@@ -152,12 +167,22 @@ class RecordEditor(QWidget):
         type_line = QHBoxLayout(self.type_row)
         type_line.setContentsMargins(0, 0, 0, 0)
         type_line.addWidget(QLabel("Session type"))
-        type_line.addWidget(self.session_type, 1)
+        type_line.addWidget(self.session, 1)
+        self.deficit_row = QWidget()
+        deficit_line = QHBoxLayout(self.deficit_row)
+        deficit_line.setContentsMargins(0, 0, 0, 0)
+        deficit_line.addWidget(QLabel("Underlying deficit"))
+        deficit_line.addWidget(self.deficit)
+        deficit_line.addStretch(1)
+        self.activity_label = QLabel(tr("活動"))
+
         self.scores_row = QWidget()
         scores = QVBoxLayout(self.scores_row)
         scores.setContentsMargins(0, 0, 0, 0)
         scores.addWidget(QLabel(tr("目標表現")))
         scores.addWidget(self.scores)
+        self.parts.update(scores=[self.scores_row], activity=[self.activity_label, self.activity_edit],
+                          deficit=[self.deficit_row])
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
         line.setFrameShadow(QFrame.Shadow.Plain)
@@ -170,9 +195,11 @@ class RecordEditor(QWidget):
         body.addWidget(self.times_row)
         body.addWidget(self.type_row)
         body.addWidget(self.scores_row)
-        body.addWidget(QLabel(tr("活動")))
+        body.addWidget(self.activity_label)
         body.addWidget(self.activity_edit)
         body.addWidget(self.tabs, 1)
+        body.addWidget(self.deficit_row)
+        self._show_parts(shown_parts(record))
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         self.splitter.setChildrenCollapsible(False)
         self.splitter.addWidget(chart)
@@ -206,16 +233,94 @@ class RecordEditor(QWidget):
         self.activity_edit.fitted.connect(self._match_activities)
         self.time_box.editTextChanged.connect(self._start_changed)
         self.end_box.editTextChanged.connect(self._end_changed)
-        self.session_type.changed.connect(lambda: self._changed("session_type"))
+        self.session.changed.connect(self._session_changed)
+        self.deficit.currentIndexChanged.connect(lambda: self._changed("deficit"))
         self.scores.changed.connect(lambda: self._changed("goal_scores"))
         self.zh_edit.textChanged.connect(lambda: self._changed("zh_text"))
         self.en_edit.textChanged.connect(lambda: self._changed("en_text"))
+        self.zh_followup_edit.textChanged.connect(lambda: self._changed("zh_followup"))
+        self.en_followup_edit.textChanged.connect(lambda: self._changed("en_followup"))
+        for edit in self.text_edits():
+            edit.installEventFilter(self)  # leaving an emptied box may hide it (see eventFilter)
+        for comments, followup in ((self.zh_edit, self.zh_followup_edit), (self.en_edit, self.en_followup_edit)):
+            comments.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            comments.customContextMenuRequested.connect(
+                lambda pos, c=comments, f=followup: self._comments_menu(c, f).exec(c.mapToGlobal(pos)))
         self.back_btn.clicked.connect(self.close_editor)
         self.date_btn.clicked.connect(lambda: self.change_date())
         self.tabs.tabBarDoubleClicked.connect(self.copy_tab)
         self.compare_btn.clicked.connect(self._show_compare_menu)
         self.book_btn.clicked.connect(lambda: self.book_next.emit(self.record_id))
         self.profile.edit_requested.connect(lambda: self.edit_profile.emit(self.student_id))
+
+    def _chart_page(self, comments: QPlainTextEdit, followup: QPlainTextEdit) -> QWidget:
+        """One language's tab: the comments (記錄) above the follow-up (追蹤)."""
+        page = QWidget()
+        column = QVBoxLayout(page)
+        column.setContentsMargins(8, 8, 8, 8)
+        comments_label, followup_label = QLabel(tr("記錄")), QLabel(tr("追蹤"))
+        column.addWidget(comments_label)
+        column.addWidget(comments, 3)
+        column.addWidget(followup_label)
+        column.addWidget(followup, 1)
+        self.parts["comments"] += [comments_label, comments]
+        self.parts["followup"] += [followup_label, followup]
+        return page
+
+    def text_edits(self) -> list[QPlainTextEdit]:
+        return [self.activity_edit, self.zh_edit, self.en_edit, self.zh_followup_edit, self.en_followup_edit]
+
+    def current_parts(self) -> set[str]:
+        """The parts to show for what the editor holds now (see shown_parts)."""
+        return needed_parts(self.session.session_type()) | {
+            part for part, filled in (
+                ("scores", any(self.scores.scores())),
+                ("activity", bool(self.activity_edit.toPlainText().strip())),
+                ("comments", bool(self.zh_edit.toPlainText().strip() or self.en_edit.toPlainText().strip())),
+                ("followup", bool(self.zh_followup_edit.toPlainText().strip()
+                                  or self.en_followup_edit.toPlainText().strip()))) if filled}
+
+    def _show_parts(self, parts: set[str]) -> None:
+        for part, widgets in self.parts.items():
+            for widget in widgets:
+                widget.setVisible(part in parts)
+        self.tabs.setVisible(bool(parts & {"comments", "followup"}))
+
+    def shown(self, part: str) -> bool:
+        """Whether a part ("scores", "activity", "comments", "followup", "deficit") is shown."""
+        return not self.parts[part][0].isHidden() and (part not in ("comments", "followup")
+                                                         or not self.tabs.isHidden())
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        # A box emptied by hand is hidden when the cursor leaves it, not while it is typed in.
+        if event.type() == QEvent.Type.FocusOut and watched in self.text_edits():
+            self._show_parts(self.current_parts())
+        return super().eventFilter(watched, event)
+
+    def _session_changed(self) -> None:
+        self._changed("session_mode")
+        self._changed("session_type")
+        self._show_parts(self.current_parts())
+
+    def _comments_menu(self, comments: QPlainTextEdit, followup: QPlainTextEdit) -> QMenu:
+        """The text box's own menu, plus moving the selected text to the follow-up."""
+        menu = comments.createStandardContextMenu()
+        menu.addSeparator()
+        move = menu.addAction(tr("移到追蹤"))
+        move.setEnabled(comments.textCursor().hasSelection())
+        move.triggered.connect(lambda: self.move_to_followup(comments, followup))
+        return menu
+
+    def move_to_followup(self, comments: QPlainTextEdit, followup: QPlainTextEdit) -> None:
+        """Cut the selected comments and add them to the end of the follow-up."""
+        cursor = comments.textCursor()
+        moved = cursor.selectedText().replace("\u2029", "\n").strip()  # Qt's paragraph separator
+        if not moved:
+            return
+        cursor.removeSelectedText()
+        existing = followup.toPlainText().rstrip()
+        followup.setPlainText(f"{existing}\n{moved}" if existing else moved)
+        self._show_parts(self.current_parts() | {"followup"})
 
     def show_profile(self) -> None:
         """Re-read the student's name and profile, e.g. after they were edited."""
@@ -283,8 +388,8 @@ class RecordEditor(QWidget):
         """Put the whole Chinese (0) or English (1) chart on the clipboard."""
         if index < 0:
             return
-        edit = (self.zh_edit, self.en_edit)[index]
-        QGuiApplication.clipboard().setText(edit.toPlainText())
+        comments, followup = ((self.zh_edit, self.zh_followup_edit), (self.en_edit, self.en_followup_edit))[index]
+        QGuiApplication.clipboard().setText(excel_comment(comments.toPlainText(), followup.toPlainText()))
         self.status.setText(tr(("已複製中文病歷", "已複製英文病歷")[index]))
 
     def _show_title(self) -> None:
@@ -342,9 +447,13 @@ class RecordEditor(QWidget):
         values = {"activity": self.activity_edit.toPlainText(),
                   "zh_text": self.zh_edit.toPlainText(),
                   "en_text": self.en_edit.toPlainText(),
+                  "zh_followup": self.zh_followup_edit.toPlainText(),
+                  "en_followup": self.en_followup_edit.toPlainText(),
+                  "session_mode": self.session.mode(),
+                  "deficit": self.deficit.currentText(),
                   "start_time": normal_time(self.time_box.currentText()),
                   "end_time": normal_time(self.end_box.currentText()),
-                  "session_type": self.session_type.value(),
+                  "session_type": self.session.session_type(),
                   "goal_scores": self.scores.scores()}
         # A half-typed time ("9:") is not saved; the last good one stays until it is complete.
         changed = {field: values[field] for field in self._dirty if values[field] is not None}
@@ -361,12 +470,14 @@ class RecordEditor(QWidget):
         Pending edits are saved first so they are not replaced."""
         self.flush()
         record = self.store.get_record(self.record_id)
-        for edit, text in ((self.zh_edit, record.zh_text), (self.en_edit, record.en_text)):
+        for edit, text in ((self.zh_edit, record.zh_text), (self.en_edit, record.en_text),
+                           (self.zh_followup_edit, record.zh_followup), (self.en_followup_edit, record.en_followup)):
             if edit.toPlainText() != text:
                 edit.setPlainText(text)
         self._dirty.clear()
         self._timer.stop()
         self.status.setText("")
+        self._show_parts(shown_parts(record))
 
     def close_editor(self) -> None:
         self.flush()

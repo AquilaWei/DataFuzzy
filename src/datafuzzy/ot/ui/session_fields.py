@@ -1,55 +1,111 @@
-"""What the school form asks of each visit besides the chart: the session type and how the
-student did on each of their goals. Editable in the chart editor, read-only beside it."""
+"""What the school form and ACE ask of each visit besides the chart: the session's mode and
+service type, the deficit it addressed and how the student did on each of their goals. Editable
+in the chart editor, read-only beside it."""
 
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QButtonGroup,
     QComboBox,
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QRadioButton,
     QWidget,
 )
 
-from ..db import DEFAULT_SESSION_TYPE, SESSION_TYPES
+from ..db import (
+    COMMENT_TYPES,
+    DEFAULT_SESSION_MODE,
+    DEFAULT_SESSION_TYPE,
+    DEFICITS,
+    DIRECT_THERAPY,
+    FULL_TYPES,
+    SESSION_MODES,
+    Record,
+    types_for,
+)
 from ..excel_export import NO_SCORE
 from .i18n import tr
+from .widgets import SegmentedControl
 
 SCORES = ("met", "not met", "not addressed")  # the choices the form takes for a goal
 SCORE_WIDTH = 13  # characters the score box shows, "not addressed" in full
+MODE_LABELS = ("Individual", "Group")  # SESSION_MODES as shown
 
 
-def session_type_label(session_type: str) -> str:
-    """"Make up" for "make up": the form's words, capitalised as a choice."""
-    return session_type[:1].upper() + session_type[1:]
+def needed_parts(session_type: str) -> set[str]:
+    """The parts of the chart below the times that a service type asks for, out of "scores",
+    "activity", "comments", "followup" and "deficit" (see FULL_TYPES, COMMENT_TYPES)."""
+    if session_type in FULL_TYPES:
+        return {"scores", "activity", "comments", "followup", "deficit"}
+    if session_type in COMMENT_TYPES:
+        return {"comments"}
+    return set()
 
 
-class SessionTypePicker(QWidget):
-    """One of SESSION_TYPES, picked with radio buttons."""
+def shown_parts(record: Record) -> set[str]:
+    """The parts to show for `record`: those its service type asks for, and any other that has
+    something in it (a chart from before the types, say), so nothing written is hidden."""
+    filled = {"scores": any(record.goal_scores), "activity": bool(record.activity.strip()),
+              "comments": bool(record.zh_text.strip() or record.en_text.strip()),
+              "followup": bool(record.zh_followup.strip() or record.en_followup.strip())}
+    return needed_parts(record.session_type) | {part for part, has in filled.items() if has}
 
-    changed = Signal()  # a different type was picked by hand
 
-    def __init__(self, session_type: str = DEFAULT_SESSION_TYPE, parent: QWidget | None = None) -> None:
+class SessionPicker(QWidget):
+    """The session's mode (Individual or Group) and its service type, whose choices follow the
+    mode (see types_for): a type the new mode does not have falls back to Direct Therapy Time."""
+
+    changed = Signal()  # the mode or the type was changed by hand
+
+    def __init__(self, mode: str = DEFAULT_SESSION_MODE, session_type: str = DEFAULT_SESSION_TYPE,
+                 parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._group = QButtonGroup(self)
+        self.mode_control = SegmentedControl(list(MODE_LABELS))
+        self.mode_control.set_index(SESSION_MODES.index(mode))
+        self.type_box = QComboBox()
+        self.type_box.setMinimumContentsLength(22)
+        self._fill_types(mode, session_type)
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
-        for i, name in enumerate(SESSION_TYPES):
-            button = QRadioButton(session_type_label(name))
-            self._group.addButton(button, i)
-            row.addWidget(button)
+        row.addWidget(self.mode_control)
+        row.addSpacing(12)
+        row.addWidget(self.type_box)
         row.addStretch(1)
-        self._group.button(SESSION_TYPES.index(session_type)).setChecked(True)
-        self._group.idToggled.connect(lambda _, on: self.changed.emit() if on else None)
+        self.mode_control.changed.connect(self._mode_changed)
+        self.type_box.currentIndexChanged.connect(self.changed)
 
-    def value(self) -> str:
-        return SESSION_TYPES[self._group.checkedId()]
+    def _fill_types(self, mode: str, session_type: str) -> None:
+        self.type_box.blockSignals(True)  # refilling is not a pick
+        self.type_box.clear()
+        self.type_box.addItems(types_for(mode))
+        self.type_box.setCurrentText(session_type if session_type in types_for(mode) else DIRECT_THERAPY)
+        self.type_box.blockSignals(False)
 
-    def button(self, session_type: str) -> QRadioButton:
-        return self._group.button(SESSION_TYPES.index(session_type))
+    def _mode_changed(self) -> None:
+        self._fill_types(self.mode(), self.session_type())
+        self.changed.emit()
+
+    def mode(self) -> str:
+        return SESSION_MODES[self.mode_control.index()]
+
+    def session_type(self) -> str:
+        return self.type_box.currentText()
+
+    def set_mode(self, mode: str) -> None:
+        self.mode_control.set_index(SESSION_MODES.index(mode))
+
+    def set_session_type(self, session_type: str) -> None:
+        self.type_box.setCurrentText(session_type)
+
+
+class DeficitPicker(QComboBox):
+    """The underlying deficit a therapy session addressed, one of DEFICITS."""
+
+    def __init__(self, deficit: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.addItems(DEFICITS)
+        self.setCurrentText(deficit)
 
 
 class GoalScores(QWidget):

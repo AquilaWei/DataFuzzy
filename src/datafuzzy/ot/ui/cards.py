@@ -28,7 +28,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QMenu, QVBoxLayout, QWidget
 
-from ..db import Record
+from ..db import DIRECT_THERAPY, Record
 from ..excel_export import NO_SCORE, score_text
 from .i18n import WEEKDAYS_EN, language, tr
 from .widgets import record_menu
@@ -105,13 +105,16 @@ def normal_time(text: str) -> str | None:
 
 
 
-def preview_text(zh_text: str, en_text: str) -> str:
-    """The first lines of the chart for a card: in the interface language when there is that
-    version, else the other one."""
-    first, second = (en_text, zh_text) if language() == "en" else (zh_text, en_text)
-    text = first.strip() or second.strip()
+def preview_text(record: Record) -> str:
+    """The first lines of the chart for a card: the comments in the interface language when
+    there are, else in the other one, else the follow-up likewise; failing all, the service
+    type (an absence has no text) or a note that the chart is empty."""
+    zh_first = language() != "en"
+    candidates = ((record.zh_text, record.en_text) if zh_first else (record.en_text, record.zh_text)) + \
+        ((record.zh_followup, record.en_followup) if zh_first else (record.en_followup, record.zh_followup))
+    text = next((c.strip() for c in candidates if c.strip()), "")
     if not text:
-        return tr("（尚無內容）")
+        return record.session_type if record.session_type != DIRECT_THERAPY else tr("（尚無內容）")
     lines = [line.strip() for line in text.splitlines() if line.strip()][:PREVIEW_LINES]
     joined = "\n".join(lines)
     return joined if len(joined) <= PREVIEW_CHARS else joined[:PREVIEW_CHARS].rstrip() + "…"
@@ -196,7 +199,7 @@ class RecordCard(QWidget):
         self.date_label.setStyleSheet("font-size: 15px; font-weight: 600;")
         self.location_label = QLabel(record.location or tr("未填地點"))
         self.location_label.setObjectName("subtle")
-        self.preview_label = QLabel(preview_text(record.zh_text, record.en_text))
+        self.preview_label = QLabel(preview_text(record))
         self.preview_label.setWordWrap(True)
         self.preview_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         layout = QVBoxLayout(self)

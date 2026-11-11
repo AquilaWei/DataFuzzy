@@ -1,7 +1,7 @@
 """The chart database: students, their visit records and the export batches.
 
-Names, student profiles, locations, both chart texts, the activities and the export mappings are encrypted
-column by column;
+Names, student profiles, locations, both chart texts and their follow-ups, the activities and the export
+mappings are encrypted column by column;
 only dates and ids stay readable so records can be found by date without the key.
 """
 
@@ -40,12 +40,17 @@ CREATE TABLE IF NOT EXISTS {name} (
     activity   BLOB,  -- NULL in records made before the column existed
     start_time TEXT,  -- "HH:MM", or NULL when not filled in
     end_time   TEXT,  -- "HH:MM", or NULL when not filled in
-    session_type TEXT,  -- one of SESSION_TYPES; NULL in records made before it, read as individual
-    goal_scores  BLOB   -- JSON list, one score per profile goal; NULL when none filled in
+    session_type TEXT,  -- one of types_for(session_mode); NULL in records made before it, read as the default
+    goal_scores  BLOB,  -- JSON list, one score per profile goal; NULL when none filled in
+    session_mode TEXT,  -- one of SESSION_MODES; NULL in records made before it, read as individual
+    zh_followup  BLOB,  -- the follow-up part of the comments; NULL in records made before it
+    en_followup  BLOB,  -- likewise in English
+    deficit      TEXT   -- one of DEFICITS; NULL in records made before it, read as the default
 );
 """
 RECORD_COLUMNS = ("id, student_id, visit_date, location, zh_text, en_text, updated_at,"
-                  " activity, start_time, end_time, session_type, goal_scores")
+                  " activity, start_time, end_time, session_type, goal_scores,"
+                  " session_mode, zh_followup, en_followup, deficit")
 STUDENT_COLUMNS = "id, name, active, family_name"
 
 SCHEMA = """
@@ -102,12 +107,19 @@ def connect(path: Path, check_same_thread: bool = True) -> sqlite3.Connection:
         db.execute("ALTER TABLE record ADD COLUMN session_type TEXT")
     if "goal_scores" not in columns:  # a chart book from before goal scores
         db.execute("ALTER TABLE record ADD COLUMN goal_scores BLOB")
+    for column, kind in (("session_mode", "TEXT"), ("zh_followup", "BLOB"), ("en_followup", "BLOB"),
+                         ("deficit", "TEXT")):
+        if column not in columns:  # a chart book from before ACE modes, service types and follow-ups
+            db.execute(f"ALTER TABLE record ADD COLUMN {column} {kind}")
     if db.execute("PRAGMA user_version").fetchone()[0] < 1:
         fill_end_times(db)
         db.execute("PRAGMA user_version = 1")
     if db.execute("PRAGMA user_version").fetchone()[0] < 2:
         allow_several_records_a_day(db)
         db.execute("PRAGMA user_version = 2")
+    if db.execute("PRAGMA user_version").fetchone()[0] < 3:
+        convert_session_types(db)
+        db.execute("PRAGMA user_version = 3")
     db.commit()
     path.chmod(0o600)
     return db
@@ -129,6 +141,27 @@ def allow_several_records_a_day(db: sqlite3.Connection) -> None:
     db.execute("ALTER TABLE record_new RENAME TO record")
     db.execute("CREATE INDEX record_by_date ON record(visit_date)")
     db.commit()
+
+
+# The session types from before ACE service types, as (mode, service type).
+OLD_SESSION_TYPES = {
+    "individual": ("individual", "Direct Therapy Time"),
+    "group": ("group", "Direct Therapy Time"),
+    "consult": ("individual", "Consult"),
+    "collaboration": ("individual", "Collaboration"),
+    "make up": ("individual", "Make-Up"),
+}
+
+
+def convert_session_types(db: sqlite3.Connection) -> None:
+    """Turn the five session types from before ACE service types into a mode and a service
+    type (see OLD_SESSION_TYPES); a record with none becomes individual Direct Therapy Time.
+    Runs once per database (see connect). Only the plaintext types are touched: no key is
+    needed and no chart is decrypted."""
+    rows = db.execute("SELECT id, session_type FROM record").fetchall()
+    db.executemany("UPDATE record SET session_mode = ?, session_type = ? WHERE id = ?",
+                   [(*OLD_SESSION_TYPES.get(old or "individual", ("individual", "Direct Therapy Time")), record_id)
+                    for record_id, old in rows])
 
 
 def fill_end_times(db: sqlite3.Connection) -> None:
@@ -327,8 +360,36 @@ def split_goals(text: str) -> tuple[str, ...]:
 
 
 SESSION_MINUTES = 30  # a new session's default length
-SESSION_TYPES = ("group", "individual", "consult", "collaboration", "make up")  # as the form names them
-DEFAULT_SESSION_TYPE = "individual"
+# A chart is an individual session (ACE's Direct Time) or a group one (its Group Time), and of
+# one service type, named as ACE names it. Some types are for individual sessions only.
+SESSION_MODES = ("individual", "group")
+DEFAULT_SESSION_MODE = "individual"
+DIRECT_THERAPY = "Direct Therapy Time"
+COMMON_TYPES = ("Absent Student", DIRECT_THERAPY, "Make-Up", "School Not in Session", "Therapist Absent",
+                "Unavailable Student", "Consult", "Collaboration", "Home Program", "IEP Meeting/Meeting",
+                "Progress Report", "Scheduling")
+INDIVIDUAL_ONLY_TYPES = ("Annual IEP Report", "Evaluation", "Re-Evaluation", "Screen", "Student Observation")
+DEFAULT_SESSION_TYPE = DIRECT_THERAPY
+# What the chart asks for below the times: everything (goal scores, activities, comments and a
+# follow-up, the deficit) for a therapy session; only the comments for these; nothing otherwise.
+FULL_TYPES = frozenset({DIRECT_THERAPY, "Make-Up"})
+COMMENT_TYPES = frozenset({"Evaluation", "Re-Evaluation", "Screen", "Student Observation",
+                           "Unavailable Student", "Collaboration"})
+# The underlying deficits a therapy session can address, as ACE names them.
+DEFICITS = ("Visual Motor Coordination", "Sensory Processing")
+DEFAULT_DEFICIT = DEFICITS[0]
+
+
+def types_for(mode: str) -> tuple[str, ...]:
+    """The service types a chart of `mode` can have. Raises ValueError for an unknown mode."""
+    if mode not in SESSION_MODES:
+        raise ValueError(f"unknown session mode {mode!r}")
+    return COMMON_TYPES + INDIVIDUAL_ONLY_TYPES if mode == "individual" else COMMON_TYPES
+
+
+def session_label(mode: str, session_type: str) -> str:
+    """"Individual - Direct Therapy Time": the mode and the service type, for a list or a sheet."""
+    return f"{mode.capitalize()} - {session_type}"
 
 
 def default_end_time(start_time: str) -> str:
@@ -352,13 +413,23 @@ class Record:
     activity: str = ""  # the day's therapy activities; never in a translation export
     start_time: str = ""  # when the session began, "HH:MM", or "" if not filled in; never in a translation export
     end_time: str = ""  # when it ended, likewise
-    session_type: str = DEFAULT_SESSION_TYPE  # one of SESSION_TYPES
+    session_type: str = DEFAULT_SESSION_TYPE  # one of types_for(session_mode)
     goal_scores: tuple[str, ...] = ()  # how the student did on Goal 1, 2, …: "75%", "not met", "" for none
+    session_mode: str = DEFAULT_SESSION_MODE  # one of SESSION_MODES
+    zh_followup: str = ""  # the follow-up part of the comments (zh_text being the rest)
+    en_followup: str = ""  # likewise in English
+    deficit: str = DEFAULT_DEFICIT  # the underlying deficit the session addressed, one of DEFICITS
 
 
-def _check_session_type(session_type: str) -> None:
-    if session_type not in SESSION_TYPES:
-        raise ValueError(f"unknown session type {session_type!r}")
+# The texts of a chart that set_chart_texts writes: the comments and the follow-up, both languages.
+CHART_TEXT_FIELDS = ("zh_text", "zh_followup", "en_text", "en_followup")
+
+
+def _check_session(mode: str, session_type: str, deficit: str) -> None:
+    if session_type not in types_for(mode):
+        raise ValueError(f"service type {session_type!r} is not for a {mode} session")
+    if deficit not in DEFICITS:
+        raise ValueError(f"unknown deficit {deficit!r}")
 
 
 @dataclass(frozen=True)
@@ -521,43 +592,49 @@ class RecordStore:
     def add_record(self, student_id: int, visit_date: date, location: str = "",
                    zh_text: str = "", en_text: str = "", activity: str = "",
                    start_time: str = "", end_time: str = "",
-                   session_type: str = DEFAULT_SESSION_TYPE, goal_scores: tuple[str, ...] = ()) -> Record:
-        """Raises NotFound for an unknown student, ValueError for a session type not in
-        SESSION_TYPES. The student may already have records that day."""
-        _check_session_type(session_type)
+                   session_type: str = DEFAULT_SESSION_TYPE, goal_scores: tuple[str, ...] = (),
+                   session_mode: str = DEFAULT_SESSION_MODE, zh_followup: str = "",
+                   en_followup: str = "", deficit: str = DEFAULT_DEFICIT) -> Record:
+        """Raises NotFound for an unknown student, ValueError for a service type that is not
+        for `session_mode` (see types_for) or a deficit not in DEFICITS. The student may
+        already have records that day."""
+        _check_session(session_mode, session_type, deficit)
         self.get_student(student_id)
         with self._lock:
             updated_at = self._now()
             with self._db:
+                # The row first, for its id; the texts are written (encrypted) in the same transaction.
                 cur = self._db.execute(
-                    "INSERT INTO record(student_id, visit_date, location, zh_text, en_text,"
-                    " updated_at, activity, start_time, end_time, session_type, goal_scores)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (student_id, visit_date.isoformat(), self._enc(location, "record.location"),
-                     self._enc(zh_text, "record.zh_text"), self._enc(en_text, "record.en_text"),
-                     updated_at.isoformat(), self._enc(activity, "record.activity"),
-                     start_time or None, end_time or None, session_type,
-                     self._enc_scores(tuple(goal_scores))))
-        return Record(cur.lastrowid, student_id, visit_date, location, zh_text, en_text, updated_at,
-                      activity, start_time, end_time, session_type, tuple(goal_scores))
+                    "INSERT INTO record(student_id, visit_date, location, zh_text, en_text, updated_at)"
+                    " VALUES (?, ?, ?, ?, ?, ?)",
+                    (student_id, visit_date.isoformat(), b"", b"", b"", updated_at.isoformat()))
+                record = Record(cur.lastrowid, student_id, visit_date, location, zh_text, en_text, updated_at,
+                                activity, start_time, end_time, session_type, tuple(goal_scores),
+                                session_mode, zh_followup, en_followup, deficit)
+                self._write_texts(record)
+        return record
 
     def update_record(self, record_id: int, *, location: str | None = None,
                       zh_text: str | None = None, en_text: str | None = None,
                       activity: str | None = None, start_time: str | None = None,
                       end_time: str | None = None, session_type: str | None = None,
-                      goal_scores: tuple[str, ...] | None = None) -> Record:
+                      goal_scores: tuple[str, ...] | None = None, session_mode: str | None = None,
+                      zh_followup: str | None = None, en_followup: str | None = None,
+                      deficit: str | None = None) -> Record:
         """Change only the fields given (None leaves one alone), for autosave. The English
         text is overwritten, not versioned. Raises NotFound for an unknown record, ValueError
-        for a session type not in SESSION_TYPES."""
-        if session_type is not None:
-            _check_session_type(session_type)
+        if the mode and service type it ends up with do not go together (see types_for) or
+        for a deficit not in DEFICITS."""
         given = {"location": location, "zh_text": zh_text, "en_text": en_text, "activity": activity,
                  "start_time": start_time, "end_time": end_time, "session_type": session_type,
-                 "goal_scores": None if goal_scores is None else tuple(goal_scores)}
+                 "goal_scores": None if goal_scores is None else tuple(goal_scores),
+                 "session_mode": session_mode, "zh_followup": zh_followup, "en_followup": en_followup,
+                 "deficit": deficit}
         with self._lock:
             record = self.get_record(record_id)
             new = replace(record, updated_at=self._now(),
                           **{field: value for field, value in given.items() if value is not None})
+            _check_session(new.session_mode, new.session_type, new.deficit)
             with self._db:
                 self._write_texts(new)
         return new
@@ -572,23 +649,31 @@ class RecordStore:
                                  (visit_date.isoformat(), new.updated_at.isoformat(), record_id))
         return new
 
-    def set_en_texts(self, texts: dict[int, str]) -> None:
-        """Replace the English text of several records in one transaction: either all are
-        written or, if one id is unknown (NotFound), none."""
+    def set_chart_texts(self, texts: dict[int, dict[str, str]]) -> None:
+        """Replace chart texts of several records in one transaction: either all are written
+        or, if one id is unknown (NotFound), none. Each record's dict holds the fields to
+        change, out of CHART_TEXT_FIELDS (ValueError for any other)."""
         with self._lock, self._db:
-            for record_id, en_text in texts.items():
+            for record_id, fields in texts.items():
+                unknown = set(fields) - set(CHART_TEXT_FIELDS)
+                if unknown:
+                    raise ValueError(f"not chart texts: {sorted(unknown)}")
                 record = self.get_record(record_id)
-                self._write_texts(replace(record, en_text=en_text, updated_at=self._now()))
+                self._write_texts(replace(record, **fields, updated_at=self._now()))
 
     def _write_texts(self, r: Record) -> None:
+        followups = [None if not text else self._enc(text, f"record.{column}")
+                     for column, text in (("zh_followup", r.zh_followup), ("en_followup", r.en_followup))]
         self._db.execute(
             "UPDATE record SET location = ?, zh_text = ?, en_text = ?, updated_at = ?,"
-            " activity = ?, start_time = ?, end_time = ?, session_type = ?, goal_scores = ?"
+            " activity = ?, start_time = ?, end_time = ?, session_type = ?, goal_scores = ?,"
+            " session_mode = ?, zh_followup = ?, en_followup = ?, deficit = ?"
             " WHERE id = ?",
             (self._enc(r.location, "record.location"), self._enc(r.zh_text, "record.zh_text"),
              self._enc(r.en_text, "record.en_text"), r.updated_at.isoformat(),
              self._enc(r.activity, "record.activity"), r.start_time or None,
-             r.end_time or None, r.session_type, self._enc_scores(r.goal_scores), r.id))
+             r.end_time or None, r.session_type, self._enc_scores(r.goal_scores),
+             r.session_mode, *followups, r.deficit, r.id))
 
     def _enc_scores(self, scores: tuple[str, ...]) -> bytes | None:
         """Scores are about the student's progress, so they are encrypted like the charts."""
@@ -618,7 +703,7 @@ class RecordStore:
 
     def book_next_visit(self, record_id: int, days: int = 7) -> Record:
         """A record for the next session, `days` after this one: the same student, start and end
-        time and session type, at the student's location now. If the student already has a
+        time, mode and service type, at the student's location now. If the student already has a
         record then that starts at the same time, it is returned instead, so booking twice makes
         one. Raises NotFound for an unknown record."""
         with self._lock:
@@ -629,7 +714,7 @@ class RecordStore:
                     return booked
             return self.add_record(record.student_id, day, self.student_location(record.student_id),
                                    start_time=record.start_time, end_time=record.end_time,
-                                   session_type=record.session_type)
+                                   session_type=record.session_type, session_mode=record.session_mode)
 
     def _record(self, row: tuple) -> Record:
         return Record(row[0], row[1], date.fromisoformat(row[2]),
@@ -637,7 +722,11 @@ class RecordStore:
                       self._dec(row[5], "record.en_text"), datetime.fromisoformat(row[6]),
                       "" if row[7] is None else self._dec(row[7], "record.activity"), row[8] or "",
                       row[9] or "", row[10] or DEFAULT_SESSION_TYPE,
-                      () if row[11] is None else tuple(json.loads(self._dec(row[11], "record.goal_scores"))))
+                      () if row[11] is None else tuple(json.loads(self._dec(row[11], "record.goal_scores"))),
+                      row[12] or DEFAULT_SESSION_MODE,
+                      "" if row[13] is None else self._dec(row[13], "record.zh_followup"),
+                      "" if row[14] is None else self._dec(row[14], "record.en_followup"),
+                      row[15] or DEFAULT_DEFICIT)
 
     def _records(self, where: str, args: tuple, order: str) -> list[Record]:
         with self._lock:
@@ -768,6 +857,18 @@ class RecordStore:
         with self._lock, self._db:
             self._db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('excel_folder', ?)",
                              (blob,))
+
+    # --- follow-ups moved out of older comments ---------------------------------------
+
+    def followups_reviewed(self) -> bool:
+        """Whether the user has been through the follow-ups found in comments from before they
+        had a box of their own (see followup.py), so the review is not offered again."""
+        with self._lock:
+            return self._db.execute("SELECT 1 FROM meta WHERE key = 'followups_reviewed'").fetchone() is not None
+
+    def set_followups_reviewed(self) -> None:
+        with self._lock, self._db:
+            self._db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('followups_reviewed', ?)", (b"1",))
 
     # --- export batches -------------------------------------------------------------
 

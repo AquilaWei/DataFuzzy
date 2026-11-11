@@ -116,9 +116,16 @@ class Launcher(QObject):
         if old is not None:  # a new language: same place and size, the old one's edits are saved
             self.window.setGeometry(old.geometry())
         self.window.show()
+        if old is None:  # once per start, after unlocking: move older follow-ups if any are found
+            QTimer.singleShot(0, self._review_followups)
         if old is not None:
             old.close()
             old.deleteLater()
+
+    def _review_followups(self) -> None:
+        # Deferred to the event loop, by when the app may already be shutting down.
+        if self.store is not None and self.window is not None:
+            self.window.review_followups()
 
     def _offer_models(self) -> None:
         """First launch without any model: offer the download once."""

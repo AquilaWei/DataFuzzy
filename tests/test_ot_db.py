@@ -202,10 +202,11 @@ def test_booking_the_next_visit_makes_one_a_week_later_at_the_same_time(store):
     student = store.add_student("王小明")
     store.set_profile(student.id, StudentProfile(location="B校"))
     record = store.add_record(student.id, date(2026, 10, 5), "A校", "中文", start_time="10:00",
-                              end_time="10:30", session_type="group", goal_scores=("met",))
+                              end_time="10:30", session_mode="group", session_type="Make-Up",
+                              goal_scores=("met",))
     booked = store.book_next_visit(record.id)
-    assert (booked.visit_date, booked.start_time, booked.end_time, booked.session_type) == (
-        date(2026, 10, 12), "10:00", "10:30", "group")
+    assert (booked.visit_date, booked.start_time, booked.end_time, booked.session_mode, booked.session_type) == (
+        date(2026, 10, 12), "10:00", "10:30", "group", "Make-Up")
     assert (booked.location, booked.zh_text, booked.goal_scores) == ("B校", "", ())
 
 
@@ -232,7 +233,8 @@ def test_a_chart_book_from_before_several_records_a_day_takes_a_second_one(tmp_p
         s.add_record(student.id, date(2026, 10, 1), "A校", "中文", "English", start_time="09:00")
     old = sqlite3.connect(path)
     old.executescript(
-        "CREATE TABLE r2 AS SELECT * FROM record; DROP TABLE record;"
+        "CREATE TABLE r2 AS SELECT id, student_id, visit_date, location, zh_text, en_text, updated_at,"
+        " activity, start_time, end_time, session_type, goal_scores FROM record; DROP TABLE record;"
         " CREATE TABLE record (id INTEGER PRIMARY KEY, student_id INTEGER NOT NULL REFERENCES student(id)"
         " ON DELETE CASCADE, visit_date TEXT NOT NULL, location BLOB NOT NULL, zh_text BLOB NOT NULL,"
         " en_text BLOB NOT NULL, updated_at TEXT NOT NULL, activity BLOB, start_time TEXT, end_time TEXT,"
@@ -286,19 +288,19 @@ def test_update_of_unknown_record_raises_not_found(store):
         store.update_record(99, zh_text="x")
 
 
-def test_set_en_texts_writes_all_records(store):
+def test_set_chart_texts_writes_all_records(store):
     student = store.add_student("王小明")
     a = store.add_record(student.id, date(2026, 10, 1))
     b = store.add_record(student.id, date(2026, 10, 2))
-    store.set_en_texts({a.id: "one", b.id: "two"})
+    store.set_chart_texts({a.id: {"en_text": "one"}, b.id: {"en_text": "two"}})
     assert [store.get_record(a.id).en_text, store.get_record(b.id).en_text] == ["one", "two"]
 
 
-def test_set_en_texts_writes_nothing_when_one_id_is_unknown(store):
+def test_set_chart_texts_writes_nothing_when_one_id_is_unknown(store):
     student = store.add_student("王小明")
     a = store.add_record(student.id, date(2026, 10, 1))
     with pytest.raises(NotFound):
-        store.set_en_texts({a.id: "one", 99: "two"})
+        store.set_chart_texts({a.id: {"en_text": "one"}, 99: {"en_text": "two"}})
     assert store.get_record(a.id).en_text == ""
 
 
@@ -553,10 +555,10 @@ def test_update_changes_activity_and_keeps_the_texts(store):
     assert (again.activity, again.location, again.zh_text, again.en_text) == ("平衡木", "新竹國小", "中文", "English")
 
 
-def test_set_en_texts_keeps_the_activity(store):
+def test_set_chart_texts_keeps_the_activity(store):
     student = store.add_student("王小明")
     record = store.add_record(student.id, date(2026, 10, 1), activity="串珠")
-    store.set_en_texts({record.id: "Beading"})
+    store.set_chart_texts({record.id: {"en_text": "Beading"}})
     assert store.get_record(record.id).activity == "串珠"
 
 
@@ -618,7 +620,7 @@ def test_start_time_is_saved_cleared_and_kept_by_other_updates(store):
     assert record.start_time == ""
     store.update_record(record.id, start_time="09:30")
     store.update_record(record.id, zh_text="中文")
-    store.set_en_texts({record.id: "English"})
+    store.set_chart_texts({record.id: {"en_text": "English"}})
     assert store.get_record(record.id).start_time == "09:30"
     store.update_record(record.id, start_time="")
     assert store.get_record(record.id).start_time == ""
@@ -882,17 +884,18 @@ def test_profile_is_an_iep_unless_marked_504():
     assert StudentProfile(plan_504=True).plan_label == "504 Date"
 
 
-def test_new_record_is_an_individual_session(store):
+def test_new_record_is_an_individual_direct_therapy_session(store):
     student = store.add_student("王小明")
-    assert store.add_record(student.id, date(2026, 10, 1)).session_type == "individual"
+    record = store.add_record(student.id, date(2026, 10, 1))
+    assert (record.session_mode, record.session_type) == ("individual", "Direct Therapy Time")
 
 
 def test_session_type_and_goal_scores_are_read_back(store):
     student = store.add_student("王小明")
     record = store.add_record(student.id, date(2026, 10, 1))
-    store.update_record(record.id, session_type="group", goal_scores=("75%", "not met"))
+    store.update_record(record.id, session_mode="group", session_type="Scheduling", goal_scores=("75%", "not met"))
     again = store.get_record(record.id)
-    assert (again.session_type, again.goal_scores) == ("group", ("75%", "not met"))
+    assert (again.session_mode, again.session_type, again.goal_scores) == ("group", "Scheduling", ("75%", "not met"))
 
 
 def test_an_unknown_session_type_is_refused(store):
@@ -910,19 +913,132 @@ def test_goal_scores_are_stored_encrypted(tmp_path):
     assert b"not met" not in path.read_bytes()
 
 
-def test_chart_book_from_before_session_types_reads_them_as_individual(tmp_path):
+def test_chart_book_from_before_session_types_reads_them_as_individual_direct_therapy(tmp_path):
     path = tmp_path / "t.db"
     with RecordStore(path, KEY) as store:
         student = store.add_student("王小明")
-        record = store.add_record(student.id, date(2026, 10, 1), session_type="consult")
+        record = store.add_record(student.id, date(2026, 10, 1), session_type="Consult")
     old = sqlite3.connect(path)
-    old.execute("ALTER TABLE record DROP COLUMN session_type")
-    old.execute("ALTER TABLE record DROP COLUMN goal_scores")
+    for column in ("session_type", "goal_scores", "session_mode", "zh_followup", "en_followup", "deficit"):
+        old.execute(f"ALTER TABLE record DROP COLUMN {column}")
+    old.execute("PRAGMA user_version = 2")
     old.commit()
     old.close()
     with RecordStore(path, KEY) as again:
-        assert again.get_record(record.id).session_type == "individual"
-        assert again.get_record(record.id).goal_scores == ()
+        read = again.get_record(record.id)
+    assert (read.session_mode, read.session_type, read.goal_scores) == ("individual", "Direct Therapy Time", ())
+
+
+def _old_session_type_book(tmp_path, old_type: str):
+    """A chart book from before ACE service types, with one chart of `old_type`."""
+    path = tmp_path / "t.db"
+    with RecordStore(path, KEY) as store:
+        student = store.add_student("王小明")
+        record = store.add_record(student.id, date(2026, 10, 1), "A校", "中文", "English")
+    old = sqlite3.connect(path)
+    old.execute("UPDATE record SET session_type = ?, session_mode = NULL", (old_type,))
+    old.execute("PRAGMA user_version = 2")
+    old.commit()
+    old.close()
+    return path, record.id
+
+
+def test_an_old_individual_session_becomes_individual_direct_therapy(tmp_path):
+    path, record_id = _old_session_type_book(tmp_path, "individual")
+    with RecordStore(path, KEY) as store:
+        record = store.get_record(record_id)
+    assert (record.session_mode, record.session_type) == ("individual", "Direct Therapy Time")
+
+
+def test_an_old_group_session_becomes_group_direct_therapy(tmp_path):
+    path, record_id = _old_session_type_book(tmp_path, "group")
+    with RecordStore(path, KEY) as store:
+        record = store.get_record(record_id)
+    assert (record.session_mode, record.session_type) == ("group", "Direct Therapy Time")
+
+
+def test_an_old_consult_becomes_an_individual_consult(tmp_path):
+    path, record_id = _old_session_type_book(tmp_path, "consult")
+    with RecordStore(path, KEY) as store:
+        record = store.get_record(record_id)
+    assert (record.session_mode, record.session_type) == ("individual", "Consult")
+
+
+def test_an_old_collaboration_becomes_an_individual_collaboration(tmp_path):
+    path, record_id = _old_session_type_book(tmp_path, "collaboration")
+    with RecordStore(path, KEY) as store:
+        record = store.get_record(record_id)
+    assert (record.session_mode, record.session_type) == ("individual", "Collaboration")
+
+
+def test_an_old_make_up_becomes_an_individual_make_up(tmp_path):
+    path, record_id = _old_session_type_book(tmp_path, "make up")
+    with RecordStore(path, KEY) as store:
+        record = store.get_record(record_id)
+    assert (record.session_mode, record.session_type) == ("individual", "Make-Up")
+
+
+def test_converting_old_session_types_keeps_the_chart_texts(tmp_path):
+    path, record_id = _old_session_type_book(tmp_path, "group")
+    with RecordStore(path, KEY) as store:
+        record = store.get_record(record_id)
+    assert (record.location, record.zh_text, record.en_text, record.zh_followup, record.en_followup) == (
+        "A校", "中文", "English", "", "")
+
+
+def test_an_old_chart_addressed_the_default_deficit(tmp_path):
+    path, record_id = _old_session_type_book(tmp_path, "individual")
+    with RecordStore(path, KEY) as store:
+        assert store.get_record(record_id).deficit == "Visual Motor Coordination"
+
+
+def test_a_group_session_cannot_be_an_evaluation(store):
+    student = store.add_student("王小明")
+    with pytest.raises(ValueError):
+        store.add_record(student.id, date(2026, 10, 1), session_mode="group", session_type="Evaluation")
+
+
+def test_changing_an_evaluation_to_a_group_session_is_refused(store):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, date(2026, 10, 1), session_type="Evaluation")
+    with pytest.raises(ValueError):
+        store.update_record(record.id, session_mode="group")
+
+
+def test_an_unknown_deficit_is_refused(store):
+    student = store.add_student("王小明")
+    with pytest.raises(ValueError):
+        store.add_record(student.id, date(2026, 10, 1), deficit="Fine Motor Skills")
+
+
+def test_follow_ups_and_deficit_are_read_back(store):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, date(2026, 10, 1))
+    store.update_record(record.id, zh_followup="下次練拉鍊", en_followup="Practise zippers",
+                        deficit="Sensory Processing")
+    again = store.get_record(record.id)
+    assert (again.zh_followup, again.en_followup, again.deficit) == (
+        "下次練拉鍊", "Practise zippers", "Sensory Processing")
+
+
+def test_set_chart_texts_writes_the_follow_up(store):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, date(2026, 10, 1), en_text="Old")
+    store.set_chart_texts({record.id: {"en_text": "Notes", "en_followup": "Next"}})
+    again = store.get_record(record.id)
+    assert (again.en_text, again.en_followup) == ("Notes", "Next")
+
+
+def test_set_chart_texts_refuses_other_fields(store):
+    student = store.add_student("王小明")
+    record = store.add_record(student.id, date(2026, 10, 1))
+    with pytest.raises(ValueError):
+        store.set_chart_texts({record.id: {"activity": "串珠"}})
+
+
+def test_the_follow_up_review_is_remembered(store):
+    store.set_followups_reviewed()
+    assert store.followups_reviewed()
 
 
 def test_plan_dates_read_month_first_with_a_two_or_four_digit_year():

@@ -323,7 +323,7 @@ def test_import_applied_refreshes_open_editor(qtbot, store, monkeypatch):
     record_id = window.new_record(student_id, OCT_1)
 
     def fake_exec(dialog):
-        store.set_en_texts({record_id: "Imported"})
+        store.set_chart_texts({record_id: {"en_text": "Imported"}})
         dialog.applied.emit(1)
 
     monkeypatch.setattr(main_window.ImportDialog, "exec", fake_exec)
