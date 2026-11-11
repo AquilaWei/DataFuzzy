@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.5] - 2026-11-11
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 變更
+- ACE 擴充功能改用 TheraNote 的圖示，版本號與 TheraNote 相同。
+- ACE 頁面上的面板平常不顯示，點 Chrome 工具列的 TheraNote 圖示才打開，再點一次或按 ✕ 關閉。
+
 ## [0.7.0.37.4] - 2026-11-11
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
