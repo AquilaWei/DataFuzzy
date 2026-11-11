@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.4] - 2026-11-11
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 變更
+- ACE 填寫檔的存放資料夾可以自己選，選一次就會記住；沒選過時存到「下載」。同名檔案已存在時會先問要不要取代。
+
 ## [0.7.0.37.3] - 2026-11-11
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
