@@ -563,26 +563,32 @@ class ExcelExportDialog(QDialog):
 
 class AceExportDialog(QDialog):
     """Pick a week, save its charts as the ACE fill-in file the browser extension enters into
-    ACE Portal (see ace_export.py). The file is not encrypted, which the dialog says."""
+    ACE Portal (see ace_export.py), into a folder the user picks once (remembered; Downloads
+    until then). The file is not encrypted, which the dialog says."""
 
     def __init__(self, store: RecordStore, today: date | None = None,
-                 choose: Callable[[str], str] | None = None, parent: QWidget | None = None) -> None:
+                 choose: Callable[[str], str] | None = None,
+                 confirm: Callable[[Path], bool] | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.store = store
         self.written: Path | None = None
-        self._choose = choose or (lambda start: QFileDialog.getSaveFileName(
-            self, tr("ACE 填寫檔"), start, "JSON (*.json)")[0])
+        self._choose = choose or (lambda start: QFileDialog.getExistingDirectory(
+            self, tr("ACE 填寫檔資料夾"), start))
+        self._confirm = confirm or (lambda path: ask_replace_file(self, path))
         today = today or date.today()
         monday = today - timedelta(days=today.weekday())  # ACE's grid shows Monday to Sunday
         self.setWindowTitle(tr("ACE 填寫檔"))
-        self.resize(520, 220)
+        self.resize(560, 240)
 
         self.from_edit = QDateEdit(to_qdate(monday))
         self.to_edit = QDateEdit(to_qdate(monday + timedelta(days=6)))
         for edit in (self.from_edit, self.to_edit):
             edit.setCalendarPopup(True)
             edit.setDisplayFormat("yyyy-MM-dd")
-        self.save_btn = QPushButton(tr("存檔…"))
+        self.folder_label = QLabel(str(self.folder()))
+        self.folder_label.setWordWrap(True)
+        self.folder_btn = QPushButton(tr("選擇資料夾…"))
+        self.save_btn = QPushButton(tr("存檔"))
         self.save_btn.setObjectName("primary")
         warning = QLabel(tr("檔案裡有學生姓名和英文病歷，沒有加密。在 ACE 填完後請刪除。"))
         warning.setWordWrap(True)
@@ -596,15 +602,30 @@ class AceExportDialog(QDialog):
         row.addWidget(QLabel(tr("到")))
         row.addWidget(self.to_edit)
         row.addStretch(1)
+        folder = QHBoxLayout()
+        folder.addWidget(QLabel(tr("存放資料夾：")))
+        folder.addWidget(self.folder_label, 1)
+        folder.addWidget(self.folder_btn)
         buttons = QHBoxLayout()
         buttons.addStretch(1)
         buttons.addWidget(self.save_btn)
         layout = QVBoxLayout(self)
         layout.addLayout(row)
+        layout.addLayout(folder)
         layout.addWidget(warning)
         layout.addWidget(self.status, 1)
         layout.addLayout(buttons)
+        self.folder_btn.clicked.connect(self.choose_folder)
         self.save_btn.clicked.connect(self.save)
+
+    def folder(self) -> Path:
+        return Path(self.store.ace_folder() or Path.home() / "Downloads")
+
+    def choose_folder(self) -> None:
+        chosen = self._choose(str(self.folder()))
+        if chosen:
+            self.store.set_ace_folder(chosen)
+            self.folder_label.setText(chosen)
 
     def save(self) -> None:
         date_from, date_to = to_date(self.from_edit.date()), to_date(self.to_edit.date())
@@ -615,12 +636,12 @@ class AceExportDialog(QDialog):
         if not cells:
             self.status.setText(tr("這段期間沒有病歷。"))
             return
-        start = Path.home() / "Downloads" / f"TheraNote-ACE-{date_from.isoformat()}.json"
-        chosen = self._choose(str(start))
-        if not chosen:
+        path = self.folder() / f"TheraNote-ACE-{date_from.isoformat()}.json"
+        if path.exists() and not self._confirm(path):
+            self.status.setText(tr("略過 {path}：沒有取代既有檔案。", path=path.name))
             return
-        path = Path(chosen)
         try:
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(to_json(cells, date_from, date_to), encoding="utf-8")
         except OSError as e:
             self.status.setText(tr("{label}寫入失敗：{error}", label=path.name, error=e.strerror or e))

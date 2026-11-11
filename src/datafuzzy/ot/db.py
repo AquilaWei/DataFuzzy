@@ -848,15 +848,27 @@ class RecordStore:
     def excel_folder(self) -> str:
         """The folder the last Excel export went to, "" before the first. Kept encrypted, since
         a path can name a school or a student."""
-        with self._lock:
-            row = self._db.execute("SELECT value FROM meta WHERE key = 'excel_folder'").fetchone()
-        return self._dec(row[0], "meta.excel_folder") if row else ""
+        return self._folder("excel_folder")
 
     def set_excel_folder(self, folder: str) -> None:
-        blob = self._enc(folder, "meta.excel_folder")
+        self._set_folder("excel_folder", folder)
+
+    def ace_folder(self) -> str:
+        """The folder ACE fill-in files are saved to, "" until one is picked; encrypted likewise."""
+        return self._folder("ace_folder")
+
+    def set_ace_folder(self, folder: str) -> None:
+        self._set_folder("ace_folder", folder)
+
+    def _folder(self, key: str) -> str:
+        with self._lock:
+            row = self._db.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+        return self._dec(row[0], f"meta.{key}") if row else ""
+
+    def _set_folder(self, key: str, folder: str) -> None:
+        blob = self._enc(folder, f"meta.{key}")
         with self._lock, self._db:
-            self._db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('excel_folder', ?)",
-                             (blob,))
+            self._db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)", (key, blob))
 
     # --- follow-ups moved out of older comments ---------------------------------------
 

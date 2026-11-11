@@ -1,5 +1,6 @@
 import json
 from datetime import date
+from pathlib import Path
 
 import pytest
 
@@ -128,36 +129,39 @@ def test_the_file_holds_each_row_s_fields(store):
 TUESDAY = date(2026, 11, 10)
 
 
-def ace_dialog(qtbot, store, choose):
+def ace_dialog(qtbot, store, choose=lambda start: "", confirm=lambda path: True):
     from datafuzzy.ot.ui.exchange_dialogs import AceExportDialog
 
-    dialog = AceExportDialog(store, today=TUESDAY, choose=choose)
+    dialog = AceExportDialog(store, today=TUESDAY, choose=choose, confirm=confirm)
     qtbot.addWidget(dialog)
     return dialog
 
 
 def test_the_dialog_starts_at_this_week_monday_to_sunday(qtbot, store):
-    dialog = ace_dialog(qtbot, store, lambda start: "")
+    dialog = ace_dialog(qtbot, store)
     assert (dialog.from_edit.date().toString("yyyy-MM-dd"), dialog.to_edit.date().toString("yyyy-MM-dd")) == (
         "2026-11-09", "2026-11-15")
 
 
-def test_the_dialog_suggests_a_file_in_downloads_named_by_the_week(qtbot, store):
+def test_files_go_to_downloads_until_a_folder_is_picked(qtbot, store):
+    assert ace_dialog(qtbot, store).folder() == Path.home() / "Downloads"
+
+
+def test_a_picked_folder_is_remembered(qtbot, store, tmp_path):
+    ace_dialog(qtbot, store, choose=lambda start: str(tmp_path)).choose_folder()
+    assert ace_dialog(qtbot, store).folder() == tmp_path
+
+
+def test_saving_writes_the_week_s_file_into_the_folder(qtbot, store, tmp_path):
     therapy(store, store.add_student("Todd", "Lane").id)
-    asked = []
-    ace_dialog(qtbot, store, lambda start: asked.append(start) or "").save()
-    assert asked[0].endswith("Downloads/TheraNote-ACE-2026-11-09.json")
+    store.set_ace_folder(str(tmp_path))
+    ace_dialog(qtbot, store).save()
+    assert json.loads((tmp_path / "TheraNote-ACE-2026-11-09.json").read_text())["cells"][0]["first"] == "Todd"
 
 
-def test_saving_writes_the_week_s_cells(qtbot, store, tmp_path):
+def test_a_file_already_there_is_kept_unless_replacing_is_confirmed(qtbot, store, tmp_path):
     therapy(store, store.add_student("Todd", "Lane").id)
-    path = tmp_path / "ace.json"
-    ace_dialog(qtbot, store, lambda start: str(path)).save()
-    assert json.loads(path.read_text())["cells"][0]["first"] == "Todd"
-
-
-def test_cancelling_the_save_writes_nothing(qtbot, store):
-    therapy(store, store.add_student("Todd", "Lane").id)
-    dialog = ace_dialog(qtbot, store, lambda start: "")
-    dialog.save()
-    assert dialog.written is None
+    store.set_ace_folder(str(tmp_path))
+    (tmp_path / "TheraNote-ACE-2026-11-09.json").write_text("old")
+    ace_dialog(qtbot, store, confirm=lambda path: False).save()
+    assert (tmp_path / "TheraNote-ACE-2026-11-09.json").read_text() == "old"

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml/badge.svg)](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/AquilaWei/DataFuzzy/graph/badge.svg)](https://codecov.io/gh/AquilaWei/DataFuzzy)
-![Version](https://img.shields.io/badge/version-0.7.0.37.3-blue)
+![Version](https://img.shields.io/badge/version-0.7.0.37.4-blue)
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
@@ -51,7 +51,7 @@ uv run theranote
 - **學生姓名**：新增學生時分成「名」（必填）和「姓」（選填，用來區分同名的學生）。
   匯出時以名為主換代號，病歷寫「Emma」貼回就是「Emma」，寫全名「Emma Wang」才還原成全名。
   舊學生的姓名整個存在「名」欄，按 ✎ 把姓移到「姓」欄後才會照這個方式處理。
-- **ACE 自動填寫**：側邊欄「ACE 填寫檔」選一週（預設本週一到週日），存成 `TheraNote-ACE-<週一>.json`。
+- **ACE 自動填寫**：側邊欄「ACE 填寫檔」選一週（預設本週一到週日），存成 `TheraNote-ACE-<週一>.json`，存放資料夾按「選擇資料夾…」設定一次即會記住（沒設定時存到「下載」）。
   再用 Chrome 擴充功能（repo 的 `chrome-extension/`）在 ACE Portal 的 Therapist's Accountability 週表逐格填寫：
   面板按「填這一格」會打開該學生那天的 Edit Therapist Time 視窗並填好 Direct／Group／Indirect，
   **由你檢查後自己按 Save Changes**（按 Cancel 會標記為跳過），存好才換下一格。

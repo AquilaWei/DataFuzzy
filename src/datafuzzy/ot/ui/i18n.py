@@ -75,7 +75,9 @@ ENGLISH = {
     "貼回": "Paste back",
     "Excel 匯出": "Excel export",
     "ACE 填寫檔": "ACE fill-in file",
-    "存檔…": "Save…",
+    "存檔": "Save",
+    "ACE 填寫檔資料夾": "ACE fill-in file folder",
+    "存放資料夾：": "Save to:",
     "檔案裡有學生姓名和英文病歷，沒有加密。在 ACE 填完後請刪除。":
         "The file holds the students' names and English charts, unencrypted. Delete it once ACE is filled in.",
     "已存 {count} 格到 {path}；其中 {manual} 格要手動填。":
