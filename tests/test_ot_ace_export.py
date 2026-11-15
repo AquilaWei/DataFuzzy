@@ -13,7 +13,7 @@ from datafuzzy.ot.ace_export import (
     to_json,
 )
 from datafuzzy.ot.ace_mapping import AceRow
-from datafuzzy.ot.db import RecordStore, StudentProfile
+from datafuzzy.ot.db import Plan, RecordStore, StudentProfile
 
 KEY = bytes(range(32))
 NOV_9, NOV_10, NOV_15 = date(2026, 11, 9), date(2026, 11, 10), date(2026, 11, 15)
@@ -178,3 +178,20 @@ def test_a_file_already_there_is_kept_unless_replacing_is_confirmed(qtbot, store
     (tmp_path / "TheraNote-ACE-2026-11-09.json").write_text("old")
     ace_dialog(qtbot, store, confirm=lambda path: False).save()
     assert (tmp_path / "TheraNote-ACE-2026-11-09.json").read_text() == "old"
+
+
+def test_a_group_plan_student_s_one_to_one_session_is_entered_as_a_group_of_one(store):
+    todd = store.add_student("Todd", "Lane").id
+    store.set_profile(todd, StudentProfile(group=True))
+    therapy(store, todd)
+    [cell] = week(store)
+    assert (cell.rows[0].section, cell.rows[0].group, cell.rows[0].group_size) == ("group", "Group A", 1)
+
+
+def test_the_group_plan_in_effect_on_the_chart_s_day_decides(store):
+    todd = store.add_student("Todd", "Lane").id
+    store.set_profile(todd, StudentProfile().with_plans([Plan(False, "01/01/2026", group=True),
+                                                         Plan(False, "11/12/2026")]))
+    therapy(store, todd, day=NOV_10)
+    [cell] = week(store)
+    assert cell.rows[0].section == "group"

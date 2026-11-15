@@ -104,3 +104,33 @@ def test_each_day_names_its_groups_from_a():
 
 def test_individual_charts_form_no_group():
     assert group_names([chart(1), chart(2, mode="group", start="")]) == {}
+
+
+def test_a_group_plan_student_s_one_to_one_therapy_fills_group_time():
+    [main, _] = ace_rows(chart(en_followup="Zippers."), ma_billing=False, group=("Group A", 1), plan_group=True)
+    assert (main.section, main.group, main.group_size) == ("group", "Group A", 1)
+
+
+def test_a_group_plan_student_s_one_to_one_therapy_says_why_before_its_follow_up():
+    [main, _] = ace_rows(chart(en_followup="Zippers."), ma_billing=False, group=("Group A", 1), plan_group=True)
+    assert main.comments_on_log == "No appropriate student to group with.\nZippers."
+
+
+def test_a_group_plan_student_s_one_to_one_therapy_takes_no_ma_billing():
+    rows = ace_rows(chart(), ma_billing=True, group=("Group A", 1), plan_group=True)
+    assert rows[1:] == [DOCUMENTATION]
+
+
+def test_a_group_plan_student_s_group_therapy_keeps_ma_billing():
+    rows = ace_rows(chart(mode="group"), ma_billing=True, group=("Group A", 2), plan_group=True)
+    assert rows[1:] == [DOCUMENTATION, AceRow("indirect", "MA ACCESS Billing", 5)]
+
+
+def test_a_group_plan_student_s_evaluation_stays_in_direct_time():
+    [main, _] = ace_rows(chart(session_type="Evaluation"), ma_billing=False, plan_group=True)
+    assert (main.section, main.comments_on_log) == ("direct", "Comments.")
+
+
+def test_a_chart_held_alone_is_a_group_of_its_own():
+    records = [chart(1, mode="group"), chart(2, mode="group"), chart(3)]
+    assert group_names(records, alone=[3]) == {1: ("Group A", 2), 2: ("Group A", 2), 3: ("Group B", 1)}

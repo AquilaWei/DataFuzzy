@@ -21,6 +21,8 @@ UNMAPPED_TYPES = frozenset({"Consult"})
 ACE_NAMES = {NO_SHOW: "No Show"}
 # Of the types ACE asks no time for, those that still take minutes.
 TIMED_WITHOUT_TIMES = frozenset({"Annual IEP Report", NO_SHOW})
+# The first line of the comments of a therapy session held alone for a student whose plan is for groups.
+NO_GROUP_NOTE = "No appropriate student to group with."
 
 
 @dataclass(frozen=True)
@@ -54,28 +56,42 @@ def ace_time(hhmm: str) -> str:
     return f"{(hour - 1) % 12 + 1}:{minute:02d} {'AM' if hour < 12 else 'PM'}"
 
 
-def group_names(records: Iterable[Record]) -> dict[int, tuple[str, int]]:
-    """Record id -> (group name, group size) for the group charts among `records`. A group is the
-    group charts of one day that start at the same time, whoever the students; each day's groups
-    are named Group A, Group B, … from the earliest. Charts without a start time form no group."""
+def group_names(records: Iterable[Record], alone: Iterable[int] = ()) -> dict[int, tuple[str, int]]:
+    """Record id -> (group name, group size) for the group charts among `records`, and for the
+    charts in `alone` (see held_alone), a group of one each. A group is the group charts of one
+    day that start at the same time, whoever the students; each day's groups are named Group A,
+    Group B, … from the earliest. Charts without a start time form no group."""
+    alone = set(alone)
     groups: dict[tuple, list[int]] = {}
     for record in records:
-        if record.session_mode == "group" and record.start_time:
-            groups.setdefault((record.visit_date, record.start_time), []).append(record.id)
+        if record.id in alone and record.start_time:
+            groups[(record.visit_date, record.start_time, record.id)] = [record.id]  # with nobody else
+        elif record.session_mode == "group" and record.start_time:
+            groups.setdefault((record.visit_date, record.start_time, 0), []).append(record.id)
     names: dict[int, tuple[str, int]] = {}
     letter: dict = {}
-    for (day, _start), ids in sorted(groups.items()):
+    for (day, _start, _alone), ids in sorted(groups.items()):
         index = letter[day] = letter.get(day, -1) + 1
         for record_id in ids:
             names[record_id] = (f"Group {ascii_uppercase[index % 26]}", len(ids))
     return names
 
 
-def ace_rows(record: Record, ma_billing: bool, group: tuple[str, int] = ("", 0)) -> list[AceRow] | None:
+def held_alone(record: Record, plan_group: bool) -> bool:
+    """Whether `record` is a therapy session held one to one although the student's plan in
+    effect (`plan_group`) is for groups: ACE takes it as Group Time, a group of one."""
+    return plan_group and record.session_mode != "group" and record.session_type in FULL_TYPES
+
+
+def ace_rows(record: Record, ma_billing: bool, group: tuple[str, int] = ("", 0),
+             plan_group: bool = False) -> list[AceRow] | None:
     """The ACE rows for one chart, the Indirect ones last; None for a type ACE has no place
     for (see UNMAPPED_TYPES), to be entered by hand. `ma_billing` is the student's profile
-    setting; `group` comes from group_names."""
+    setting; `group` comes from group_names; `plan_group` says the student's plan on the
+    chart's day is for groups. A session held_alone goes under Group Time with NO_GROUP_NOTE
+    before its follow-up and no MA ACCESS Billing."""
     kind = record.session_type
+    alone = held_alone(record, plan_group)
     if kind in UNMAPPED_TYPES:
         return None
     minutes = minutes_between(record.start_time, record.end_time)
@@ -83,13 +99,14 @@ def ace_rows(record: Record, ma_billing: bool, group: tuple[str, int] = ("", 0))
     if kind in INDIRECT_TYPES:
         comments = record.en_text if kind in COMMENT_TYPES else ""
         return [AceRow("indirect", kind, minutes, comments_on_log=comments)]
-    section = "group" if record.session_mode == "group" else "direct"
+    section = "group" if record.session_mode == "group" or alone else "direct"
     name, size = group if section == "group" else ("", 0)
     if kind in FULL_TYPES:
+        comments = f"{NO_GROUP_NOTE}\n{record.en_followup}" if alone else record.en_followup
         main = AceRow(section, kind, minutes, ace_time(record.start_time), ace_time(record.end_time),
-                      comments_on_log=record.en_followup, data_towards_goals=record.en_text,
+                      comments_on_log=comments, data_towards_goals=record.en_text,
                       deficit=record.deficit, group=name, group_size=size)
-        billing = [AceRow("indirect", "MA ACCESS Billing", MA_BILLING_MINUTES)] if ma_billing else []
+        billing = [AceRow("indirect", "MA ACCESS Billing", MA_BILLING_MINUTES)] if ma_billing and not alone else []
         return [main, documentation, *billing]
     if kind in COMMENT_TYPES:
         main = AceRow(section, kind, minutes, comments_on_log=record.en_text, group=name, group_size=size)
