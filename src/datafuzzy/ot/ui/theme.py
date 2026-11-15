@@ -80,6 +80,11 @@ QLabel#weekday {
 }
 QLabel#weekday[today="true"] { color: white; background: #0a84ff; }
 QLabel#slotTime { font-size: 13px; font-weight: 700; color: #0a84ff; padding: 6px 6px 0 0; }
+QFrame#groupSlot {
+    border: 1.5px solid rgba(10, 132, 255, 0.55); border-radius: 11px; background: rgba(10, 132, 255, 0.06);
+}
+QLabel#groupHead { font-size: 11px; font-weight: 700; color: #0a84ff; padding: 0 2px; }
+QLabel#groupLine { font-size: 12px; color: palette(placeholder-text); padding: 0 2px; }
 
 QListWidget { background: transparent; border: none; outline: none; }
 QListWidget::item { border-radius: 8px; padding: 8px 10px; margin: 1px 6px; }

@@ -843,6 +843,11 @@ class RecordStore:
                  for session in self.get_profile(student.id).sessions]
         return sorted(slots, key=lambda slot: (slot[0].weekday, slot[0].start, slot[1].name.casefold()))
 
+    def group_students(self, day: date) -> set[int]:
+        """The active students whose plan in effect on `day` is for group sessions."""
+        return {student.id for student in self.students()
+                if student.active and self.get_profile(student.id).plan_on(day).group}
+
     def student_default_slot(self, student_id: int, day: date) -> tuple[str, str]:
         """(start, end) for a new visit on `day`: the student's session time on that weekday from
         the profile (the earliest, if there are several); failing that, the times of the latest

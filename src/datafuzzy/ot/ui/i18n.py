@@ -187,6 +187,7 @@ ENGLISH = {
     "去哪裡找這個孩子": "Where to find the child for the session",
     "（領取教室：{room}）": " (pickup: {room})",
     "領取教室：{room}": "Pickup: {room}",
+    "Group · {count} 人": "Group · {count}",
     "＋ 新增時段": "+ Add session",
     "移除這個時段": "Remove this session",
     "＋ 新增目標": "+ Add goal",

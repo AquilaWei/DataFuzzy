@@ -108,6 +108,25 @@ def timetable_grid(slots: list[tuple[Session, Student]]) -> tuple[list[int], lis
     return weekdays, starts, cells
 
 
+def cell_chips(entries: list[tuple[Session, Student]], grouped: set[int]) -> list[list[tuple[Session, Student]]]:
+    """The tiles of one cell, in the order of `entries`: one per student, except that students
+    in `grouped` (their plan is for group sessions) who share both start and end make one tile
+    together, where the first of them is, when there are two or more."""
+    together: dict[tuple[str, str], list[tuple[Session, Student]]] = {}
+    for session, student in entries:
+        if student.id in grouped:
+            together.setdefault((session.start, session.end), []).append((session, student))
+    chips, placed = [], set()
+    for session, student in entries:
+        group = together.get((session.start, session.end), []) if student.id in grouped else []
+        if len(group) < 2:
+            chips.append([(session, student)])
+        elif (session.start, session.end) not in placed:
+            placed.add((session.start, session.end))
+            chips.append(group)
+    return chips
+
+
 class TimetableView(QWidget):
     """Two pages: the week grid, and one student's charts (with a way back to the grid).
     The window calls refresh() after anything that may change the timetable."""
@@ -201,6 +220,7 @@ class TimetableView(QWidget):
         """A rounded card: weekday headings (today's highlighted), then one rounded lane per
         start time, every other lane tinted, the students as coloured tiles in their weekday."""
         weekdays, starts, cells = timetable_grid(slots)
+        grouped = self.store.group_students(date.today())
         widget = QWidget()
         outer = QVBoxLayout(widget)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -232,9 +252,9 @@ class TimetableView(QWidget):
             time.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
             grid.addWidget(self._cell(time, kind="time"), row, 0)
             for col, weekday in enumerate(weekdays, start=1):
-                buttons = [self._slot_button(session, student)
-                           for session, student in cells.get((weekday, start), [])]
-                grid.addWidget(self._cell(*buttons, kind=band), row, col)
+                tiles = [self._slot_button(*chip[0]) if len(chip) == 1 else self._group_tile(chip)
+                         for chip in cell_chips(cells.get((weekday, start), []), grouped)]
+                grid.addWidget(self._cell(*tiles, kind=band), row, col)
         return widget
 
     @staticmethod
@@ -251,10 +271,38 @@ class TimetableView(QWidget):
         layout.addStretch(1)
         return cell
 
+    def _group_tile(self, members: list[tuple[Session, Student]]) -> QFrame:
+        """Students of a group session in one framed tile: "Group · N 人", a tile per student
+        (their pickup room on it when the rooms differ), then the time and the shared room."""
+        tile = QFrame()
+        tile.setObjectName("groupSlot")
+        layout = QVBoxLayout(tile)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(4)
+        head = QLabel(tr("Group · {count} 人", count=len(members)))
+        head.setObjectName("groupHead")
+        layout.addWidget(head)
+        rooms = {session.classroom for session, _ in members}
+        for session, student in members:
+            room = [tr("領取教室：{room}", room=session.classroom)] if len(rooms) > 1 and session.classroom else []
+            layout.addWidget(self._student_chip(student, room))
+        session = members[0][0]
+        lines = [session_label(session.start, session.end)]
+        if len(rooms) == 1 and session.classroom:
+            lines.append(tr("領取教室：{room}", room=session.classroom))
+        for line in lines:
+            label = QLabel(line)
+            label.setObjectName("groupLine")
+            layout.addWidget(label)
+        return tile
+
     def _slot_button(self, session: Session, student: Student) -> QPushButton:
         lines = [session_label(session.start, session.end)]
         if session.classroom:
             lines.append(tr("領取教室：{room}", room=session.classroom))
+        return self._student_chip(student, lines)
+
+    def _student_chip(self, student: Student, lines: list[str]) -> QPushButton:
         button = SlotChip(student, lines)
         button.setToolTip(tr("查看 {name} 的所有病歷", name=student.name))
         button.clicked.connect(lambda _=False, sid=student.id: self.show_student(sid))

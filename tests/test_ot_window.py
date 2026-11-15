@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QFrame, QLabel
 
 from datafuzzy import __version__
 from datafuzzy.core.pipeline import Pipeline
-from datafuzzy.ot.db import RecordStore, Session, StudentProfile
+from datafuzzy.ot.db import Plan, RecordStore, Session, StudentProfile
 from datafuzzy.ot.ui import main_window, timetable_view
 from datafuzzy.ot.ui.date_view import NAME_ROLE, PLACE_ROLE
 from datafuzzy.ot.ui.location_view import DETAILS_ROLE, INACTIVE_ROLE, SESSIONS_ROLE
@@ -19,6 +19,7 @@ from datafuzzy.ot.ui.main_window import (
     StudentNameDialog,
     TheraNoteWindow,
 )
+from datafuzzy.ot.ui.timetable_view import SlotChip
 
 KEY = bytes(range(32))
 OCT_1 = date(2026, 10, 1)
@@ -762,6 +763,37 @@ def test_changing_session_times_from_the_timetable_updates_it(qtbot, store, monk
     window.timetable_view.student_view.profile_btn.click()
     window.timetable_view.back_btn.click()
     assert [b.text() for b in window.timetable_view.slot_buttons] == ["Amy\n1:00 PM–1:30 PM"]
+
+
+def test_group_students_of_one_time_show_in_one_group_tile(qtbot, store):
+    amy, ming = store.add_student("Amy"), store.add_student("王小明")
+    for student in (amy, ming):
+        store.set_profile(student.id, StudentProfile(group=True, sessions=(Session(4, "10:00", "10:30"),)))
+    window = make_window(qtbot, store)
+    window.set_mode(3)
+    [tile] = window.timetable_view.findChildren(QFrame, "groupSlot")
+    assert [b.text() for b in tile.findChildren(SlotChip)] == ["Amy", "王小明"]
+
+
+def test_a_student_in_a_group_tile_opens_their_charts(qtbot, store):
+    amy, ming = store.add_student("Amy"), store.add_student("王小明")
+    for student in (amy, ming):
+        store.set_profile(student.id, StudentProfile(group=True, sessions=(Session(4, "10:00", "10:30"),)))
+    window = make_window(qtbot, store)
+    window.set_mode(3)
+    window.timetable_view.slot_buttons[1].click()
+    assert window.timetable_view.student_id == ming.id
+
+
+def test_a_group_tile_follows_the_plan_in_effect_today(qtbot, store):
+    amy, ming = store.add_student("Amy"), store.add_student("王小明")
+    later = Plan(False, "01/01/2099")  # an individual plan from far ahead: not in effect yet
+    for student in (amy, ming):
+        store.set_profile(student.id, StudentProfile(sessions=(Session(4, "10:00", "10:30"),)).with_plans(
+            [Plan(False, "01/01/2020", group=True), later]))
+    window = make_window(qtbot, store)
+    window.set_mode(3)
+    assert len(window.timetable_view.findChildren(QFrame, "groupSlot")) == 1
 
 
 def test_timetable_sidebar_lists_active_students_without_a_session_time(qtbot, store):
