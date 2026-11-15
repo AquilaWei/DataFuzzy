@@ -3,10 +3,13 @@ seen. Edited in a dialog, shown read-only above each chart."""
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 
-from PySide6.QtCore import QDate, Qt, Signal
+from PySide6.QtCore import QDate, Qt, QTimer, Signal
+from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QDateEdit,
@@ -20,6 +23,8 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QRadioButton,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -28,6 +33,7 @@ from ..db import (
     FREQUENCY_MAX,
     FREQUENCY_STEP,
     GRADES,
+    PRESCHOOL,
     Plan,
     Session,
     StudentProfile,
@@ -247,10 +253,62 @@ def plan_text(plan: Plan) -> str:
     return f"{plan.kind} {plan.plan_date.strip() or tr('（未填日期）')}"
 
 
+class PlanDateEdit(QDateEdit):
+    """A plan's date, picked from a calendar. BLANK, the earliest date it takes, stands for no
+    date yet and shows as 未填; value() is the date as the form writes it, "MM/DD/YYYY"."""
+
+    BLANK = QDate(2000, 1, 1)
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setCalendarPopup(True)
+        self.setDisplayFormat("MM/dd/yyyy")
+        self.setMinimumDate(self.BLANK)
+        self.setSpecialValueText(tr("未填"))
+        self.setDate(self.BLANK)
+
+    def value(self) -> str:
+        return "" if self.date() == self.BLANK else self.date().toString("MM/dd/yyyy")
+
+    def set_value(self, text: str) -> None:
+        """Show `text`; blank, or a date that cannot be read (from before dates were picked), as 未填."""
+        day = parse_plan_date(text)
+        self.setDate(QDate(day.year, day.month, day.day) if day else self.BLANK)
+
+    def mousePressEvent(self, event) -> None:
+        super().mousePressEvent(event)
+        if self.date() == self.BLANK:  # open the calendar at this month, not at BLANK's
+            today = QDate.currentDate()
+            QTimer.singleShot(0, lambda: self.calendarWidget().setCurrentPage(today.year(), today.month()))
+
+
+def count_box(choices: range | tuple[int, ...]) -> QComboBox:
+    """A drop-down of whole numbers that takes any other typed in; "—" for none."""
+    box = QComboBox()
+    box.setEditable(True)
+    box.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+    box.setValidator(QIntValidator(0, 999, box))
+    box.addItems(["—", *(str(n) for n in choices)])
+    box.setMinimumContentsLength(3)
+    return box
+
+
+def count_of(box: QComboBox) -> int:
+    text = box.currentText().strip()
+    return int(text) if text.isdigit() else 0
+
+
+def set_count(box: QComboBox, count: int) -> None:
+    box.setEditText(str(count) if count else "—")
+
+
 class PlanEditor(QWidget):
-    """The student's IEP and 504 plans, one shown at a time: its date, whether it is a 504
-    plan, its frequency (minutes a month) and (in `goals`, laid out by the dialog) its goals. A new plan starts blank and the
-    old ones are kept, to be picked again from `picker`, newest first."""
+    """The student's IEP and 504 plans, one shown at a time. This widget is the picker of the
+    plans, newest first, with the buttons to add and delete one; the shown plan's type
+    (`plan_iep`/`plan_504` in `plan_type`), `plan_date`, `service_type`, frequency (in
+    `frequency_stack`: minutes a month, or for a pre-school student visits, days and units)
+    and `goals` are laid out by the dialog, a row each. A new plan starts blank and the old
+    ones are kept."""
 
     def __init__(self, plans: tuple[Plan, ...], parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -263,41 +321,58 @@ class PlanEditor(QWidget):
         self.add_btn.setToolTip(tr("IEP/504 快到期時，填入新的日期和目標；舊的會保留"))
         self.remove_btn = QPushButton(tr("刪除這份計畫"))
         self.remove_btn.setObjectName("flat")
-        self.plan_date = QLineEdit()
-        self.plan_date.setPlaceholderText("MM/DD/YYYY")
-        self.plan_504 = QCheckBox(tr("504 計畫（不勾是 IEP）"))
+        self.plan_iep = QRadioButton("IEP")
+        self.plan_504 = QRadioButton("504")
+        kinds = QButtonGroup(self)  # one or the other
+        kinds.addButton(self.plan_iep)
+        kinds.addButton(self.plan_504)
+        self.plan_type = QWidget()
+        kind_row = QHBoxLayout(self.plan_type)
+        kind_row.setContentsMargins(0, 0, 0, 0)
+        kind_row.addWidget(self.plan_iep)
+        kind_row.addWidget(self.plan_504)
+        kind_row.addStretch(1)
+        self.plan_date = PlanDateEdit()
+        self.service_type = QComboBox()
+        self.service_type.addItem("Individual", False)
+        self.service_type.addItem("Group", True)
         self.frequency = QComboBox()  # a list, so the minutes stay a multiple of FREQUENCY_STEP
         self.frequency.setToolTip(tr("每個月的治療分鐘數"))
         self.frequency.addItem("—", 0)
         for minutes in range(FREQUENCY_STEP, FREQUENCY_MAX + 1, FREQUENCY_STEP):
             self.frequency.addItem(f"{minutes} mins/month", minutes)
+        self.visits, self.days, self.units = count_box(range(1, 8)), count_box((7, 14, 30)), count_box(range(1, 9))
+        visits = QWidget()
+        visit_row = QHBoxLayout(visits)
+        visit_row.setContentsMargins(0, 0, 0, 0)
+        for part in (self.visits, QLabel("times per"), self.days, QLabel("days,"), self.units, QLabel("units")):
+            visit_row.addWidget(part)
+        visit_row.addStretch(1)
+        minutes = QWidget()
+        minute_row = QHBoxLayout(minutes)
+        minute_row.setContentsMargins(0, 0, 0, 0)
+        minute_row.addWidget(self.frequency)
+        minute_row.addStretch(1)
+        self.frequency_stack = QStackedWidget()  # page 0 minutes a month, page 1 a pre-school student's visits
+        self.frequency_stack.addWidget(minutes)
+        self.frequency_stack.addWidget(visits)
         self.goals = GoalsEditor()
-        pick = QHBoxLayout()
+        pick = QHBoxLayout(self)
         pick.setContentsMargins(0, 0, 0, 0)
         pick.addWidget(self.picker, 1)
         pick.addWidget(self.add_btn)
         pick.addWidget(self.remove_btn)
-        fields = QHBoxLayout()
-        fields.setContentsMargins(0, 0, 0, 0)
-        fields.addWidget(self.plan_date, 1)
-        fields.addWidget(self.plan_504)
-        frequency = QHBoxLayout()
-        frequency.setContentsMargins(0, 0, 0, 0)
-        frequency.addWidget(QLabel("Frequency"))
-        frequency.addWidget(self.frequency)
-        frequency.addStretch(1)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addLayout(pick)
-        layout.addLayout(fields)
-        layout.addLayout(frequency)
         self._list()
         self._load()
         self.picker.currentIndexChanged.connect(self._pick)
         self.add_btn.clicked.connect(self.add_plan)
         self.remove_btn.clicked.connect(lambda: self.remove_plan())
-        self.plan_date.textChanged.connect(self._relabel)
+        self.plan_date.dateChanged.connect(self._relabel)
         self.plan_504.toggled.connect(self._relabel)
+
+    def set_preschool(self, preschool: bool) -> None:
+        """Ask for the frequency as a pre-school student's visits, or as minutes a month."""
+        self.frequency_stack.setCurrentIndex(1 if preschool else 0)
 
     def _list(self) -> None:
         self.picker.blockSignals(True)  # rebuilding the list is not picking a plan
@@ -311,18 +386,27 @@ class PlanEditor(QWidget):
 
     def _load(self) -> None:
         plan = self._plans[self._shown]
-        for edit, set_value in ((self.plan_date, lambda: self.plan_date.setText(plan.plan_date)),
-                                (self.plan_504, lambda: self.plan_504.setChecked(plan.plan_504)),
-                                (self.frequency, lambda: self.set_frequency(plan.frequency))):
+        for edit, set_value in (
+                (self.plan_date, lambda: self.plan_date.set_value(plan.plan_date)),
+                (self.plan_504, lambda: (self.plan_504 if plan.plan_504 else self.plan_iep).setChecked(True)),
+                (self.service_type, lambda: self.service_type.setCurrentIndex(1 if plan.group else 0)),
+                (self.frequency, lambda: self.set_frequency(plan.frequency)),
+                (self.visits, lambda: set_count(self.visits, plan.visits)),
+                (self.days, lambda: set_count(self.days, plan.days)),
+                (self.units, lambda: set_count(self.units, plan.units))):
             edit.blockSignals(True)
             set_value()
             edit.blockSignals(False)
         self.goals.set_goals(plan.goals)
 
+    def _shown_plan(self, goals: tuple[str, ...]) -> Plan:
+        return Plan(self.plan_504.isChecked(), self.plan_date.value(), goals, self.frequency.currentData(),
+                    self.service_type.currentData(), count_of(self.visits), count_of(self.days),
+                    count_of(self.units))
+
     def _keep(self) -> None:
         """Take the shown plan's edits into the list."""
-        self._plans[self._shown] = Plan(self.plan_504.isChecked(), self.plan_date.text(), self.goals.goals(),
-                                        self.frequency.currentData())
+        self._plans[self._shown] = self._shown_plan(self.goals.goals())
 
     def set_frequency(self, minutes: int) -> None:
         """Pick `minutes` a month; one not in the list (from an older version) is added to it."""
@@ -346,9 +430,9 @@ class PlanEditor(QWidget):
         self.picker.setCurrentIndex(index)
 
     def add_plan(self) -> None:
-        """Start a blank plan, of the kind and frequency of the one shown, and show it."""
+        """Start a blank plan, of the kind, service type and frequency of the one shown, and show it."""
         self._keep()
-        self._plans.insert(0, Plan(plan_504=self.plan_504.isChecked(), frequency=self.frequency.currentData()))
+        self._plans.insert(0, replace(self._shown_plan(()), plan_date=""))
         self._shown = 0
         self._list()
         self._load()
@@ -385,7 +469,7 @@ class PlanEditor(QWidget):
         if any(p.plan_date.strip() and parse_plan_date(p.plan_date) is None for p in plans):
             return tr("IEP/504 日期請填成 10/29/2026 這樣的格式")
         if len(plans) > 1 and not all(p.plan_date.strip() for p in plans):
-            return tr("有多份 IEP/504 計畫時，每份都要填日期")
+            return tr("日期格式錯誤：至少有一份計畫沒有填寫日期，請填寫日期")
         if len({parse_plan_date(p.plan_date) for p in plans}) < len(plans):
             return tr("兩份 IEP/504 計畫的日期不能相同")
         return ""
@@ -427,6 +511,8 @@ class StudentProfileDialog(QDialog):
         self.plans = PlanEditor(profile.plans)
         self.plan_date, self.plan_504, self.goals = self.plans.plan_date, self.plans.plan_504, self.plans.goals
         self.frequency = self.plans.frequency
+        self.plans.set_preschool(profile.grade == PRESCHOOL)
+        self.grade.currentTextChanged.connect(lambda grade: self.plans.set_preschool(grade == PRESCHOOL))
         self.sessions = SessionsEditor(profile.sessions, classrooms)
         self.problem = QLabel("")
         self.problem.setStyleSheet("color: #ff453a;")  # as in the unlock prompt
@@ -445,7 +531,11 @@ class StudentProfileDialog(QDialog):
         form.addRow("Classroom", self.classroom)
         form.addRow("Case manager", self.case_manager)
         form.addRow("MA billing", self.ma_billing)
-        form.addRow("IEP/504 Date", self.plans)
+        form.addRow("Service plan", self.plans)
+        form.addRow("Plan type", self.plans.plan_type)
+        form.addRow("Date", self.plan_date)
+        form.addRow("Service type", self.plans.service_type)
+        form.addRow("Frequency", self.plans.frequency_stack)
         form.addRow("Goals", self.goals)  # the shown plan's, so right below it
         form.addRow("School year", school_year)
         form.addRow(tr("看診時段"), self.sessions)
@@ -554,7 +644,7 @@ def summary_value(profile: StudentProfile, field: str, plan: Plan | None = None)
         return sessions_text(profile.sessions)
     if field == "plan":
         return " · ".join(t for t in (f"{plan.kind} {plan.plan_date}" if plan.plan_date else "",
-                                      plan.frequency_text) if t)
+                                      plan.frequency_text_for(profile.grade == PRESCHOOL)) if t)
     if field == "goals":
         return "\n".join(f"{i}. {goal}" for i, goal in enumerate(plan.goals, start=1))
     if field == "ma_billing":

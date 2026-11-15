@@ -1083,8 +1083,42 @@ def test_saving_puts_the_plans_in_date_order(store):
 
 
 def test_frequency_reads_as_minutes_a_month():
-    assert Plan(frequency=90).frequency_text == "90 mins/month"
-    assert Plan().frequency_text == ""
+    assert Plan(frequency=90).frequency_text_for(preschool=False) == "90 mins/month"
+
+
+def test_a_plan_without_a_frequency_reads_blank():
+    assert Plan().frequency_text_for(preschool=False) == ""
+
+
+def test_a_pre_school_frequency_reads_as_visits_days_and_units():
+    assert Plan(visits=1, days=7, units=2).frequency_text_for(preschool=True) == "1 times per 7 days, 2 units"
+
+
+def test_a_pre_school_frequency_missing_a_part_reads_blank():
+    assert Plan(visits=1, days=7).frequency_text_for(preschool=True) == ""
+
+
+def test_a_pre_school_student_s_plan_with_only_minutes_reads_its_minutes():
+    assert Plan(frequency=60).frequency_text_for(preschool=True) == "60 mins/month"
+
+
+def test_an_older_student_s_plan_with_only_visits_reads_its_visits():
+    assert Plan(visits=2, days=7, units=1).frequency_text_for(preschool=False) == "2 times per 7 days, 1 units"
+
+
+def test_each_plan_keeps_its_service_type_and_visits(store):
+    student = store.add_student("王小明")
+    plans = (Plan(False, "10/29/2025", group=True, visits=1, days=7, units=2), Plan(False, "10/29/2026"))
+    store.set_profile(student.id, StudentProfile().with_plans(plans))
+    assert store.get_profile(student.id).plans == plans
+
+
+def test_a_plan_saved_before_service_types_reads_as_individual(store):
+    student = store.add_student("王小明")
+    store._db.execute("UPDATE student SET profile = ? WHERE id = ?", (store._enc(json.dumps(
+        {"plan_date": "10/29/2026", "past_plans": [{"plan_504": False, "plan_date": "10/29/2025", "goals": []}]}),
+        "student.profile"), student.id))
+    assert [(p.group, p.visits) for p in store.get_profile(student.id).plans] == [(False, 0), (False, 0)]
 
 
 def test_each_plan_keeps_its_frequency(store):

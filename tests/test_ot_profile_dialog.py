@@ -142,7 +142,7 @@ def test_ticking_504_makes_the_plan_a_504(qtbot):
     dialog = StudentProfileDialog("王小明", StudentProfile(), today=date(2026, 10, 1))
     qtbot.addWidget(dialog)
     dialog.plan_504.setChecked(True)
-    dialog.plan_date.setText("03/02/2026")
+    dialog.plan_date.set_value("03/02/2026")
     assert (dialog.profile().plan_504, dialog.profile().plan_date) == (True, "03/02/2026")
 
 
@@ -172,20 +172,20 @@ def plans_dialog(qtbot, *plans):
 
 def test_dialog_shows_the_latest_plan(qtbot):
     dialog = plans_dialog(qtbot, OLD_PLAN, NEW_PLAN)
-    assert (dialog.plan_date.text(), dialog.goals.goals()) == ("10/29/2026", ("扣釦子", "寫名字"))
+    assert (dialog.plan_date.value(), dialog.goals.goals()) == ("10/29/2026", ("扣釦子", "寫名字"))
 
 
 def test_an_old_plan_can_be_shown_again(qtbot):
     dialog = plans_dialog(qtbot, OLD_PLAN, NEW_PLAN)
     dialog.plans.show_plan(1)
-    assert (dialog.plan_date.text(), dialog.plan_504.isChecked(), dialog.goals.goals()) == (
+    assert (dialog.plan_date.value(), dialog.plan_504.isChecked(), dialog.goals.goals()) == (
         "10/29/2025", False, ("剪直線",))
 
 
 def test_a_new_plan_starts_blank_and_keeps_the_old_one(qtbot):
     dialog = plans_dialog(qtbot, OLD_PLAN)
     dialog.plans.add_plan()
-    dialog.plan_date.setText("10/29/2026")
+    dialog.plan_date.set_value("10/29/2026")
     dialog.goals.add_row("扣釦子")
     assert dialog.profile().plans == (OLD_PLAN, Plan(False, "10/29/2026", ("扣釦子",)))
 
@@ -218,24 +218,28 @@ def test_a_plan_can_be_deleted(qtbot):
     assert dialog.profile().plans == (OLD_PLAN,)
 
 
-def test_an_unreadable_plan_date_keeps_the_dialog_open(qtbot):
-    dialog = plans_dialog(qtbot, OLD_PLAN)
-    dialog.plan_date.setText("Oct 29")
+def test_an_unreadable_hidden_plan_date_keeps_the_dialog_open(qtbot):
+    dialog = plans_dialog(qtbot, Plan(False, "Oct 29"), NEW_PLAN)
     dialog.accept()
     assert dialog.problem.text() == "IEP/504 日期請填成 10/29/2026 這樣的格式"
+
+
+def test_an_unreadable_plan_date_opens_as_not_set(qtbot):
+    dialog = plans_dialog(qtbot, Plan(False, "Oct 29"))
+    assert dialog.plan_date.value() == ""
 
 
 def test_a_second_plan_needs_a_date(qtbot):
     dialog = plans_dialog(qtbot, OLD_PLAN)
     dialog.plans.add_plan()
     dialog.accept()
-    assert dialog.problem.text() == "有多份 IEP/504 計畫時，每份都要填日期"
+    assert dialog.problem.text() == "日期格式錯誤：至少有一份計畫沒有填寫日期，請填寫日期"
 
 
 def test_two_plans_cannot_share_a_date(qtbot):
     dialog = plans_dialog(qtbot, OLD_PLAN)
     dialog.plans.add_plan()
-    dialog.plan_date.setText("10/29/25")
+    dialog.plan_date.set_value("10/29/25")
     dialog.accept()
     assert dialog.problem.text() == "兩份 IEP/504 計畫的日期不能相同"
 
@@ -303,3 +307,76 @@ def test_an_older_grade_naming_no_grade_is_kept_as_a_choice(qtbot):
     dialog = StudentProfileDialog("王小明", StudentProfile(grade="Senior"), today=date(2026, 10, 26))
     qtbot.addWidget(dialog)
     assert dialog.profile().grade == "Senior"
+
+
+def test_a_new_student_s_plan_is_an_iep(qtbot):
+    dialog = plans_dialog(qtbot, Plan())
+    assert dialog.plans.plan_iep.isChecked()
+
+
+def test_picking_a_date_saves_it_as_the_form_writes_it(qtbot):
+    dialog = plans_dialog(qtbot, Plan())
+    dialog.plan_date.setDate(QDate(2026, 10, 29))
+    assert dialog.profile().plan_date == "10/29/2026"
+
+
+def test_a_date_never_picked_saves_blank(qtbot):
+    dialog = plans_dialog(qtbot, Plan())
+    assert dialog.profile().plan_date == ""
+
+
+def test_service_type_starts_as_individual(qtbot):
+    dialog = plans_dialog(qtbot, Plan())
+    assert dialog.plans.service_type.currentText() == "Individual"
+
+
+def test_picking_group_saves_a_group_plan(qtbot):
+    dialog = plans_dialog(qtbot, Plan())
+    dialog.plans.service_type.setCurrentText("Group")
+    assert dialog.profile().group
+
+
+def test_switching_plans_shows_each_ones_service_type(qtbot):
+    dialog = plans_dialog(qtbot, Plan(False, "10/29/2025", group=True), Plan(False, "10/29/2026"))
+    dialog.plans.show_plan(1)
+    assert dialog.plans.service_type.currentText() == "Group"
+
+
+def test_a_new_plan_keeps_the_service_type_of_the_one_shown(qtbot):
+    dialog = plans_dialog(qtbot, Plan(False, "10/29/2025", group=True))
+    dialog.plans.add_plan()
+    assert dialog.plans.service_type.currentText() == "Group"
+
+
+def grade_dialog(qtbot, grade, plan=None):
+    dialog = StudentProfileDialog("王小明", StudentProfile(grade=grade).with_plans([plan or Plan()]),
+                                  today=date(2026, 10, 1))
+    qtbot.addWidget(dialog)
+    return dialog
+
+
+def test_a_pre_school_student_s_frequency_asks_for_visits(qtbot):
+    assert grade_dialog(qtbot, "Pre-School").plans.frequency_stack.currentIndex() == 1
+
+
+def test_an_older_student_s_frequency_asks_for_minutes(qtbot):
+    assert grade_dialog(qtbot, "3").plans.frequency_stack.currentIndex() == 0
+
+
+def test_changing_the_grade_to_pre_school_asks_for_visits(qtbot):
+    dialog = grade_dialog(qtbot, "3")
+    dialog.grade.setCurrentText("Pre-School")
+    assert dialog.plans.frequency_stack.currentIndex() == 1
+
+
+def test_typed_visits_are_saved_with_the_plan(qtbot):
+    dialog = grade_dialog(qtbot, "Pre-School")
+    dialog.plans.visits.setEditText("3")
+    dialog.plans.days.setEditText("14")
+    dialog.plans.units.setEditText("1")
+    assert (dialog.profile().visits, dialog.profile().days, dialog.profile().units) == (3, 14, 1)
+
+
+def test_a_plan_s_visits_show_when_it_opens(qtbot):
+    dialog = grade_dialog(qtbot, "Pre-School", Plan(visits=1, days=7, units=2))
+    assert [b.currentText() for b in (dialog.plans.visits, dialog.plans.days, dialog.plans.units)] == ["1", "7", "2"]

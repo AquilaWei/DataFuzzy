@@ -383,6 +383,17 @@ def test_header_shows_the_plans_frequency():
     assert "\nFrequency: 60 mins/month\n" in header_text("Amy", profile, TODAY)
 
 
+def test_header_shows_a_pre_school_student_s_visits():
+    profile = StudentProfile(grade="Pre-School", plan_date="10/29/2026", visits=1, days=7, units=2)
+    assert "\nFrequency: 1 times per 7 days, 2 units\n" in header_text("Amy", profile, TODAY)
+
+
+def test_header_of_a_student_past_pre_school_shows_an_old_plan_s_visits():
+    profile = StudentProfile(grade="K").with_plans([Plan(False, "10/29/2025", visits=1, days=7, units=2),
+                                                     Plan(False, "10/29/2026", frequency=60)])
+    assert "\nFrequency: 1 times per 7 days, 2 units\n" in header_text("Amy", profile, TODAY, profile.past_plans[0])
+
+
 def test_header_without_a_frequency_leaves_it_blank():
     assert "\nFrequency:\n" in header_text("Amy", StudentProfile(), TODAY)
 

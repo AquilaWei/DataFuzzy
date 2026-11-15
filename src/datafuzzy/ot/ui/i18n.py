@@ -192,7 +192,6 @@ ENGLISH = {
     "＋ 新增目標": "+ Add goal",
     "移除這個目標": "Remove this goal",
     "例如 能獨立扣好三顆釦子": "e.g. Buttons three buttons on their own",
-    "504 計畫（不勾是 IEP）": "504 plan (an IEP if unticked)",
     "目標表現": "Goal scores",
     "-- 表示沒有記錄": "-- means not recorded",
     "預約下次治療": "Book next session",
@@ -207,7 +206,7 @@ ENGLISH = {
     "刪除計畫": "Delete plan",
     "要刪除「{plan}」和它的目標嗎？": "Delete “{plan}” and its goals?",
     "IEP/504 日期請填成 10/29/2026 這樣的格式": "Enter IEP/504 dates like 10/29/2026",
-    "有多份 IEP/504 計畫時，每份都要填日期": "With more than one IEP/504 plan, each needs a date",
+    "日期格式錯誤：至少有一份計畫沒有填寫日期，請填寫日期": "Date error: at least one plan has no date. Please fill in its date",
     "兩份 IEP/504 計畫的日期不能相同": "Two IEP/504 plans cannot have the same date",
     "例如 10:30 AM": "e.g. 10:30 AM",
     # unlock and start-up
