@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml/badge.svg)](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/AquilaWei/DataFuzzy/graph/badge.svg)](https://codecov.io/gh/AquilaWei/DataFuzzy)
-![Version](https://img.shields.io/badge/version-0.7.0.37.6-blue)
+![Version](https://img.shields.io/badge/version-0.7.0.37.7-blue)
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
@@ -16,7 +16,7 @@
 開啟病歷時，學生的基本資訊顯示在最上方，下面才是這次的病歷內容。學生換地點後，舊病歷保留當時的地點。
 在日期或地點模式新增病歷時，會先選地點，學生清單只列出地點是這裡的學生（日期模式預設為所選日期）。
 日期模式的當天清單可切換「依時間」或「依名字」排序，每列最左邊的時間欄醒目標示開始與結束時間。地點模式點地點列出在該地點看過的學生卡片（名字加上 Diagnosis、Age、Grade、Classroom 與看診時段），點學生再看這位學生在所有地點的全部病歷與份數。學生頁的每張病歷卡片右上角會標出當次每個目標的表現（G1 met 綠、G2 not met 紅、not addressed 與未填 -- 灰），滑鼠停在標籤上可看目標全文。開始與結束時間以 AM／PM 顯示與輸入（也接受 14:05 這種寫法）；結束時間預設為開始後 30 分鐘，可自行修改；改版前已有開始時間的舊病歷，第一次開啟時會自動補上開始後 30 分鐘的結束時間（只讀寫時間欄位，不解密病歷內容）。
-**課表模式**依啟用學生的「看診時段」排出每週課表（星期 × 開始時間，圓角卡片式課表，今天的星期以藍色標示，每位學生有固定顏色），每個時段可註明「領取教室」（去哪裡找這個孩子），點學生名字看他的所有病歷，修改時段後課表立即更新；側邊欄列出尚未設定時段的學生。學生計畫完成後，可在名單上按右鍵「停用學生」，停用的學生不出現在課表、排在名單最後，病歷仍保留。
+**課表模式**依啟用學生的「看診時段」排出每週課表（星期 × 開始時間，圓角卡片式課表，今天的星期以藍色標示，每位學生有固定顏色），每個時段可註明「領取教室」（去哪裡找這個孩子），點學生名字看他的所有病歷，修改時段後課表立即更新；當天計畫是 Group 的學生，同一時段（開始和結束都相同）有兩位以上時合併成一張有外框的「Group · N 人」卡片，點裡面的名字一樣打開該學生的病歷；側邊欄列出尚未設定時段的學生。學生計畫完成後，可在名單上按右鍵「停用學生」，停用的學生不出現在課表、排在名單最後，病歷仍保留。
 **設定**（側邊欄左下角，或 macOS 選單 TheraNote → 設定…，⌘,）可切換介面語言：中文或 English，切換後視窗立即換成新語言，下次開啟也沿用。
 病歷預覽跟著介面語言：中文介面優先顯示中文病歷，English 介面優先顯示英文病歷（沒有該語言版本時顯示另一種），開啟病歷時也先停在該語言的分頁。
 每份病歷另有「活動」欄記錄當天的治療活動與手段，只留在本機、不參與匯出與貼回。活動欄會隨內容自動長高，整頁（基本資訊、活動、病歷）可上下捲動，內容再多也不會擠壓下方的病歷；對照兩份病歷時，兩邊的活動欄同高。
@@ -32,7 +32,7 @@
 | 其他 | 不顯示 |
 
 學生模式的病歷卡片（地點旁）和日曆模式的清單（名字右側）都會顯示這份病歷的模式＋服務類型，例如 `Individual - Direct Therapy Time`。已經有內容的欄位不會因為換類型而被藏起來；清空後游標離開，才依目前的類型隱藏。記錄框按右鍵「移到追蹤」可把選取的文字搬到追蹤。舊版病歷會自動轉換：individual、group 變成該模式的 Direct Therapy Time，consult、collaboration、make up 變成 Individual 的同名類型。第一次開啟新版時，記錄裡以 `Follow-up:`、`* **Follow-up:**`、`F/U:`、`追蹤：`、`Plan:`、`Next session`、`下次` 等開頭的段落會列成清單，勾選後才搬到追蹤（之後可從 TheraNote 選單「重新檢查 Follow-up…」再做一次）。
-學生頁姓名旁或病歷上方的「基本資訊」可填地點、Diagnosis、Age、Grade（下拉選 Pre-School、K、1–12；舊資料依內容自動對應，例如 `Pre-K` → Pre-School、`3rd` → 3，認不出的保留原文）、Classroom、Case manager、MA billing（勾選表示這位學生的治療走 MA billing）、IEP/504 Date（預設 IEP，勾選 504 則匯出 504 Date）、School year 與 Goals（一個目標一列，可自行新增或移除），匯出時自動填入表頭。每份計畫另有 Frequency（每月治療分鐘數，以 30 分鐘為單位選，匯出成 `30 mins/month`）。IEP/504 快到期時按「＋ 新的計畫」填入新的日期、Frequency 與目標，舊的計畫連同目標都會保留，可從下拉選單切換顯示；每份病歷依它的日期使用當時有效的計畫目標。
+學生頁姓名旁或病歷上方的「基本資訊」可填地點、Diagnosis、Age、Grade（下拉選 Pre-School、K、1–12；舊資料依內容自動對應，例如 `Pre-K` → Pre-School、`3rd` → 3，認不出的保留原文）、Classroom、Case manager、MA billing（勾選表示這位學生的治療走 MA billing）、Service plan、School year 與 Goals（一個目標一列，可自行新增或移除），匯出時自動填入表頭。每份 Service plan 一列一項：Plan type（IEP 或 504，預設 IEP；504 匯出成 504 Date）、Date（從日曆選計畫開始日期）、Service type（Individual 或 Group，預設 Individual）、Frequency（每月治療分鐘數，以 30 分鐘為單位選，匯出成 `30 mins/month`；Pre-School 學生改填次數、天數、單位三個下拉，也可直接打字，匯出成 `1 times per 7 days, 2 units`）。IEP/504 快到期時按「＋ 新的計畫」填入新的日期、Frequency 與目標，舊的計畫連同目標都會保留，可從下拉選單切換顯示；每份病歷依它的日期使用當時有效的計畫目標。
 
 ```bash
 uv sync
@@ -60,6 +60,8 @@ uv run theranote
   Collaboration、Home Program、IEP Meeting/Meeting、Progress Report、Scheduling 只填 Indirect 該類型一列（分鐘數＝結束減開始），不加 Documentation；
   其他類型每份病歷加 Documentation 5 分（同一天兩份病歷就兩列），MA billing 學生的治療再加 MA ACCESS Billing 5 分。
   No-Show 填在 Direct Time（ACE 名稱 `No Show`），分鐘數＝結束減開始。
+  學生當天的計畫是 Group、但治療病歷是 Individual 時，改填在 Group Time，自成一組（人數 1），
+  Comments on Log 第一行是 `No appropriate student to group with.`，換行後才是英文追蹤，而且不加 MA ACCESS Billing。
   Consult、缺英文、缺時間的格子會標「要手動」，不自動填；ACE 那格已有資料、週次不對、名單找不到學生時也會停下。
   安裝：Chrome 開 `chrome://extensions` → 開啟「開發人員模式」→「載入未封裝項目」→ 選 `chrome-extension/` 資料夾
   （Chrome 直接使用這個資料夾，請勿搬動；更新後在 `chrome://extensions` 按重新載入）。擴充功能的圖示和版本號與 TheraNote 相同。

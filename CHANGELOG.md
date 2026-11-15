@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.7] - 2026-11-14
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 基本資料的計畫欄位改名 Service plan，一列一項：Plan type（IEP／504 單選，預設 IEP）、Date（從日曆選）、Service type（Individual／Group，預設 Individual）、Frequency。
+- Pre-School 學生的 Frequency 改成次數、天數、單位三個下拉（也可直接打字），交接表頭寫成 `1 times per 7 days, 2 units`；改 Grade 時立刻切換。舊計畫只填過其中一種時，照它填的印。
+- 課表：計畫是 Group 的學生，同一時段有兩位以上時合併成一張「Group · N 人」卡片。
+- ACE 填寫：計畫是 Group 的學生做了 Individual 治療時，填在 Group Time、自成一組，Comments on Log 先寫 `No appropriate student to group with.` 再接追蹤，不加 MA ACCESS Billing。
+
+### 變更
+- 有計畫沒填日期時的提示改成「日期格式錯誤：至少有一份計畫沒有填寫日期，請填寫日期」。
+
 ## [0.7.0.37.6] - 2026-11-11
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
