@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.20] - 2026-11-21
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 修正
+- ACE 擴充功能掃描或跳過後，下一格打不開的真正原因：ACE 的 Cancel 在視窗底部工具列，擴充功能找不到，就改用 close()，把 ACE 重複使用的那個填寫視窗整個銷毀了。現在從底部工具列找到 Cancel 按下；萬一找不到也只把視窗藏起來，不會銷毀。
+- 按鈕改回直接執行按鈕的程式（0.7.0.37.19 改成模擬點擊，是錯誤的猜測）。
+
 ## [0.7.0.37.19] - 2026-11-21
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
