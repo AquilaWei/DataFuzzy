@@ -89,9 +89,14 @@
     return box.items.getRange().filter((r) => r.combo_BillingCode);
   }
 
+  const counts = () => Object.fromEntries(Object.keys(SECTIONS).map((s) => [s, entryRows(s).length]));
+
+  // The window opened only to be looked at, until it closes or is taken over for filling.
+  let viewing = null;
+
   // Opens the cell's "Edit Therapist Time" window; says which sections already have entries.
-  // With `watch`, posts {theranoteAce: "closed", saved: false} when the window closes again, so
-  // the panel knows a window it opened to look at is gone.
+  // With `watch`, posts {theranoteAce: "closed", saved: false, viewed: true} when the window
+  // closes again, so the panel knows a window it opened to look at is gone.
   async function open({row, col, watch = false}) {
     if (activeEditWindow()) throw new Error("A time entry window is already open: save or cancel it first");
     const g = grid();
@@ -109,9 +114,22 @@
       "the Direct Time section");
     await sleep(500); // its sections load their entries after it shows
     if (watch) {
-      w.on("hide", () => window.postMessage({theranoteAce: "closed", saved: false}, location.origin), null, {single: true});
+      viewing = w;
+      w.on("hide", () => {
+        if (viewing !== w) return; // taken over for filling
+        viewing = null;
+        window.postMessage({theranoteAce: "closed", saved: false, viewed: true}, location.origin);
+      }, null, {single: true});
     }
-    return Object.fromEntries(Object.keys(SECTIONS).map((s) => [s, entryRows(s).length]));
+    return counts();
+  }
+
+  // Takes the window opened to be looked at over for filling, instead of opening it again.
+  function adopt() {
+    const w = activeEditWindow();
+    if (!w || viewing !== w) throw new Error("The window opened to look at is no longer open");
+    viewing = null;
+    return counts();
   }
 
   function press(button) {
@@ -236,7 +254,9 @@
   async function gridReady() {
     await until(() => {
       const g = grid();
-      const mask = g.loadMask && g.loadMask.el && g.loadMask.el.isMasked && g.loadMask.el.isMasked();
+      const masked = (el) => Boolean(el && el.isMasked && el.isMasked());
+      // ACE masks the grid itself (not its load mask) while it reloads the week after a save
+      const mask = masked(g.loadMask && g.loadMask.el) || masked(g.getEl && g.getEl());
       return !mask && g.getStore().getCount() > 0;
     }, "the student list", 8000);
     return true;
@@ -304,32 +324,65 @@
   const text = (value) => String(value ?? "").replace(/\r\n?/g, "\n").replace(/\s+/g, " ").trim().toLowerCase();
   const number = (value) => (String(value ?? "").trim() === "" ? null : Number(value));
 
+  const FIELDS = [["minutes", "Minutes"], ["start", "Start"], ["end", "End"], ["group", "Group"],
+    ["group_size", "Group Size"], ["comments_on_log", "Comments on Log"],
+    ["data_towards_goals", "Data Towards Goals"], ["deficit", "Underlying Deficits"]];
+
+  // A file row's field as ACE shows it ("" when the row has none).
+  function fileText(row, field) {
+    if (!row) return "";
+    if (field === "group") return row.group ? row.group.replace(/^group\s+/i, "") : "";
+    if (field === "group_size") return row.group ? String(row.group_size ?? "") : "";
+    return row[field] == null ? "" : String(row[field]);
+  }
+  const same = (field, a, b) => (["minutes", "group_size"].includes(field)
+    ? number(a) === number(b) : text(a) === text(b));
+
+  // Each file row with the entry of its section and type (by start time when there are
+  // several), then the entries no row took: [{row | null, entry | null}].
+  function pairUp(rows, entries) {
+    const left = [...entries];
+    const pairs = [];
+    for (const row of rows) {
+      const kind = left.filter((e) => e.section === row.section && key(e.type) === key(row.type));
+      const entry = kind.find((e) => text(e.start) === text(row.start)) || kind[0] || null;
+      if (entry) left.splice(left.indexOf(entry), 1);
+      pairs.push({row, entry});
+    }
+    return pairs.concat(left.map((entry) => ({row: null, entry})));
+  }
+
   // What differs between the file's rows and a cell's entries, as short notes; [] when they
-  // agree. A row's empty field is not compared; each row is matched to an entry of its section
-  // and type, by start time when there are several.
+  // agree. A row's empty field is not compared.
   function compare(rows, entries) {
     const notes = [];
-    const left = [...entries];
-    for (const row of rows) {
+    for (const {row, entry} of pairUp(rows, entries)) {
+      if (!row) { notes.push(`ACE 多了 ${SECTIONS[entry.section]} ${entry.type}`); continue; }
       const label = `${SECTIONS[row.section]} ${row.type}`;
-      const same = left.filter((e) => e.section === row.section && key(e.type) === key(row.type));
-      const entry = same.find((e) => text(e.start) === text(row.start)) || same[0];
       if (!entry) { notes.push(`ACE 沒有 ${label}`); continue; }
-      left.splice(left.indexOf(entry), 1);
-      const differs = (name, ours, theirs) => notes.push(`${label} ${name}：ACE「${theirs || "空白"}」、檔案「${ours}」`);
-      if (row.minutes != null && number(entry.minutes) !== row.minutes) differs("Minutes", row.minutes, entry.minutes);
-      for (const [field, name] of [["start", "Start"], ["end", "End"], ["comments_on_log", "Comments on Log"],
-        ["data_towards_goals", "Data Towards Goals"], ["deficit", "Underlying Deficits"]]) {
-        if (row[field] && text(entry[field]) !== text(row[field])) differs(name, row[field], entry[field]);
-      }
-      if (row.group) {
-        const group = row.group.replace(/^group\s+/i, "");
-        if (text(entry.group) !== text(group)) differs("Group", group, entry.group);
-        if (number(entry.group_size) !== row.group_size) differs("Group Size", row.group_size, entry.group_size);
+      for (const [field, name] of FIELDS) {
+        const ours = fileText(row, field);
+        if (ours !== "" && !same(field, ours, entry[field])) {
+          notes.push(`${label} ${name}：ACE「${entry[field] || "空白"}」、檔案「${ours}」`);
+        }
       }
     }
-    for (const entry of left) notes.push(`ACE 多了 ${SECTIONS[entry.section]} ${entry.type}`);
     return notes;
+  }
+
+  // The open window's entries beside the file's rows, field by field, for the user to choose
+  // between: [{label, only: "ace" | "file" | "", fields: [{name, ace, file, differs}]}]. Here
+  // an empty field differs from a filled one, since replacing would empty it.
+  function diff({rows}) {
+    if (!activeEditWindow()) throw new Error("No time entry window is open");
+    return pairUp(rows, readEntries()).map(({row, entry}) => {
+      const base = row || entry;
+      return {label: `${SECTIONS[base.section]} · ${base.type}`, only: !entry ? "file" : !row ? "ace" : "",
+        fields: FIELDS.map(([field, name]) => {
+          const file = fileText(row, field), ace = entry ? String(entry[field] ?? "") : "";
+          return {name, ace, file, differs: !same(field, file, ace)};
+        }).filter((f) => f.ace.trim() || f.file.trim())};
+    });
   }
 
   // Whether a cell already has entries and whether they are the file's: {state: "empty" |
@@ -355,7 +408,7 @@
     return {state: notes.length ? "different" : "same", notes};
   }
 
-  const OPS = {week, locate, open, clear, cancel, fill, scan};
+  const OPS = {week, locate, open, adopt, clear, cancel, fill, scan, diff};
 
   window.addEventListener("message", async (event) => {
     const msg = event.data;
