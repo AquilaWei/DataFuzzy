@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.22] - 2026-11-21
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- ACE 擴充功能：每處理完一格（存好、按 Cancel、跳過或保留原資料），自動在 ACE 打開下一個「待填」或「需確認」的格子。
+- ACE 擴充功能：ACE 那格已有資料時，改成跳出對話框，並排顯示 ACE 現在的內容和準備填入的 TheraNote 資料，標出不同的地方，再選「取代」或「保留」。
+- ACE 擴充功能：已在 ACE 打開檢查的格子按「填這一格」，直接在同一個視窗填，不關掉重開。
+
+### 修正
+- ACE 擴充功能：存檔後 ACE 重新載入週表時，等遮罩消失才找下一位學生。
+
 ## [0.7.0.37.21] - 2026-11-21
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
