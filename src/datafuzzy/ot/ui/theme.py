@@ -13,6 +13,7 @@ from PySide6.QtGui import QColor, QGuiApplication, QPalette
 from PySide6.QtWidgets import QApplication
 
 ACCENT = "#0a84ff"
+MISSING = "#e5484d"  # a chart still missing parts (see missing_parts), and those parts
 CALENDAR_ICON = Path(__file__).with_name("calendar.png")  # Qt picks calendar@2x.png on Retina
 CLOCK_ICON = Path(__file__).with_name("clock.png")
 PLACE_ICON = Path(__file__).with_name("place.png")

@@ -29,9 +29,17 @@ from PySide6.QtWidgets import (
 
 from ..db import RecordStore, StudentProfile
 from .cards import date_label, preview_text, time_label
-from .date_view import NAME_ROLE, PLACE_ROLE, PREVIEW_ROLE, TIME_ROLE, DayRecordDelegate
+from .date_view import (
+    MISSING_ROLE,
+    NAME_ROLE,
+    PLACE_ROLE,
+    PREVIEW_ROLE,
+    TIME_ROLE,
+    DayRecordDelegate,
+)
 from .i18n import tr
 from .profile_dialog import sessions_text
+from .session_fields import missing_parts, missing_text
 from .theme import ACCENT
 from .widgets import record_menu
 
@@ -234,6 +242,7 @@ class LocationRecordsView(QWidget):
             return
         self.pages.setCurrentWidget(self.list)
         records = self.store.records_for_student(self.student_id)
+        profile = self.store.get_profile(self.student_id)
         self.title.setText(names[self.student_id])
         self.count.setText(tr("{count} 份病歷（所有地點）", count=len(records)))
         for record in records:
@@ -244,4 +253,5 @@ class LocationRecordsView(QWidget):
             item.setData(PLACE_ROLE, record.location or tr(NO_LOCATION))
             item.setData(PREVIEW_ROLE, first_line)
             item.setData(TIME_ROLE, (time_label(record.start_time), time_label(record.end_time)))
+            item.setData(MISSING_ROLE, missing_text(missing_parts(record, profile.plan_on(record.visit_date).goals)))
             self.list.addItem(item)

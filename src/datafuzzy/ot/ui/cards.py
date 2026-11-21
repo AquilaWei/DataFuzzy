@@ -23,6 +23,7 @@ from PySide6.QtGui import (
     QMouseEvent,
     QPainter,
     QPalette,
+    QPen,
     QPixmap,
     QPixmapCache,
 )
@@ -32,6 +33,8 @@ from ..db import DIRECT_THERAPY, Record
 from ..db import session_label as session_combo
 from ..excel_export import NO_SCORE, score_text
 from .i18n import WEEKDAYS_EN, language, tr
+from .session_fields import missing_parts, missing_text
+from .theme import MISSING
 from .widgets import record_menu
 
 MARGIN = 16
@@ -189,9 +192,13 @@ class RecordCard(QWidget):
 
     def __init__(self, record: Record, index: int, parent: QWidget | None = None,
                  goals: tuple[str, ...] = ()) -> None:
-        """`goals`: those of the plan the chart was scored on, each shown with its result."""
+        """`goals`: those of the plan the chart was scored on, each shown with its result. A
+        chart missing parts (see missing_parts) is outlined in red and says which."""
         super().__init__(parent)
         self.record_id = record.id
+        self.missing = missing_text(missing_parts(record, goals))
+        self.missing_label = QLabel(self.missing)
+        self.missing_label.setStyleSheet(f"color: {MISSING}; font-weight: 600;")
         self.index = index
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFixedHeight(CARD_H)
@@ -222,16 +229,23 @@ class RecordCard(QWidget):
         place.addWidget(QLabel("·"))
         place.addWidget(self.session_label)
         place.addStretch(1)
+        place.addWidget(self.missing_label)
         layout.addLayout(place)
         layout.addSpacing(6)
         layout.addWidget(self.preview_label, 1)
+        # Hidden only once in the card: shown before, it would open as a window of its own.
+        self.missing_label.setVisible(bool(self.missing))
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setBrush(self.palette().color(QPalette.ColorRole.Base))
-        painter.setPen(self.palette().color(QPalette.ColorRole.Mid))
-        painter.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), RADIUS, RADIUS)
+        if self.missing:
+            painter.setPen(QPen(QColor(MISSING), 2))
+            painter.drawRoundedRect(QRectF(self.rect()).adjusted(1, 1, -1, -1), RADIUS, RADIUS)
+        else:
+            painter.setPen(self.palette().color(QPalette.ColorRole.Mid))
+            painter.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), RADIUS, RADIUS)
 
     def enterEvent(self, event) -> None:
         self.entered.emit(self.index)

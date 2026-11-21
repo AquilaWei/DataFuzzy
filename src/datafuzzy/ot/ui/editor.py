@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..db import PRESCHOOL, RecordStore, default_end_time
+from ..db import PRESCHOOL, Record, RecordStore, default_end_time
 from ..followup import excel_comment
 from .cards import TIME_CHOICES, date_label, normal_time, time_label
 from .compare_panel import ComparePanel, candidate_label, compare_candidates
@@ -39,9 +39,12 @@ from .session_fields import (
     DeficitPicker,
     GoalScores,
     SessionPicker,
+    missing_parts,
+    missing_text,
     needed_parts,
     shown_parts,
 )
+from .theme import MISSING
 from .widgets import GrowingTextEdit
 
 AUTOSAVE_MS = 800
@@ -60,10 +63,14 @@ class RecordEditor(QWidget):
     book_next = Signal(int)  # this record's id, from the book-next-session button
 
     def __init__(self, store: RecordStore, record_id: int, debounce_ms: int = AUTOSAVE_MS,
-                 parent: QWidget | None = None) -> None:
+                 parent: QWidget | None = None, fresh: bool = False) -> None:
+        """`fresh`: the chart was just made (a new or booked one), so what it is missing is not
+        pointed out until it is opened again (see show_missing)."""
         super().__init__(parent)
         self.store = store
         record = store.get_record(record_id)
+        self._record = record  # what the database held at opening, for the fields the editor has not
+        self._fresh = fresh
         student = store.get_student(record.student_id)
         self.record_id = record_id
         self.student_id = record.student_id
@@ -93,6 +100,9 @@ class RecordEditor(QWidget):
         self.book_btn.setToolTip(tr("新增七天後同一時段的病歷，和這份並排顯示"))
         self.status = QLabel("")
         self.status.setObjectName("subtle")
+        self.missing_label = QLabel("")  # what the chart is missing, in red (see show_missing)
+        self.missing_label.setStyleSheet(f"color: {MISSING}; font-weight: 600;")
+        self.missing_label.hide()
 
         self.profile = ProfileSummary()
         self.show_profile()
@@ -132,6 +142,7 @@ class RecordEditor(QWidget):
         self.en_followup_edit.setPlaceholderText("English follow-up")
         # Each part's widgets, to show or hide together (see _show_parts).
         self.parts: dict[str, list[QWidget]] = {"comments": [], "followup": []}
+        self.comment_labels: dict[str, list[QLabel]] = {"comments": [], "followup": []}
         self.tabs = QTabWidget()
         self.tabs.addTab(self._chart_page(self.zh_edit, self.zh_followup_edit), tr("中文"))
         self.tabs.addTab(self._chart_page(self.en_edit, self.en_followup_edit), "English")
@@ -142,6 +153,7 @@ class RecordEditor(QWidget):
         top = QHBoxLayout()
         top.addWidget(self.back_btn)
         top.addStretch(1)
+        top.addWidget(self.missing_label)
         top.addWidget(self.status)
         top.addWidget(self.book_btn)
         top.addWidget(self.compare_btn)
@@ -158,10 +170,11 @@ class RecordEditor(QWidget):
         self.times_row = QWidget()
         times = QHBoxLayout(self.times_row)
         times.setContentsMargins(0, 0, 0, 0)
-        times.addWidget(QLabel(tr("開始時間")))
+        start_label, end_label = QLabel(tr("開始時間")), QLabel(tr("結束時間"))
+        times.addWidget(start_label)
         times.addWidget(self.time_box)
         times.addSpacing(12)
-        times.addWidget(QLabel(tr("結束時間")))
+        times.addWidget(end_label)
         times.addWidget(self.end_box)
         times.addStretch(1)
         self.type_row = QWidget()
@@ -180,10 +193,15 @@ class RecordEditor(QWidget):
         self.scores_row = QWidget()
         scores = QVBoxLayout(self.scores_row)
         scores.setContentsMargins(0, 0, 0, 0)
-        scores.addWidget(QLabel(tr("目標表現")))
+        scores_label = QLabel(tr("目標表現"))
+        scores.addWidget(scores_label)
         scores.addWidget(self.scores)
         self.parts.update(scores=[self.scores_row], activity=[self.activity_label, self.activity_edit],
                           deficit=[self.deficit_row])
+        # The labels of what missing_parts can find missing, turned red while it is.
+        self.missing_labels: dict[str, list[QLabel]] = {
+            "times": [start_label, end_label], "scores": [scores_label], "activity": [self.activity_label],
+            "comments": self.comment_labels["comments"], "followup": self.comment_labels["followup"]}
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
         line.setFrameShadow(QFrame.Shadow.Plain)
@@ -253,6 +271,7 @@ class RecordEditor(QWidget):
         self.compare_btn.clicked.connect(self._show_compare_menu)
         self.book_btn.clicked.connect(lambda: self.book_next.emit(self.record_id))
         self._show_book_btn()
+        self.show_missing()
         self.profile.edit_requested.connect(lambda: self.edit_profile.emit(self.student_id))
 
     def _chart_page(self, comments: QPlainTextEdit, followup: QPlainTextEdit) -> QWidget:
@@ -267,6 +286,8 @@ class RecordEditor(QWidget):
         column.addWidget(followup, 1)
         self.parts["comments"] += [comments_label, comments]
         self.parts["followup"] += [followup_label, followup]
+        self.comment_labels["comments"].append(comments_label)
+        self.comment_labels["followup"].append(followup_label)
         return page
 
     def text_edits(self) -> list[QPlainTextEdit]:
@@ -422,6 +443,7 @@ class RecordEditor(QWidget):
         self._show_title()
         self._show_book_btn()
         self.show_profile()  # the day may fall under another plan, with other goals
+        self.show_missing()
         self.saved.emit(self.record_id)
         return True
 
@@ -444,8 +466,33 @@ class RecordEditor(QWidget):
         self._end_follows = False
         self._changed("end_time")
 
+    def current_record(self) -> Record:
+        """The chart as the editor holds it now, typed but maybe not saved yet."""
+        start, end = normal_time(self.time_box.currentText()), normal_time(self.end_box.currentText())
+        return replace(self._record, visit_date=self.visit_date, activity=self.activity_edit.toPlainText(),
+                       zh_text=self.zh_edit.toPlainText(), en_text=self.en_edit.toPlainText(),
+                       zh_followup=self.zh_followup_edit.toPlainText(),
+                       en_followup=self.en_followup_edit.toPlainText(),
+                       session_mode=self.session.mode(), session_type=self.session.session_type(),
+                       start_time=start or "", end_time=end or "", goal_scores=self.scores.scores())
+
+    def missing(self) -> list[str]:
+        """What the chart is missing now (see missing_parts)."""
+        return missing_parts(self.current_record(), self.scores.scores())
+
+    def show_missing(self) -> None:
+        """Say in red what the chart is missing, and turn those parts' labels red; a fresh chart
+        says nothing yet. Follows the edits, so each warning goes once its part is filled in."""
+        missing = [] if self._fresh else self.missing()
+        self.missing_label.setText(tr("這份病歷還{missing}", missing=missing_text(missing)) if missing else "")
+        self.missing_label.setVisible(bool(missing))
+        for part, labels in self.missing_labels.items():
+            for label in labels:
+                label.setStyleSheet(f"color: {MISSING}; font-weight: 600;" if part in missing else "")
+
     def _changed(self, field: str) -> None:
         self._dirty.add(field)
+        self.show_missing()
         self.status.setText(tr("編輯中…"))
         self._timer.start()
 

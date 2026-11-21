@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from PySide6.QtCore import QDate, QModelIndex, QPoint, QRect, QSize, Qt, Signal
+from PySide6.QtCore import QDate, QModelIndex, QPoint, QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import (
     QColor,
     QFont,
     QFontMetrics,
     QPainter,
     QPalette,
+    QPen,
     QTextCharFormat,
 )
 from PySide6.QtWidgets import (
@@ -30,7 +31,8 @@ from PySide6.QtWidgets import (
 from ..db import RecordStore, session_label
 from .cards import date_label, preview_text, time_label
 from .i18n import tr
-from .theme import ACCENT
+from .session_fields import missing_parts, missing_text
+from .theme import ACCENT, MISSING
 from .widgets import SegmentedControl, record_menu
 
 
@@ -82,13 +84,15 @@ PLACE_ROLE = Qt.ItemDataRole.UserRole + 2  # the tag: the location, or the date 
 PREVIEW_ROLE = Qt.ItemDataRole.UserRole + 3
 TIME_ROLE = Qt.ItemDataRole.UserRole + 4  # (start, end) as shown, e.g. ("9:30 AM", "10:00 AM"), or ("", "")
 SESSION_ROLE = Qt.ItemDataRole.UserRole + 5  # "Individual - Direct Therapy Time", shown at the right of the name; optional
+MISSING_ROLE = Qt.ItemDataRole.UserRole + 6  # "缺：時間、追蹤" for a chart still missing parts, in red; optional
 
 
 class DayRecordDelegate(QStyledItemDelegate):
     """A row of the day list in distinct looks, so they are not read as one another: the
     session time in its own column at the left (start in accent bold, end under it), then the
     student's name in bold, the location as a small accent-tinted tag, and the start of the
-    chart in grey."""
+    chart in grey. A chart still missing parts has a red bar and outline and says which, in red,
+    before its start."""
 
     PAD_X, PAD_Y, GAP, TAG_PAD = 12, 8, 4, 6
     BAR_W, BAR_GAP = 3, 12  # the accent bar between the time column and the rest
@@ -152,8 +156,13 @@ class DayRecordDelegate(QStyledItemDelegate):
             painter.setPen(grey)
             painter.drawText(QRect(column.left(), r.top(), column.width(), name_h),
                              Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, tr("未填時間"))
-        bar = QColor(accent if start else grey)
-        bar.setAlpha(255 if start else 90)
+        missing = index.data(MISSING_ROLE) or ""
+        bar = QColor(MISSING if missing else accent if start else grey)
+        bar.setAlpha(255 if start or missing else 90)
+        if missing:
+            painter.setPen(QPen(QColor(MISSING), 1.5))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(QRectF(opt.rect).adjusted(1.5, 1.5, -1.5, -1.5), 8, 8)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(bar)
         painter.drawRoundedRect(QRect(column.right() + self.BAR_GAP, r.top() + 2, self.BAR_W, r.height() - 4), 1.5, 1.5)
@@ -181,6 +190,13 @@ class DayRecordDelegate(QStyledItemDelegate):
         painter.drawText(tag_rect, Qt.AlignmentFlag.AlignCenter, place)
 
         body_left = tag_rect.right() + 10
+        if missing:
+            painter.setFont(tag_font)
+            painter.setPen(text if selected else QColor(MISSING))
+            width = tag_fm.horizontalAdvance(missing)
+            painter.drawText(QRect(body_left, top, width, tag_rect.height()),
+                             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, missing)
+            body_left += width + 10
         body_rect = QRect(body_left, top, r.right() - body_left, tag_rect.height())
         painter.setFont(body_font)
         painter.setPen(grey)
@@ -255,6 +271,7 @@ class DayRecordsView(QWidget):
         if self.day is None:
             return
         names = {s.id: s.name for s in self.store.students_on(self.day)}  # sorted by name
+        goals = {sid: self.store.get_profile(sid).plan_on(self.day).goals for sid in names}
         order = {student_id: i for i, student_id in enumerate(names)}
         # A student seen twice that day has a row per record, in the order of the sessions.
         records = sorted(self.store.records_on(self.day),
@@ -274,6 +291,7 @@ class DayRecordsView(QWidget):
             item.setData(PREVIEW_ROLE, first_line)
             item.setData(TIME_ROLE, (time_label(record.start_time), time_label(record.end_time)))
             item.setData(SESSION_ROLE, session_label(record.session_mode, record.session_type))
+            item.setData(MISSING_ROLE, missing_text(missing_parts(record, goals[record.student_id])))
             self.list.addItem(item)
         self.empty.setVisible(not records)
         self.list.setVisible(bool(records))

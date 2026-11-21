@@ -521,7 +521,7 @@ class TheraNoteWindow(QMainWindow):
         record = self.store.add_record(student_id, day, self.store.student_location(student_id),
                                        start_time=start_time, end_time=end_time)
         self.refresh_after_change()
-        self.open_record(record.id)
+        self.open_record(record.id, fresh=True)
         return record.id
 
     def delete_prompt(self, student_name: str, day: date) -> tuple[QMessageBox, QPushButton]:
@@ -556,14 +556,15 @@ class TheraNoteWindow(QMainWindow):
         self.close_editor()  # the open chart is saved before its times are copied
         booked = self.store.book_next_visit(record_id)
         self.refresh_after_change()
-        self.open_record(booked.id)
+        self.open_record(booked.id, fresh=True)
         self.editor.show_compare(record_id)
         return booked.id
 
-    def open_record(self, record_id: int) -> None:
-        """Show a record in the editor. Whatever was being edited is saved first."""
+    def open_record(self, record_id: int, fresh: bool = False) -> None:
+        """Show a record in the editor. Whatever was being edited is saved first. A `fresh`
+        one was just made: what it is missing is pointed out once it is opened again."""
         self.close_editor()
-        editor = RecordEditor(self.store, record_id, parent=self, **self._editor_kwargs)
+        editor = RecordEditor(self.store, record_id, parent=self, fresh=fresh, **self._editor_kwargs)
         editor.saved.connect(lambda _: self.refresh_after_change())
         editor.edit_profile.connect(lambda sid: self.edit_profile(sid))
         editor.book_next.connect(lambda rid: self.book_next(rid))
@@ -613,7 +614,10 @@ class TheraNoteWindow(QMainWindow):
 
     def open_ace_export(self) -> None:
         self.flush()
-        AceExportDialog(self.store, parent=self).exec()
+        dialog = AceExportDialog(self.store, parent=self)
+        dialog.exec()
+        if dialog.opened is not None:  # a chart to fix before the file is saved
+            self.open_record(dialog.opened)
 
     def open_import(self) -> None:
         self.flush()

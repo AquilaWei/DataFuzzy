@@ -4,6 +4,8 @@ in the chart editor, read-only beside it."""
 
 from __future__ import annotations
 
+from datetime import date
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
@@ -13,6 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..ace_mapping import INDIRECT_TYPES, TIMED_WITHOUT_TIMES
 from ..db import (
     COMMENT_TYPES,
     DEFAULT_SESSION_MODE,
@@ -50,6 +53,34 @@ def shown_parts(record: Record) -> set[str]:
               "comments": bool(record.zh_text.strip() or record.en_text.strip()),
               "followup": bool(record.zh_followup.strip() or record.en_followup.strip())}
     return needed_parts(record.session_type) | {part for part, has in filled.items() if has}
+
+
+# What missing_parts can find missing, in the order a chart shows them, with their names.
+MISSING_NAMES = {"times": "時間", "scores": "目標表現", "activity": "活動", "comments": "記錄", "followup": "追蹤"}
+
+
+def missing_parts(record: Record, goals: tuple[str, ...], today: date | None = None) -> list[str]:
+    """What a chart has yet to be filled in with, out of MISSING_NAMES; none for a chart after
+    `today` (a booked session, not held yet). The times are needed by any type ACE takes
+    minutes or a group for; the rest as the type asks (see needed_parts), every goal of
+    `goals` (the plan's) scored, and the comments and follow-up in either language."""
+    if record.visit_date > (today or date.today()):
+        return []
+    kind, needed = record.session_type, needed_parts(record.session_type)
+    timed = (kind in FULL_TYPES or kind in COMMENT_TYPES or kind in TIMED_WITHOUT_TIMES or kind in INDIRECT_TYPES
+             or record.session_mode == "group")
+    scores = tuple(record.goal_scores) + ("",) * len(goals)
+    filled = {"times": not timed or bool(record.start_time and record.end_time),
+              "scores": "scores" not in needed or all(scores[:len(goals)]),
+              "activity": "activity" not in needed or bool(record.activity.strip()),
+              "comments": "comments" not in needed or bool(record.zh_text.strip() or record.en_text.strip()),
+              "followup": "followup" not in needed or bool(record.zh_followup.strip() or record.en_followup.strip())}
+    return [part for part in MISSING_NAMES if not filled[part]]
+
+
+def missing_text(parts: list[str]) -> str:
+    """"缺：時間、追蹤" for missing_parts, "" when nothing is missing."""
+    return tr("缺：{parts}", parts=tr("、").join(tr(MISSING_NAMES[p]) for p in parts)) if parts else ""
 
 
 class SessionPicker(QWidget):
