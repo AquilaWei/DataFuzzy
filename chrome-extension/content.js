@@ -46,12 +46,35 @@
 
   // --- state -------------------------------------------------------------------------
 
-  async function load() {
-    state = (await chrome.storage.session.get(KEY))[KEY] || null;
+  // The extension was reloaded or updated while this page stayed open: this copy of the panel
+  // can no longer reach it.
+  const STALE = "TheraNote 擴充功能已更新或重新載入，請重新整理這個 ACE 頁面（⌘R）再繼續。";
+  const stale = (error) => /context invalidated/i.test(String(error && error.message));
+
+  // chrome.storage.session, once the background worker has let this page use it (it may not
+  // have started yet after the browser starts).
+  async function session(use) {
+    try {
+      return await use(chrome.storage.session);
+    } catch (error) {
+      if (stale(error)) throw new Error(STALE);
+      await chrome.runtime.sendMessage({theranoteAce: "allow"}); // wakes the worker, which allows it
+      return use(chrome.storage.session);
+    }
   }
 
-  function save() {
-    return state ? chrome.storage.session.set({[KEY]: state}) : chrome.storage.session.remove(KEY);
+  async function load() {
+    state = (await session((s) => s.get(KEY)))[KEY] || null;
+  }
+
+  // Keeps the progress; a failure is shown, never thrown.
+  async function save() {
+    try {
+      await session((s) => (state ? s.set({[KEY]: state}) : s.remove(KEY)));
+    } catch (error) {
+      $("msg").dataset.keep = "1";
+      say(stale(error) || error.message === STALE ? STALE : `進度沒能保存：${error.message}`, true);
+    }
   }
 
   function openFile(text) {
@@ -400,7 +423,8 @@
   const drop = () => {
     if (!dragging) return;
     dragging = null;
-    chrome.storage.local.set({[POSITION]: {left: parseFloat(host.style.left), top: parseFloat(host.style.top)}});
+    chrome.storage.local.set({[POSITION]: {left: parseFloat(host.style.left), top: parseFloat(host.style.top)}})
+      .catch(() => {}); // only the remembered position is lost
   };
   $("drag").addEventListener("pointerup", drop);
   $("drag").addEventListener("pointercancel", drop);
@@ -420,5 +444,9 @@
       state.notes = state.notes || state.file.cells.map(() => []);
     }
     render();
+  }, (error) => {
+    render();
+    $("msg").dataset.keep = "1";
+    say(stale(error) || error.message === STALE ? STALE : `讀不到先前的進度（${error.message}），請重新選擇填寫檔。`, true);
   });
 })();
