@@ -11,10 +11,13 @@ from typing import Literal, NamedTuple
 
 from .db import COMMENT_TYPES, DIRECT_THERAPY, FULL_TYPES, NO_SHOW, Record
 
-DOCUMENTATION_MINUTES = 5  # every chart's Documentation (Indirect Time), save the Indirect-only types
+DOCUMENTATION_MINUTES = 5  # a chart's Documentation (Indirect Time), save for INDIRECT_TYPES and UNDOCUMENTED_TYPES
 MA_BILLING_MINUTES = 5  # a therapy session's MA ACCESS Billing, for a student billed to MA
 # Types ACE keeps under Indirect Time only, whichever the mode; they take no Documentation.
 INDIRECT_TYPES = frozenset({"Collaboration", "Home Program", "IEP Meeting/Meeting", "Progress Report", "Scheduling"})
+# Of the other types, those that take no Documentation either.
+UNDOCUMENTED_TYPES = frozenset({"Annual IEP Report", "Evaluation", "Re-Evaluation", "Screen", "Student Observation",
+                                NO_SHOW})
 # Types with no ACE counterpart: left for the user to enter by hand.
 UNMAPPED_TYPES = frozenset({"Consult"})
 # TheraNote's names that ACE's drop-down spells otherwise.
@@ -132,4 +135,4 @@ def ace_rows(record: Record, ma_billing: bool, group: AceGroup = EMPTY_GROUP,
     else:  # Absent Student, School Not in Session, …: no time, save for the minutes of TIMED_WITHOUT_TIMES
         main = AceRow(section, ACE_NAMES.get(kind, kind), minutes if kind in TIMED_WITHOUT_TIMES else None,
                       group=name, group_size=size)
-    return [main, documentation]
+    return [main] if kind in UNDOCUMENTED_TYPES else [main, documentation]

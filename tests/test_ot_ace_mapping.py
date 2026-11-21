@@ -1,7 +1,7 @@
 from datetime import date, datetime
 
 from datafuzzy.ot.ace_mapping import AceGroup, AceRow, ace_rows, ace_time, group_names
-from datafuzzy.ot.db import Record
+from datafuzzy.ot.db import COMMON_TYPES, INDIVIDUAL_ONLY_TYPES, NO_SHOW, Record
 
 OCT_1 = date(2026, 10, 1)
 DOCUMENTATION = AceRow("indirect", "Documentation", 5)
@@ -34,9 +34,9 @@ def test_a_group_make_up_fills_group_time_with_its_group():
     assert (main.section, main.type, main.group, main.group_size) == ("group", "Make-Up", "Group B", 3)
 
 
-def test_an_evaluation_logs_its_comments_and_minutes():
+def test_an_evaluation_logs_its_comments_and_minutes_without_documentation():
     rows = ace_rows(chart(session_type="Evaluation"), ma_billing=True)
-    assert rows == [AceRow("direct", "Evaluation", 30, comments_on_log="Comments."), DOCUMENTATION]
+    assert rows == [AceRow("direct", "Evaluation", 30, comments_on_log="Comments.")]
 
 
 def test_an_absence_takes_no_time():
@@ -44,9 +44,9 @@ def test_an_absence_takes_no_time():
     assert rows == [AceRow("direct", "Absent Student"), DOCUMENTATION]
 
 
-def test_an_annual_iep_report_takes_its_minutes():
-    [main, _] = ace_rows(chart(session_type="Annual IEP Report"), ma_billing=False)
-    assert (main.minutes, main.start) == (30, "")
+def test_an_annual_iep_report_takes_its_minutes_without_documentation():
+    rows = ace_rows(chart(session_type="Annual IEP Report"), ma_billing=False)
+    assert rows == [AceRow("direct", "Annual IEP Report", 30)]
 
 
 def test_a_group_absence_goes_under_group_time():
@@ -78,9 +78,16 @@ def test_a_progress_report_takes_no_documentation():
     assert rows == [AceRow("indirect", "Progress Report", 30)]
 
 
-def test_a_no_show_takes_its_minutes_and_documentation():
+def test_a_no_show_takes_its_minutes_without_documentation():
     rows = ace_rows(chart(session_type="No-Show"), ma_billing=True)
-    assert rows == [AceRow("direct", "No Show", 30), DOCUMENTATION]  # as ACE spells it
+    assert rows == [AceRow("direct", "No Show", 30)]  # as ACE spells it
+
+
+def test_only_these_types_take_documentation():
+    documented = {kind for kind in (*COMMON_TYPES, *INDIVIDUAL_ONLY_TYPES, NO_SHOW)
+                  if DOCUMENTATION in (ace_rows(chart(session_type=kind, mode="individual"), ma_billing=False) or [])}
+    assert documented == {"Direct Therapy Time", "Make-Up", "Absent Student", "Unavailable Student",
+                          "School Not in Session", "Therapist Absent"}
 
 
 def test_consult_is_left_to_be_entered_by_hand():
@@ -88,7 +95,7 @@ def test_consult_is_left_to_be_entered_by_hand():
 
 
 def test_missing_times_give_no_minutes():
-    [main, _] = ace_rows(chart(session_type="Evaluation", end=""), ma_billing=False)
+    [main] = ace_rows(chart(session_type="Evaluation", end=""), ma_billing=False)
     assert main.minutes is None
 
 
@@ -127,7 +134,7 @@ def test_a_group_plan_student_s_group_therapy_keeps_ma_billing():
 
 
 def test_a_group_plan_student_s_evaluation_stays_in_direct_time():
-    [main, _] = ace_rows(chart(session_type="Evaluation"), ma_billing=False, plan_group=True)
+    [main] = ace_rows(chart(session_type="Evaluation"), ma_billing=False, plan_group=True)
     assert (main.section, main.comments_on_log) == ("direct", "Comments.")
 
 

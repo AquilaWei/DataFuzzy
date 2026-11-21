@@ -60,7 +60,8 @@ uv run theranote
   依服務類型填的內容與 `src/datafuzzy/ot/ace_mapping.py` 一致：Direct Therapy Time／Make-Up 填分鐘、時間、
   Comments on Log（英文追蹤）、Data Towards Goals（英文記錄）、Underlying Deficits，Group 另填 Group（A、B…）與 Group Size；
   Collaboration、Home Program、IEP Meeting/Meeting、Progress Report、Scheduling 只填 Indirect 該類型一列（分鐘數＝結束減開始），不加 Documentation；
-  其他類型每份病歷加 Documentation 5 分（同一天兩份病歷就兩列），MA billing 學生的治療再加 MA ACCESS Billing 5 分。
+  Direct Therapy Time、Make-Up、Absent Student、Unavailable Student、School Not in Session、Therapist Absent 每份病歷加 Documentation 5 分（同一天兩份病歷就兩列），MA billing 學生的治療再加 MA ACCESS Billing 5 分；
+  Annual IEP Report、Evaluation、Re-Evaluation、Screen、Student Observation、No-Show 不加 Documentation。
   No-Show 填在 Direct Time（ACE 名稱 `No Show`），分鐘數＝結束減開始。
   學生當天的計畫是 Group、但治療病歷是 Individual 時，改填在 Group Time，自成一組（人數 1），
   Comments on Log 第一行是 `No appropriate student to group with.`，換行後才是英文追蹤，而且不加 MA ACCESS Billing。
