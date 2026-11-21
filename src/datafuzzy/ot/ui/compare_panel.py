@@ -69,7 +69,6 @@ class ComparePanel(QWidget):
         self.tabs = QTabWidget()
         self.tabs.addTab(self._chart_page(record, "zh", parts, tr("（沒有中文記錄）"), tr("（沒有中文追蹤）")), tr("中文"))
         self.tabs.addTab(self._chart_page(record, "en", parts, tr("（沒有英文記錄）"), tr("（沒有英文追蹤）")), "English")
-        self.tabs.setVisible(bool(parts & {"comments", "followup"}))
         self.tabs.setCurrentIndex(1 if language() == "en" else 0)  # as in the editor
         self.tabs.setMinimumHeight(280)  # the editor's CHART_MIN_HEIGHT
 
@@ -121,6 +120,9 @@ class ComparePanel(QWidget):
         activity_label.setVisible("activity" in parts)
         self.activity.setVisible("activity" in parts)
         layout.addWidget(self.tabs, 1)
+        # Hidden or shown only once in the layout: shown before, it would open as a window of its own,
+        # which takes a full-screen window out of full screen on macOS.
+        self.tabs.setVisible(bool(parts & {"comments", "followup"}))
         if "deficit" in parts:
             layout.addWidget(QLabel(f"Underlying deficit: {record.deficit}"))
         self.close_btn.clicked.connect(self.closed)

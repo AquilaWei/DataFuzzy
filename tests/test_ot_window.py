@@ -2,9 +2,9 @@ from dataclasses import replace
 from datetime import date
 
 import pytest
-from PySide6.QtCore import QDate, QPoint, Qt
+from PySide6.QtCore import QDate, QEvent, QObject, QPoint, Qt
 from PySide6.QtGui import QGuiApplication
-from PySide6.QtWidgets import QFrame, QLabel
+from PySide6.QtWidgets import QApplication, QFrame, QLabel
 
 from datafuzzy import __version__
 from datafuzzy.core.pipeline import Pipeline
@@ -913,3 +913,30 @@ def test_timetable_shows_the_classroom_to_fetch_the_student_from(qtbot, store):
     window = make_window(qtbot, store)
     window.set_mode(3)
     assert [b.text() for b in window.timetable_view.slot_buttons] == ["Amy\n10:00 AM–10:30 AM\n領取教室：301"]
+
+
+def test_comparing_or_booking_opens_no_window_of_its_own(qtbot, store):
+    """A widget shown before it has a parent opens as its own window, which on macOS takes a
+    full-screen TheraNote out of full screen."""
+    window = make_window(qtbot, store)
+    student_id = window.add_student("王小明")
+    first = window.new_record(student_id, OCT_1)
+    window.close_editor()
+    second = window.new_record(student_id, date(2026, 10, 8))
+    shown = []
+
+    class Watch(QObject):
+        def eventFilter(self, watched, event):
+            if event.type() == QEvent.Type.Show and watched.isWidgetType() and watched.isWindow():
+                shown.append(type(watched).__name__)
+            return False
+
+    watch = Watch()
+    QApplication.instance().installEventFilter(watch)
+    try:
+        window.editor.show_compare(first)
+        window.editor.book_btn.click()
+    finally:
+        QApplication.instance().removeEventFilter(watch)
+    assert window.editor.compare.record_id == second
+    assert shown == []
