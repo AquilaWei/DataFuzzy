@@ -29,6 +29,7 @@ from .. import APP_NAME
 from ..crypto import DecryptionError
 from ..db import RecordStore, default_db_path
 from ..keys import KeyProvider, UnlockCancelled, UnlockError, default_provider
+from .diagnostics import start_diagnostics
 from .i18n import load_language, tr
 from .main_window import TheraNoteWindow
 from .theme import apply_theme
@@ -196,6 +197,8 @@ def main() -> int:
     sweep_stale()  # temp folders left by crashed DataFuzzy runs
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
+    app.setApplicationVersion(__version__)
+    diagnostics = start_diagnostics(app)  # why the app stopped, in a local log
     app.setWindowIcon(QIcon(str(files("datafuzzy.ot").joinpath("icon.png"))))
     apply_theme(app)
     ignore_wheel_on_pickers(app)
@@ -204,7 +207,7 @@ def main() -> int:
     # Qt's event loop blocks Python signal handlers; a periodic no-op timer lets them run,
     # so SIGINT/SIGTERM go through a normal quit (and save pending edits) instead of killing us.
     for sig in (signal.SIGINT, signal.SIGTERM):
-        signal.signal(sig, lambda *_: app.quit())
+        signal.signal(sig, lambda number, _: (diagnostics and diagnostics.write(f"signal {number}"), app.quit()))
     keepalive = QTimer()
     keepalive.timeout.connect(lambda: None)
     keepalive.start(250)
