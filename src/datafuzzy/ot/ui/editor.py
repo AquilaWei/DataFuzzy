@@ -252,6 +252,7 @@ class RecordEditor(QWidget):
         self.tabs.tabBarDoubleClicked.connect(self.copy_tab)
         self.compare_btn.clicked.connect(self._show_compare_menu)
         self.book_btn.clicked.connect(lambda: self.book_next.emit(self.record_id))
+        self._show_book_btn()
         self.profile.edit_requested.connect(lambda: self.edit_profile.emit(self.student_id))
 
     def _chart_page(self, comments: QPlainTextEdit, followup: QPlainTextEdit) -> QWidget:
@@ -419,9 +420,16 @@ class RecordEditor(QWidget):
         self.store.move_record(self.record_id, day)
         self.visit_date = day
         self._show_title()
+        self._show_book_btn()
         self.show_profile()  # the day may fall under another plan, with other goals
         self.saved.emit(self.record_id)
         return True
+
+    def _show_book_btn(self) -> None:
+        """Booking the next session is offered on the student's latest chart only: from an older
+        one the next session is usually charted already."""
+        latest = self.store.records_for_student(self.student_id)[0]
+        self.book_btn.setVisible(latest.id == self.record_id)
 
     def _start_changed(self) -> None:
         self._changed("start_time")

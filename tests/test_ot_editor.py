@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import pytest
 from PySide6.QtCore import QEvent
@@ -274,6 +274,19 @@ def test_booking_the_next_session_asks_the_window(qtbot, store, record):
     with qtbot.waitSignal(editor.book_next) as booked:
         editor.book_btn.click()
     assert booked.args == [record.id]
+
+
+def test_booking_is_offered_on_the_latest_chart_only(qtbot, store, record):
+    later = store.add_record(record.student_id, record.visit_date + timedelta(days=7), "A校")
+    assert make_editor(qtbot, store, record).book_btn.isHidden()
+    assert not make_editor(qtbot, store, later).book_btn.isHidden()
+
+
+def test_moving_a_chart_past_the_latest_offers_booking(qtbot, store, record):
+    later = store.add_record(record.student_id, record.visit_date + timedelta(days=7), "A校")
+    editor = make_editor(qtbot, store, record)
+    editor.change_date(later.visit_date + timedelta(days=7))
+    assert not editor.book_btn.isHidden()
 
 
 def test_compare_list_says_when_there_is_nothing_else(qtbot, store, record):
