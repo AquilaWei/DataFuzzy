@@ -346,6 +346,29 @@ ENGLISH = {
     "都不要搬": "Move none",
     "沒有找到需要拆分的 follow-up。": "No follow-ups were found to split off.",
     "重新檢查 Follow-up…": "Check for follow-ups again…",
+    # calling sessions off
+    "按右鍵可以整天取消，例如學校放假": "Right-click to call the whole day off, e.g. when school is closed",
+    "勾選的學生會在這一天新增「{reason}」的病歷。": "The ticked students get a “{reason}” chart on this day.",
+    "這一天已經有病歷": "There are charts on this day already",
+    "這些學生在 {day} 已經有病歷。勾選的會延到下一週（{next}），沒勾選的會被新的病歷取代：原本的病歷會刪除，無法復原。":
+        "These students have charts on {day} already. Ticked ones move to the next week ({next}); the others"
+        " are replaced by the new charts: they are deleted for good.",
+    "繼續": "Continue",
+    "返回": "Back",
+    "{weeks} 週後": "{weeks} weeks later",
+    "預約延期": "Postpone",
+    "預約取消": "Cancel bookings",
+    "延到": "Move to",
+    "勾選的病歷會整份移到同一個星期幾的那一天。": "The ticked charts move, as they are, to the same weekday then.",
+    "延期": "Postpone",
+    "先把預約延期": "Postpone the bookings first",
+    "取消原因": "Reason",
+    "取消預約": "Cancel bookings",
+    "勾選的預約會移到之後的那一天，原本這天改成取消原因的病歷。":
+        "The ticked bookings move to that later day, and this day gets a chart of the reason instead.",
+    "勾選的預約會被取消原因的病歷取代：原本的病歷會刪除，無法復原。沒勾選的照舊。":
+        "The ticked bookings are replaced by a chart of the reason: they are deleted for good. The others stay"
+        " as they are.",
 }
 
 WEEKDAYS_EN = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")

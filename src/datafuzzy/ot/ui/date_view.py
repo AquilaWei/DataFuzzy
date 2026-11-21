@@ -1,4 +1,5 @@
-"""The by-date page: a calendar that marks days with records, and who was seen on a day."""
+"""The by-date page: a calendar that marks days with records, and who was seen on a day. A day
+from today on with bookings can have them moved to a later week or cancelled (see schedule.py)."""
 
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMenu,
+    QPushButton,
     QStyle,
     QStyledItemDelegate,
     QStyleOptionViewItem,
@@ -28,9 +30,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..db import RecordStore, session_label
+from ..db import Record, RecordStore, session_label
+from ..schedule import cancel, postpone
 from .cards import date_label, preview_text, time_label
 from .i18n import tr
+from .schedule_dialogs import CancelDialog, PostponeDialog
 from .session_fields import missing_parts, missing_text
 from .theme import ACCENT, MISSING
 from .widgets import SegmentedControl, record_menu
@@ -211,10 +215,12 @@ BY_TIME, BY_NAME = range(2)
 
 class DayRecordsView(QWidget):
     """The children with a record on one day, by start time (those without one last) or by
-    name; clicking one opens the record."""
+    name; clicking one opens the record. From today on, the day's bookings can be postponed or
+    cancelled."""
 
     open_record = Signal(int)  # record id
     delete_record = Signal(int)  # record id chosen from a row's right-click menu
+    records_changed = Signal()  # bookings were postponed or cancelled
 
     def __init__(self, store: RecordStore, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -225,6 +231,8 @@ class DayRecordsView(QWidget):
         self.count = QLabel("")
         self.count.setObjectName("subtle")
         self.sort = SegmentedControl([tr("依時間"), tr("依名字")])
+        self.postpone_btn = QPushButton(tr("預約延期"))
+        self.cancel_btn = QPushButton(tr("預約取消"))
         self.empty = QLabel(tr("這天沒有病歷。"))
         self.empty.setObjectName("subtle")
         self.list = QListWidget()
@@ -239,6 +247,9 @@ class DayRecordsView(QWidget):
         titles.addWidget(self.count)
         header = QHBoxLayout()
         header.addLayout(titles, 1)
+        header.addWidget(self.postpone_btn)
+        header.addWidget(self.cancel_btn)
+        header.addSpacing(8)
         header.addWidget(self.sort)
         layout.addLayout(header)
         layout.addSpacing(10)
@@ -248,7 +259,46 @@ class DayRecordsView(QWidget):
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.list.customContextMenuRequested.connect(self._show_menu)
         self.empty.setVisible(False)
+        self.postpone_btn.setVisible(False)  # until a day from today on with records is shown
+        self.cancel_btn.setVisible(False)
         self.sort.changed.connect(lambda _: self.refresh())
+        self.postpone_btn.clicked.connect(self.postpone_bookings)
+        self.cancel_btn.clicked.connect(self.cancel_bookings)
+
+    def _bookings(self) -> list[Record]:
+        """The day's records, by start time (those without one last)."""
+        return sorted(self.store.records_on(self.day), key=lambda r: (r.start_time or "99:99", r.id))
+
+    def _names(self) -> dict[int, str]:
+        return {student.id: student.name for student in self.store.students()}
+
+    def postpone_bookings(self) -> bool:
+        """Ask by how many weeks and which, and move those records. Returns whether any moved."""
+        picked = self._ask_postpone(self._bookings())
+        if picked is None or not picked[1]:
+            return False
+        postpone(self.store, picked[1], picked[0])
+        self.records_changed.emit()
+        return True
+
+    def cancel_bookings(self) -> bool:
+        """Ask the reason, whether to move them on first, and which, then call those bookings
+        off (see schedule.cancel). Returns whether any were."""
+        picked = self._ask_cancel(self._bookings())
+        if picked is None or not picked[2]:
+            return False
+        reason, weeks, record_ids = picked
+        cancel(self.store, record_ids, reason, weeks)
+        self.records_changed.emit()
+        return True
+
+    def _ask_postpone(self, records: list[Record]) -> tuple[int, list[int]] | None:
+        dialog = PostponeDialog(records, self._names(), self)
+        return dialog.choice() if dialog.exec() == PostponeDialog.DialogCode.Accepted else None
+
+    def _ask_cancel(self, records: list[Record]) -> tuple[str, int | None, list[int]] | None:
+        dialog = CancelDialog(records, self._names(), self)
+        return dialog.choice() if dialog.exec() == CancelDialog.DialogCode.Accepted else None
 
     def context_menu(self, pos: QPoint) -> QMenu | None:
         """The menu for the row at `pos` (list viewport coordinates), None off the rows."""
@@ -295,3 +345,6 @@ class DayRecordsView(QWidget):
             self.list.addItem(item)
         self.empty.setVisible(not records)
         self.list.setVisible(bool(records))
+        bookable = bool(records) and self.day >= date.today()
+        self.postpone_btn.setVisible(bookable)
+        self.cancel_btn.setVisible(bookable)

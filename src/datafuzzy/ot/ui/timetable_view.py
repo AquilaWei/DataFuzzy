@@ -1,17 +1,19 @@
 """The weekly timetable: which active students come on which weekday at what time, from the
-session times in their profiles. Clicking a student shows all of their charts."""
+session times in their profiles. Clicking a student shows all of their charts; right-clicking a
+weekday, Monday to Friday, calls off a coming such day (see schedule.py)."""
 
 from __future__ import annotations
 
 from datetime import date
 
-from PySide6.QtCore import QRectF, QSize, Qt, Signal
+from PySide6.QtCore import QPoint, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPaintEvent, QPalette
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QPushButton,
     QScrollArea,
     QStackedWidget,
@@ -19,9 +21,18 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..db import RecordStore, Session, Student
+from ..db import Record, RecordStore, Session, Student
+from ..schedule import (
+    CANCEL_REASONS,
+    Slot,
+    cancel_day,
+    clashes,
+    weekday_dates,
+    weekday_slots,
+)
 from .cards import session_label, time_label, weekday_label
 from .i18n import tr
+from .schedule_dialogs import ClashDialog, DayOffDialog
 from .student_view import StudentRecordsView
 
 WORKDAYS = range(5)  # Monday to Friday always get a column; the weekend only when used
@@ -135,11 +146,13 @@ class TimetableView(QWidget):
     delete_record = Signal(int)
     rename_student = Signal(int)
     edit_profile = Signal(int)
+    records_changed = Signal()  # charts were added, moved or deleted for a day off
 
     def __init__(self, store: RecordStore, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.store = store
         self.slot_buttons: list[QPushButton] = []
+        self.weekday_heads: dict[int, QFrame] = {}  # the headings that offer a day off, by weekday
 
         self.title = QLabel(tr("課表"))
         self.title.setObjectName("title")
@@ -232,14 +245,17 @@ class TimetableView(QWidget):
         grid.setContentsMargins(12, 12, 12, 12)
         grid.setHorizontalSpacing(0)
         grid.setVerticalSpacing(6)
-        self.slot_buttons = []
+        self.slot_buttons, self.weekday_heads = [], {}
         today = date.today().weekday()
         for col, weekday in enumerate(weekdays, start=1):
             head = QLabel(weekday_label(weekday))
             head.setObjectName("weekday")
             head.setProperty("today", weekday == today)  # picked up by the stylesheet
             head.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            grid.addWidget(self._cell(head, kind="head"), 0, col)
+            cell = self._cell(head, kind="head")
+            if weekday in WORKDAYS:
+                self._offer_day_off(cell, weekday)
+            grid.addWidget(cell, 0, col)
             grid.setColumnStretch(col, 1)
         for row, start in enumerate(starts, start=1):
             band = "band" if row % 2 == 0 else "plain"
@@ -256,6 +272,55 @@ class TimetableView(QWidget):
                          for chip in cell_chips(cells.get((weekday, start), []), grouped)]
                 grid.addWidget(self._cell(*tiles, kind=band), row, col)
         return widget
+
+    def _offer_day_off(self, cell: QFrame, weekday: int) -> None:
+        cell.setToolTip(tr("按右鍵可以整天取消，例如學校放假"))
+        cell.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        cell.customContextMenuRequested.connect(
+            lambda pos: self.weekday_menu(weekday).exec(cell.mapToGlobal(QPoint(pos))))
+        self.weekday_heads[weekday] = cell
+
+    def weekday_menu(self, weekday: int) -> QMenu:
+        """The reasons a coming `weekday` can be called off for; disabled when no one comes then."""
+        menu = QMenu(self)
+        anyone = bool(weekday_slots(self.store, weekday))
+        for reason in CANCEL_REASONS:
+            action = menu.addAction(reason)
+            action.setEnabled(anyone)
+            action.triggered.connect(lambda _=False, r=reason: self.day_off(weekday, r))
+        return menu
+
+    def day_off(self, weekday: int, reason: str) -> bool:
+        """Ask which coming `weekday` and whose sessions, then what to do with charts already on
+        that day, and give each picked session a chart of `reason` (see schedule.cancel_day).
+        Returns whether anything was changed; cancelling either dialog changes nothing."""
+        picked = self._ask_day_off(reason, weekday, weekday_dates(weekday, date.today()),
+                                   weekday_slots(self.store, weekday))
+        if picked is None or not picked[1]:
+            return False
+        day, slots = picked
+        move: list[int] = []
+        existing = clashes(self.store, day, {slot.student_id for slot in slots})
+        if existing:
+            chosen = self._ask_clashes(day, existing)
+            if chosen is None:
+                return False
+            move = chosen
+        cancel_day(self.store, day, reason, slots, move)
+        self.records_changed.emit()
+        return True
+
+    def _names(self) -> dict[int, str]:
+        return {student.id: student.name for student in self.store.students()}
+
+    def _ask_day_off(self, reason: str, weekday: int, dates: list[date],
+                     slots: list[tuple[str, Slot]]) -> tuple[date, list[Slot]] | None:
+        dialog = DayOffDialog(reason, weekday, dates, slots, self)
+        return dialog.choice() if dialog.exec() == DayOffDialog.DialogCode.Accepted else None
+
+    def _ask_clashes(self, day: date, records: list[Record]) -> list[int] | None:
+        dialog = ClashDialog(day, records, self._names(), self)
+        return dialog.choice() if dialog.exec() == ClashDialog.DialogCode.Accepted else None
 
     @staticmethod
     def _cell(*children: QWidget, kind: str) -> QFrame:

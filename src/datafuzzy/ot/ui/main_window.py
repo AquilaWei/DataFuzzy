@@ -244,6 +244,8 @@ class TheraNoteWindow(QMainWindow):
         self.day_view.open_record.connect(self.open_record)
         self.student_view.delete_record.connect(self.delete_record)
         self.day_view.delete_record.connect(self.delete_record)
+        self.day_view.records_changed.connect(self.refresh_after_change)
+        self.timetable_view.records_changed.connect(self.refresh_after_change)
         self.student_view.rename_student.connect(lambda sid: self.rename_student(sid))
         self.student_view.edit_profile.connect(lambda sid: self.edit_profile(sid))
         self.timetable_view.open_record.connect(self.open_record)
