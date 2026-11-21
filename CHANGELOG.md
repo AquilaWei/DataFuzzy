@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.17] - 2026-11-21
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 修正
+- ACE 擴充功能選好填寫檔後不再自動掃描、也不會自動打開學生的視窗，而是待機；按「掃描 ACE」才比對 ACE 已有的資料，或直接選一格按「填這一格」。原本的「重新掃描」按鈕改名「掃描 ACE」。
+- ACE 填寫檔存檔成功後，視窗自動關閉；寫入失敗時視窗保留，可以改資料夾再試。
+
 ## [0.7.0.37.16] - 2026-11-21
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
