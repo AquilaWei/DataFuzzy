@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.10] - 2026-11-20
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 修正
+- 全螢幕時按 Compare 或 Book next session，視窗會跳出全螢幕。原因是對照病歷的分頁在放進畫面前就先顯示，短暫成為一個獨立視窗。
+
 ## [0.7.0.37.9] - 2026-11-20
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
