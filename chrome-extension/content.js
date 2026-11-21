@@ -78,7 +78,8 @@
     :host{all:initial}
     .panel{width:320px;max-height:70vh;display:flex;flex-direction:column;font:13px/1.4 -apple-system,system-ui,sans-serif;
       color:#1d2327;background:#fff;border:1px solid #c7ced3;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.18);overflow:hidden}
-    header{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#0f6e72;color:#fff;font-weight:600}
+    header{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#0f6e72;color:#fff;font-weight:600;
+      cursor:move;user-select:none;touch-action:none}
     header span{flex:1}
     header button{background:none;border:none;color:#fff;cursor:pointer;font-size:14px}
     .body{padding:10px;overflow:auto;display:flex;flex-direction:column;gap:8px}
@@ -103,7 +104,7 @@
     .hidden{display:none}
   </style>
   <div class="panel">
-    <header><span>TheraNote → ACE</span><button id="close" title="關閉（點工具列的圖示再打開）">✕</button></header>
+    <header id="drag" title="拖曳移動面板"><span>TheraNote → ACE</span><button id="close" title="關閉（點工具列的圖示再打開）">✕</button></header>
     <div class="body" id="body">
       <div class="msg" id="msg"></div>
       <div class="actions">
@@ -304,7 +305,43 @@
     await save();
     render();
   });
-  const show = (on) => { host.style.display = on ? "block" : "none"; };
+  const show = (on) => { host.style.display = on ? "block" : "none"; if (on) keepInView(); };
+
+  // The panel is moved by its header and stays where it was left (per browser, in
+  // chrome.storage.local), always kept within the window.
+  const POSITION = "theranoteAcePosition";
+  function place(left, top) {
+    const width = host.offsetWidth || 320, height = host.offsetHeight || 60;
+    left = Math.min(Math.max(0, left), Math.max(0, window.innerWidth - width));
+    top = Math.min(Math.max(0, top), Math.max(0, window.innerHeight - Math.min(height, 40)));
+    Object.assign(host.style, {left: `${left}px`, top: `${top}px`, right: "auto"});
+    return {left, top};
+  }
+  function keepInView() {
+    if (host.style.left) place(parseFloat(host.style.left), parseFloat(host.style.top));
+  }
+  let dragging = null;
+  $("drag").addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || event.target.closest("button")) return;
+    const box = host.getBoundingClientRect();
+    dragging = {dx: event.clientX - box.left, dy: event.clientY - box.top};
+    $("drag").setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+  $("drag").addEventListener("pointermove", (event) => {
+    if (dragging) place(event.clientX - dragging.dx, event.clientY - dragging.dy);
+  });
+  const drop = () => {
+    if (!dragging) return;
+    dragging = null;
+    chrome.storage.local.set({[POSITION]: {left: parseFloat(host.style.left), top: parseFloat(host.style.top)}});
+  };
+  $("drag").addEventListener("pointerup", drop);
+  $("drag").addEventListener("pointercancel", drop);
+  window.addEventListener("resize", keepInView);
+  chrome.storage.local.get(POSITION).then((saved) => {
+    if (saved[POSITION]) place(saved[POSITION].left, saved[POSITION].top);
+  }).catch(() => {});
   $("close").addEventListener("click", () => show(false));
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg && msg.theranoteAce === "toggle") show(host.style.display === "none");

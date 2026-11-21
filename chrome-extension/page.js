@@ -42,7 +42,9 @@
   // The grid row and column of a student's day; `matches` is how many rows have the name. A
   // student with no family name in TheraNote is found by the first name alone when only one
   // student in the grid has it.
-  function locate({first, last, date}) {
+  async function locate({first, last, date}) {
+    if (activeEditWindow()) throw new Error("A time entry window is still open: save or cancel it first");
+    await gridReady();
     const g = grid();
     const store = g.getStore();
     const name = fullName(first, last);
@@ -173,12 +175,38 @@
     return true;
   }
 
-  // Closes the open window without saving, as its Cancel button does.
-  function cancel() {
+  // The window's Cancel button: an Ext button found by its text, wherever the window keeps it.
+  function cancelButton(w) {
+    const isCancel = (b) => b && /^cancel$/i.test(norm(b.text));
+    const found = (w.buttons || []).find(isCancel)
+      || (w.fbar && w.fbar.items && w.fbar.items.getRange().find(isCancel));
+    if (found) return found;
+    let match = null;
+    w.cascade((c) => { if (!match && c.getXType && c.getXType() === "button" && isCancel(c)) match = c; });
+    return match;
+  }
+
+  // Closes the open window without saving, as its Cancel button does, and waits until it is
+  // gone and the grid is back, so the next cell can be looked up in it.
+  async function cancel() {
     const w = activeEditWindow();
     if (!w) return false;
-    const button = (w.buttons || []).find((b) => /cancel/i.test(norm(b.text)));
-    if (button) press(button); else w.close();
+    const button = cancelButton(w);
+    if (button) press(button);
+    await until(() => { confirmMessageBox(); return !w.isVisible() || w.isDestroyed; }, "the time entry window closed", 3000)
+      .catch(() => (w.close ? w.close() : w.hide()));
+    await until(() => !activeEditWindow(), "the time entry window closed");
+    await gridReady();
+    return true;
+  }
+
+  // Waits while the grid reloads (ACE may reload it when a window closes) and has no rows yet.
+  async function gridReady() {
+    await until(() => {
+      const g = grid();
+      const mask = g.loadMask && g.loadMask.el && g.loadMask.el.isMasked && g.loadMask.el.isMasked();
+      return !mask && g.getStore().getCount() > 0;
+    }, "the student list", 8000);
     return true;
   }
 
