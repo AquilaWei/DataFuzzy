@@ -109,20 +109,9 @@
     return Object.fromEntries(Object.keys(SECTIONS).map((s) => [s, entryRows(s).length]));
   }
 
-  // Presses an Ext button the way a person does, with a click on its own element, so ACE runs
-  // everything it ties to that click (not only the button's handler); a button not on the page
-  // gets its handler called instead.
   function press(button) {
-    const dom = (button.btnEl && button.btnEl.dom) || (button.el && button.el.dom);
-    if (dom && dom.isConnected) {
-      for (const type of ["mousedown", "mouseup", "click"]) {
-        dom.dispatchEvent(new MouseEvent(type, {bubbles: true, cancelable: true, view: window, button: 0}));
-      }
-    } else if (button.handler) {
-      button.handler.call(button.scope || button, button, Ext.EventObject);
-    } else {
-      button.fireEvent("click", button, Ext.EventObject);
-    }
+    if (button.handler) button.handler.call(button.scope || button, button, Ext.EventObject);
+    else button.fireEvent("click", button, Ext.EventObject);
   }
 
   // A new empty entry row in `section`: the section's own add button when it has no row yet,
@@ -208,18 +197,23 @@
     return true;
   }
 
-  // The window's Cancel button: an Ext button found by its text, wherever the window keeps it.
+  // The window's Cancel button: an Ext button found by its text. ACE keeps it in the window's
+  // bottom toolbar; the button bar and the items are looked through as well.
   function cancelButton(w) {
     const isCancel = (b) => b && /^cancel$/i.test(norm(b.text));
-    const found = (w.buttons || []).find(isCancel)
-      || (w.fbar && w.fbar.items && w.fbar.items.getRange().find(isCancel));
+    const bars = [w.getBottomToolbar && w.getBottomToolbar(), w.fbar, w.getTopToolbar && w.getTopToolbar()];
+    for (const bar of bars) {
+      const found = bar && bar.items && bar.items.getRange().find(isCancel);
+      if (found) return found;
+    }
+    const found = (w.buttons || []).find(isCancel);
     if (found) return found;
     let match = null;
     w.cascade((c) => { if (!match && c.getXType && c.getXType() === "button" && isCancel(c)) match = c; });
     return match;
   }
 
-  // Closes the open window without saving, as its Cancel button does, and waits until it is
+  // Closes the open window without saving, as its Cancel button does (which only hides it), and waits until it is
   // gone and the grid is back, so the next cell can be looked up in it.
   async function cancel() {
     const w = activeEditWindow();
@@ -227,7 +221,7 @@
     const button = cancelButton(w);
     if (button) press(button);
     await until(() => { confirmMessageBox(); return !w.isVisible() || w.isDestroyed; }, "the time entry window closed", 3000)
-      .catch(() => (w.close ? w.close() : w.hide()));
+      .catch(() => w.hide()); // never close(): it destroys the one window ACE reuses for every cell
     await until(() => !activeEditWindow(), "the time entry window closed");
     await gridReady();
     return true;
