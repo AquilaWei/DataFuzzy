@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.11] - 2026-11-21
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 修正
+- ACE 擴充功能找不到學生：TheraNote 沒有填姓、整個名字寫在名字欄的學生（例如「Cole Crudup」），在 ACE 清單裡對不到。現在改用完整姓名比對；沒有姓的學生，在 ACE 清單裡只有一位同名時，也用名字找。ACE 清單分頁、學生不在這一頁時，會提示翻頁。
+
 ## [0.7.0.37.10] - 2026-11-20
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
