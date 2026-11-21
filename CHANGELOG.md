@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.15] - 2026-11-21
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- ACE 擴充功能選好填寫檔後先掃描 ACE：已經有資料的格子打開讀取、和填寫檔比對後按 Cancel 關閉，不改任何資料。一致的標成「已完成」，不一致的標成「需確認」並列出哪裡不同（例如 Minutes：ACE「25」、檔案「30」），空的格子照原本待填。面板新增「重新掃描」按鈕。
+
 ## [0.7.0.37.14] - 2026-11-21
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
