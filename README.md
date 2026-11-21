@@ -69,6 +69,7 @@ uv run theranote
   當天計畫是 Group 的學生，Absent Student、School Not in Session、Therapist Absent、Unavailable Student
   即使病歷是 Individual，也填在 Group Time，和同一時間的組同一個 Group。
   Consult、缺英文、缺時間的格子會標「要手動」，不自動填；週次不對、名單找不到學生時也會停下。
+  選好填寫檔後會先掃描一次：ACE 已經有資料的格子會打開讀取、和填寫檔比對後按 Cancel 關閉（不改任何資料），一致的標成「已完成」，不一致的標成「需確認」並列出哪裡不同，空的格子照原本「待填」；之後可按「重新掃描」再比對一次。
   ACE 那格已有資料時，面板先問「取代」或「跳過」：取代會先刪掉 ACE 視窗裡原有的資料再填入（按 Save Changes 才真的刪除，按 Cancel 原資料不變；已核准而 ACE 不讓刪的資料會停下請你手動處理），跳過會按 Cancel 關掉 ACE 視窗、不改任何資料，等週表重新載入後才找下一位學生。面板可以拖曳標題列移動，位置會記住。
   安裝：Chrome 開 `chrome://extensions` → 開啟「開發人員模式」→「載入未封裝項目」→ 選 `chrome-extension/` 資料夾
   （Chrome 直接使用這個資料夾，請勿搬動；更新後在 `chrome://extensions` 按重新載入）。擴充功能的圖示和版本號與 TheraNote 相同。

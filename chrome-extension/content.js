@@ -13,9 +13,12 @@
     no_times: "缺開始／結束時間",
     no_group: "Group 病歷缺開始時間，無法分組",
   };
-  const STATUS = {todo: "待填", filling: "填寫中", saved: "已存", skipped: "跳過", problem: "要手動"};
+  const STATUS = {todo: "待填", filling: "填寫中", saved: "已存", skipped: "跳過", problem: "要手動",
+    done: "已完成", check: "需確認"};
+  const WAITING = ["todo", "check"]; // the cells still to go through, one by one
 
-  let state = null; // {file: {...}, status: [..per cell], current: index}
+  let state = null; // {file: {...}, status: [..per cell], notes: [..per cell], current: index}
+  let scanning = false;
 
   // --- talking to page.js ----------------------------------------------------------
 
@@ -54,13 +57,14 @@
   function openFile(text) {
     const file = JSON.parse(text);
     if (file.format !== FORMAT) throw new Error(`這不是 TheraNote 的 ACE 填寫檔（${FORMAT}）`);
-    state = {file, status: file.cells.map((c) => (c.problems.length ? "problem" : "todo")), current: 0};
+    state = {file, status: file.cells.map((c) => (c.problems.length ? "problem" : "todo")),
+      notes: file.cells.map(() => []), current: 0};
     state.current = nextTodo(0);
   }
 
   function nextTodo(from) {
-    const i = state.status.findIndex((s, i) => i >= from && s === "todo");
-    return i >= 0 ? i : state.status.findIndex((s) => s === "todo");
+    const i = state.status.findIndex((s, i) => i >= from && WAITING.includes(s));
+    return i >= 0 ? i : state.status.findIndex((s) => WAITING.includes(s));
   }
 
   // "11/9" for the file's first day, to compare with ACE's "monday 11/9".
@@ -100,6 +104,8 @@
     .badge{font-size:11px;padding:1px 6px;border-radius:9px;background:#e8eaed;white-space:nowrap}
     .badge.saved{background:#d7f0dc;color:#1b5e20}.badge.problem{background:#fdecea;color:#8a1c12}
     .badge.filling{background:#fff4ce;color:#7a5b00}
+    .badge.done{background:#d7f0dc;color:#1b5e20}.badge.check{background:#ffe2c2;color:#8a4500}
+    .notes{margin:4px 0;padding-left:16px;color:#8a4500}
     .choice{background:#fff4ce;color:#5c4400;display:flex;flex-direction:column;gap:6px}
     .hidden{display:none}
   </style>
@@ -109,6 +115,7 @@
       <div class="msg" id="msg"></div>
       <div class="actions">
         <button class="act" id="pick">選擇填寫檔…</button>
+        <button class="act" id="scan" title="打開 ACE 裡已經有資料的格子，和填寫檔比對（按 Cancel 關閉，不改任何資料）">重新掃描</button>
         <button class="act" id="clear">清除</button>
         <input type="file" id="file" accept=".json,application/json" class="hidden">
       </div>
@@ -134,7 +141,9 @@
 
   function render() {
     const has = Boolean(state);
-    $("clear").disabled = !has;
+    $("clear").disabled = !has || scanning;
+    $("scan").disabled = !has || scanning;
+    $("pick").disabled = scanning;
     $("cells").replaceChildren();
     $("current").classList.toggle("hidden", !has || state.current < 0);
     if (!has) {
@@ -155,7 +164,7 @@
       $("cells").append(li);
     });
     if (state.current >= 0) renderCurrent(state.file.cells[state.current], state.status[state.current]);
-    const left = state.status.filter((s) => s === "todo").length;
+    const left = state.status.filter((s) => WAITING.includes(s)).length;
     if (!$("msg").dataset.keep) say(left ? `還有 ${left} 格待填。` : "全部處理完了。填完請刪除下載的填寫檔。");
     delete $("msg").dataset.keep;
   }
@@ -173,6 +182,19 @@
       list.append(li);
     }
     box.append(title, list);
+    const notes = (state.notes && state.notes[state.current]) || [];
+    if (status === "check" && notes.length) {
+      const head = document.createElement("div");
+      head.textContent = "ACE 已經有資料，但和檔案不同：";
+      const diff = document.createElement("ul");
+      diff.className = "notes";
+      for (const note of notes) {
+        const li = document.createElement("li");
+        li.textContent = note;
+        diff.append(li);
+      }
+      box.append(head, diff);
+    }
     for (const p of cell.problems) {
       const note = document.createElement("div");
       note.className = "msg error";
@@ -182,13 +204,13 @@
     const actions = document.createElement("div");
     actions.className = "actions";
     const fill = button("填這一格", "primary", () => fillCurrent());
-    fill.disabled = status === "filling" || cell.problems.length > 0;
+    fill.disabled = scanning || status === "filling" || cell.problems.length > 0;
     const skip = button(status === "skipped" ? "改回待填" : "跳過", "", () => {
       state.status[state.current] = status === "skipped" ? "todo" : "skipped";
       if (status !== "skipped") state.current = nextTodo(state.current + 1);
       save(); render();
     });
-    skip.disabled = status === "filling";
+    skip.disabled = scanning || status === "filling";
     actions.append(fill, skip);
     box.append(actions);
   }
@@ -273,6 +295,47 @@
     }
   }
 
+  // Before filling one by one: each cell ACE already has entries in is opened, compared with
+  // the file and closed again with Cancel. The same entries mark it done, other entries mark it
+  // for checking (with what differs), and an empty cell stays as it was.
+  async function scanAll() {
+    if (!state || scanning) return;
+    scanning = true;
+    let done = 0, check = 0, failed = 0;
+    try {
+      const week = await ask("week");
+      if (!week.length || !week[0].endsWith(` ${monthDay(state.file.week[0])}`)) {
+        throw new Error(`ACE 現在顯示的週（${week[0] || "?"}）不是檔案的週（${state.file.week[0]} 起），請先切換週次再按「重新掃描」。`);
+      }
+      const cells = state.file.cells;
+      for (let i = 0; i < cells.length; i++) {
+        if (!["todo", "check", "problem", "skipped"].includes(state.status[i])) continue;
+        say(`掃描 ACE 已有的資料… ${i + 1}／${cells.length}`);
+        try {
+          const result = await ask("scan", cells[i]);
+          if (result.state === "same") { state.status[i] = "done"; state.notes[i] = []; done++; }
+          else if (result.state === "different" && state.status[i] !== "problem") {
+            state.status[i] = "check"; state.notes[i] = result.notes; check++;
+          }
+        } catch (error) {
+          failed++;
+          await ask("cancel").catch(() => {});
+        }
+      }
+      state.current = nextTodo(0);
+      $("msg").dataset.keep = "1";
+      const left = state.status.filter((s) => WAITING.includes(s)).length;
+      say(`掃描完成：${done} 格和 ACE 一致（已完成），${check} 格 ACE 有資料但不同（需確認），還有 ${left} 格要一個個處理。`
+        + (failed ? `\n${failed} 格沒能掃描，照原本的狀態。` : ""));
+    } catch (error) {
+      $("msg").dataset.keep = "1";
+      say(error.message, true);
+    } finally {
+      scanning = false;
+      save(); render();
+    }
+  }
+
   function windowClosed(saved) {
     if (!state) return;
     const i = state.status.indexOf("filling");
@@ -295,10 +358,12 @@
       openFile(await f.text());
       await save();
       render();
+      await scanAll();
     } catch (error) {
       say(error.message, true);
     }
   });
+  $("scan").addEventListener("click", () => scanAll());
   $("clear").addEventListener("click", async () => {
     if (!confirm("清除載入的填寫檔和進度？（ACE 裡已存的資料不受影響）")) return;
     state = null;
@@ -349,7 +414,10 @@
 
   document.documentElement.append(host);
   load().then(() => {
-    if (state) state.status = state.status.map((s) => (s === "filling" ? "todo" : s)); // reloaded mid-fill
+    if (state) {
+      state.status = state.status.map((s) => (s === "filling" ? "todo" : s)); // reloaded mid-fill
+      state.notes = state.notes || state.file.cells.map(() => []);
+    }
     render();
   });
 })();

@@ -241,7 +241,89 @@
     return notes;
   }
 
-  const OPS = {week, locate, open, clear, cancel, fill};
+  // --- checking what a cell already has ----------------------------------------------
+
+  // The text a combo shows for its value.
+  function shown(combo) {
+    if (!combo || !combo.store) return "";
+    const value = combo.getValue();
+    const index = combo.store.findBy((r) => String(r.get(combo.valueField)) === String(value));
+    return index >= 0 ? String(combo.store.getAt(index).get(combo.displayField)) : String(combo.getRawValue() || "");
+  }
+  const raw = (field) => (field && field.getRawValue ? String(field.getRawValue() ?? "") : "");
+
+  // The entries of the open window, in the shape of the file's rows.
+  function readEntries() {
+    const entries = [];
+    for (const section of Object.keys(SECTIONS)) {
+      for (const entry of entryRows(section)) {
+        const isGroup = section === "group";
+        entries.push({section, type: shown(entry.combo_BillingCode), minutes: raw(entry.combo_Units),
+          start: raw(entry.fld_time_start), end: raw(entry.fld_time_end),
+          group: isGroup ? String(entry.combo_GroupId.getValue() ?? "") : "",
+          group_size: isGroup ? raw(entry.group_size) : "",
+          comments_on_log: raw(entry.textfield_Comment), data_towards_goals: raw(entry.textfield_DataTowardsGoals),
+          deficit: shown(entry.underlying_deficits)});
+      }
+    }
+    return entries;
+  }
+
+  const text = (value) => String(value ?? "").replace(/\r\n?/g, "\n").replace(/\s+/g, " ").trim().toLowerCase();
+  const number = (value) => (String(value ?? "").trim() === "" ? null : Number(value));
+
+  // What differs between the file's rows and a cell's entries, as short notes; [] when they
+  // agree. A row's empty field is not compared; each row is matched to an entry of its section
+  // and type, by start time when there are several.
+  function compare(rows, entries) {
+    const notes = [];
+    const left = [...entries];
+    for (const row of rows) {
+      const label = `${SECTIONS[row.section]} ${row.type}`;
+      const same = left.filter((e) => e.section === row.section && key(e.type) === key(row.type));
+      const entry = same.find((e) => text(e.start) === text(row.start)) || same[0];
+      if (!entry) { notes.push(`ACE 沒有 ${label}`); continue; }
+      left.splice(left.indexOf(entry), 1);
+      const differs = (name, ours, theirs) => notes.push(`${label} ${name}：ACE「${theirs || "空白"}」、檔案「${ours}」`);
+      if (row.minutes != null && number(entry.minutes) !== row.minutes) differs("Minutes", row.minutes, entry.minutes);
+      for (const [field, name] of [["start", "Start"], ["end", "End"], ["comments_on_log", "Comments on Log"],
+        ["data_towards_goals", "Data Towards Goals"], ["deficit", "Underlying Deficits"]]) {
+        if (row[field] && text(entry[field]) !== text(row[field])) differs(name, row[field], entry[field]);
+      }
+      if (row.group) {
+        const group = row.group.replace(/^group\s+/i, "");
+        if (text(entry.group) !== text(group)) differs("Group", group, entry.group);
+        if (number(entry.group_size) !== row.group_size) differs("Group Size", row.group_size, entry.group_size);
+      }
+    }
+    for (const entry of left) notes.push(`ACE 多了 ${SECTIONS[entry.section]} ${entry.type}`);
+    return notes;
+  }
+
+  // Whether a cell already has entries and whether they are the file's: {state: "empty" |
+  // "same" | "different" | "unknown", notes}. A cell with entries is opened to read them and
+  // closed again with Cancel, changing nothing.
+  async function scan(cell) {
+    const spot = await locate(cell);
+    if (spot.matches !== 1) return {state: "unknown", notes: [], matches: spot.matches};
+    const g = grid();
+    const day = DAYS[new Date(`${cell.date}T12:00:00`).getDay()];
+    const id = g.getStore().getAt(spot.row).get(`${day}_id`);
+    const shownText = norm((g.getView().getCell(spot.row, spot.col) || {}).innerText);
+    if (!id && !shownText) return {state: "empty", notes: []};
+    const counts = await open(spot);
+    let entries;
+    try {
+      entries = counts.direct + counts.group + counts.indirect ? readEntries() : [];
+    } finally {
+      await cancel();
+    }
+    if (!entries.length) return {state: "empty", notes: []};
+    const notes = compare(cell.rows, entries);
+    return {state: notes.length ? "different" : "same", notes};
+  }
+
+  const OPS = {week, locate, open, clear, cancel, fill, scan};
 
   window.addEventListener("message", async (event) => {
     const msg = event.data;
