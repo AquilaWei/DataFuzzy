@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.23] - 2026-11-21
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 課表：在週一到週五的標題按右鍵，可選 School Not in Session、Therapist Absent、Unavailable Student，挑未來一個月內的那一天、勾選學生（預設全選），自動替每個時段新增這個原因的病歷。
+- 課表整天取消時，那天若已有這些學生的病歷，會列出來讓你勾選要延到下一週的，沒勾的被新的病歷取代。
+- 日期模式：今天或之後、有病歷的日子多了「預約延期」（延 1–8 週，勾選要延的病歷）和「預約取消」（選原因，可先把預約延期，或直接取代；沒勾選的照舊）。
+
 ## [0.7.0.37.22] - 2026-11-21
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
