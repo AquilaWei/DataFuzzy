@@ -31,7 +31,15 @@ from PySide6.QtWidgets import (
 
 from ...core.pipeline import Pipeline
 from ...ui.worker import run_task
-from ..ace_export import ace_cells, to_json
+from ..ace_export import (
+    MANUAL_TYPE,
+    NO_ENGLISH,
+    NO_GROUP,
+    NO_TIMES,
+    ChartIssue,
+    ace_week,
+    to_json,
+)
 from ..db import Record, RecordStore
 from ..excel_export import (
     file_name,
@@ -48,6 +56,7 @@ from ..exchange import (
     export_range,
     preview_import,
 )
+from .cards import date_label, time_label
 from .date_view import to_date, to_qdate
 from .i18n import tr
 from .location_view import NO_LOCATION
@@ -561,17 +570,89 @@ class ExcelExportDialog(QDialog):
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.written[-1].parent)))
 
 
+# What each of chart_problems' codes asks the user to fix.
+ACE_PROBLEMS = {MANUAL_TYPE: "Consult：ACE 沒有對應類型，要手動填", NO_ENGLISH: "還沒有英文記錄或追蹤",
+                NO_TIMES: "缺開始或結束時間", NO_GROUP: "Group 病歷缺開始時間，無法分組"}
+
+
+def issue_text(issue: ChartIssue) -> str:
+    """"2026-11-10  週二  1:30 PM  Cole Crudup — 還沒有英文記錄或追蹤" for one chart."""
+    when = date_label(issue.record.visit_date)
+    if issue.record.start_time:
+        when += f"  {time_label(issue.record.start_time)}"
+    return f"{when}  {issue.student_name} — " + tr("、").join(tr(ACE_PROBLEMS.get(p, p)) for p in issue.problems)
+
+
+class AceIssuesDialog(QDialog):
+    """The charts of a week that cannot be filled into ACE as they are, before its file is saved:
+    open one to fix it (`opened` is then its record id), save the file anyway (those cells are
+    marked for entering by hand) or cancel."""
+
+    def __init__(self, issues: list[ChartIssue], parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.opened: int | None = None
+        self.save_anyway = False
+        self.setWindowTitle(tr("有病歷還沒填完整"))
+        self.resize(620, 360)
+        intro = QLabel(tr("這 {count} 份病歷還不能填進 ACE。點兩下或選好後按「打開這份病歷」去修改；"
+                          "也可以照樣存檔，這些格子會標成「要手動」。", count=len(issues)))
+        intro.setWordWrap(True)
+        self.list = QListWidget()
+        for issue in issues:
+            item = QListWidgetItem(issue_text(issue))
+            item.setData(Qt.ItemDataRole.UserRole, issue.record.id)
+            self.list.addItem(item)
+        self.list.setCurrentRow(0)
+        self.open_btn = QPushButton(tr("打開這份病歷"))
+        self.open_btn.setObjectName("primary")
+        self.save_btn = QPushButton(tr("照樣存檔"))
+        cancel = QPushButton(tr("取消"))
+        buttons = QHBoxLayout()
+        buttons.addWidget(self.save_btn)
+        buttons.addStretch(1)
+        buttons.addWidget(cancel)
+        buttons.addWidget(self.open_btn)
+        layout = QVBoxLayout(self)
+        layout.addWidget(intro)
+        layout.addWidget(self.list, 1)
+        layout.addLayout(buttons)
+        self.open_btn.clicked.connect(self.open_current)
+        self.list.itemDoubleClicked.connect(lambda _: self.open_current())
+        self.save_btn.clicked.connect(self._save)
+        cancel.clicked.connect(self.reject)
+        self.open_btn.setDefault(True)
+
+    def open_current(self) -> None:
+        item = self.list.currentItem()
+        if item is not None:
+            self.opened = item.data(Qt.ItemDataRole.UserRole)
+            self.accept()
+
+    def _save(self) -> None:
+        self.save_anyway = True
+        self.accept()
+
+
 class AceExportDialog(QDialog):
     """Pick a week, save its charts as the ACE fill-in file the browser extension enters into
     ACE Portal (see ace_export.py), into a folder the user picks once (remembered; Downloads
-    until then). The file is not encrypted, which the dialog says."""
+    until then). The file is not encrypted, which the dialog says.
+
+    Charts that cannot be filled in as they are are listed first (see AceIssuesDialog); picking
+    one closes the dialog with `opened` set to its record id, for the window to open. Whether
+    the file was saved is said in a message box as well as in the dialog."""
 
     def __init__(self, store: RecordStore, today: date | None = None,
                  choose: Callable[[str], str] | None = None,
-                 confirm: Callable[[Path], bool] | None = None, parent: QWidget | None = None) -> None:
+                 confirm: Callable[[Path], bool] | None = None, parent: QWidget | None = None,
+                 review: Callable[[list[ChartIssue]], AceIssuesDialog] | None = None,
+                 notify: Callable[[bool, str], None] | None = None) -> None:
         super().__init__(parent)
         self.store = store
         self.written: Path | None = None
+        self.opened: int | None = None
+        self._review = review or self._review_issues
+        self._notify = notify or self._message
         self._choose = choose or (lambda start: QFileDialog.getExistingDirectory(
             self, tr("ACE 填寫檔資料夾"), start))
         self._confirm = confirm or (lambda path: ask_replace_file(self, path))
@@ -632,10 +713,19 @@ class AceExportDialog(QDialog):
         if date_from > date_to:
             self.status.setText(tr("開始日期晚於結束日期。"))
             return
-        cells = ace_cells(self.store, date_from, date_to)
+        cells, issues = ace_week(self.store, date_from, date_to)
         if not cells:
             self.status.setText(tr("這段期間沒有病歷。"))
             return
+        if issues:
+            review = self._review(issues)
+            if review.opened is not None:
+                self.opened = review.opened
+                self.reject()
+                return
+            if not review.save_anyway:
+                self.status.setText(tr("沒有存檔：有 {count} 份病歷還沒填完整。", count=len(issues)))
+                return
         path = self.folder() / f"TheraNote-ACE-{date_from.isoformat()}.json"
         if path.exists() and not self._confirm(path):
             self.status.setText(tr("略過 {path}：沒有取代既有檔案。", path=path.name))
@@ -644,9 +734,23 @@ class AceExportDialog(QDialog):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(to_json(cells, date_from, date_to), encoding="utf-8")
         except OSError as e:
-            self.status.setText(tr("{label}寫入失敗：{error}", label=path.name, error=e.strerror or e))
+            message = tr("{label}寫入失敗：{error}", label=path.name, error=e.strerror or e)
+            self.status.setText(message)
+            self._notify(False, message)
             return
         self.written = path
         manual = sum(bool(cell.problems) for cell in cells)
-        self.status.setText(tr("已存 {count} 格到 {path}；其中 {manual} 格要手動填。",
-                               count=len(cells), path=path, manual=manual))
+        message = tr("已存 {count} 格到 {path}；其中 {manual} 格要手動填。", count=len(cells), path=path, manual=manual)
+        self.status.setText(message)
+        self._notify(True, message)
+
+    def _review_issues(self, issues: list[ChartIssue]) -> AceIssuesDialog:
+        dialog = AceIssuesDialog(issues, self)
+        dialog.exec()
+        return dialog
+
+    def _message(self, saved: bool, message: str) -> None:
+        if saved:
+            QMessageBox.information(self, tr("轉出成功"), message)
+        else:
+            QMessageBox.warning(self, tr("轉出失敗"), message)

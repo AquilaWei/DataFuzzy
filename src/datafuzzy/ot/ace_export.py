@@ -53,8 +53,22 @@ def chart_problems(record: Record, rows: list[AceRow] | None) -> list[str]:
     return problems
 
 
+@dataclass
+class ChartIssue:
+    """A chart that keeps its cell from being filled in (see chart_problems), to be fixed."""
+    record: Record
+    student_name: str
+    problems: list[str]
+
+
 def ace_cells(store: RecordStore, date_from: date, date_to: date) -> list[AceCell]:
-    """The cells for the charts from `date_from` to `date_to` (inclusive), by day, then name.
+    """The cells for the charts from `date_from` to `date_to` (inclusive); see ace_week."""
+    return ace_week(store, date_from, date_to)[0]
+
+
+def ace_week(store: RecordStore, date_from: date, date_to: date) -> tuple[list[AceCell], list[ChartIssue]]:
+    """The cells for the charts from `date_from` to `date_to` (inclusive), by day, then name,
+    and the charts with problems, by day and start time.
 
     Reads the charts in the range and, for their students only, the name and from the profile
     the MA billing setting and whether the plan on each chart's day is for groups. Groups are
@@ -66,14 +80,19 @@ def ace_cells(store: RecordStore, date_from: date, date_to: date) -> list[AceCel
     plan_group = {r.id: profiles[r.student_id].plan_on(r.visit_date).group for r in records}
     groups = group_names(records, plan_group)
     cells: dict[tuple[date, int], AceCell] = {}
+    issues: list[ChartIssue] = []
     for record in records:
         student = students[record.student_id]
         cell = cells.setdefault((record.visit_date, student.id), AceCell(
             student.given_name, student.family_name, record.visit_date.isoformat()))
         rows = ace_rows(record, ma_billing[student.id], groups.get(record.id, EMPTY_GROUP), plan_group[record.id])
         cell.rows.extend(rows or [])
-        cell.problems.extend(p for p in chart_problems(record, rows) if p not in cell.problems)
-    return sorted(cells.values(), key=lambda c: (c.date, c.last.casefold(), c.first.casefold()))
+        problems = chart_problems(record, rows)
+        cell.problems.extend(p for p in problems if p not in cell.problems)
+        if problems:
+            issues.append(ChartIssue(record, student.name, problems))
+    issues.sort(key=lambda i: (i.record.visit_date, i.record.start_time or "99:99", i.student_name.casefold()))
+    return sorted(cells.values(), key=lambda c: (c.date, c.last.casefold(), c.first.casefold())), issues
 
 
 def to_json(cells: list[AceCell], date_from: date, date_to: date) -> str:

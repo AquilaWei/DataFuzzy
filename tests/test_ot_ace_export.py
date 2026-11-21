@@ -10,6 +10,7 @@ from datafuzzy.ot.ace_export import (
     NO_GROUP,
     NO_TIMES,
     ace_cells,
+    ace_week,
     to_json,
 )
 from datafuzzy.ot.ace_mapping import AceRow
@@ -142,10 +143,23 @@ def test_the_file_holds_each_row_s_fields(store):
 TUESDAY = date(2026, 11, 10)
 
 
-def ace_dialog(qtbot, store, choose=lambda start: "", confirm=lambda path: True):
+class Review:
+    """Stands in for AceIssuesDialog: records the issues shown and answers as told."""
+
+    def __init__(self, opened=None, save_anyway=False):
+        self.opened, self.save_anyway, self.shown = opened, save_anyway, None
+
+    def __call__(self, issues):
+        self.shown = issues
+        return self
+
+
+def ace_dialog(qtbot, store, choose=lambda start: "", confirm=lambda path: True, review=None, said=None):
     from datafuzzy.ot.ui.exchange_dialogs import AceExportDialog
 
-    dialog = AceExportDialog(store, today=TUESDAY, choose=choose, confirm=confirm)
+    said = [] if said is None else said
+    dialog = AceExportDialog(store, today=TUESDAY, choose=choose, confirm=confirm, review=review or Review(),
+                             notify=lambda saved, message: said.append((saved, message)))
     qtbot.addWidget(dialog)
     return dialog
 
@@ -207,3 +221,59 @@ def test_a_group_student_who_came_alone_is_noted_and_the_absent_one_joins_the_gr
     assert todd_cell.rows[0].comments_on_log.startswith("No appropriate student to group with.\n")
     assert (amy_cell.rows[0].section, amy_cell.rows[0].type, amy_cell.rows[0].group) == (
         "group", "Unavailable Student", "Group A")
+
+
+def test_saving_says_so(qtbot, store, tmp_path):
+    therapy(store, store.add_student("Todd", "Lane").id)
+    store.set_ace_folder(str(tmp_path))
+    said = []
+    ace_dialog(qtbot, store, said=said).save()
+    assert [saved for saved, _ in said] == [True]
+
+
+def test_a_failed_write_says_so(qtbot, store, tmp_path):
+    therapy(store, store.add_student("Todd", "Lane").id)
+    (tmp_path / "file").write_text("")
+    store.set_ace_folder(str(tmp_path / "file" / "below"))
+    said = []
+    ace_dialog(qtbot, store, said=said).save()
+    assert [saved for saved, _ in said] == [False]
+
+
+def test_incomplete_charts_are_listed_before_saving(qtbot, store, tmp_path):
+    todd = therapy(store, store.add_student("Todd", "Lane").id, en_followup="")
+    therapy(store, store.add_student("Amy", "Chen").id)
+    store.set_ace_folder(str(tmp_path))
+    review = Review()
+    ace_dialog(qtbot, store, review=review).save()
+    assert [(issue.record.id, issue.student_name, issue.problems) for issue in review.shown] == [
+        (todd.id, "Todd Lane", [NO_ENGLISH])]
+    assert not (tmp_path / "TheraNote-ACE-2026-11-09.json").exists()  # not without saying so
+
+
+def test_picking_an_incomplete_chart_closes_the_dialog_to_open_it(qtbot, store, tmp_path):
+    todd = therapy(store, store.add_student("Todd", "Lane").id, en_followup="")
+    store.set_ace_folder(str(tmp_path))
+    dialog = ace_dialog(qtbot, store, review=Review(opened=todd.id))
+    dialog.save()
+    assert dialog.opened == todd.id
+    assert not (tmp_path / "TheraNote-ACE-2026-11-09.json").exists()
+
+
+def test_incomplete_charts_can_be_saved_anyway(qtbot, store, tmp_path):
+    therapy(store, store.add_student("Todd", "Lane").id, en_followup="")
+    store.set_ace_folder(str(tmp_path))
+    ace_dialog(qtbot, store, review=Review(save_anyway=True)).save()
+    assert json.loads((tmp_path / "TheraNote-ACE-2026-11-09.json").read_text())["cells"][0]["problems"] == [NO_ENGLISH]
+
+
+def test_the_issues_dialog_names_each_chart_and_what_to_fix(qtbot, store):
+    from datafuzzy.ot.ui.exchange_dialogs import AceIssuesDialog
+
+    therapy(store, store.add_student("Todd", "Lane").id, en_followup="")
+    _, issues = ace_week(store, NOV_9, NOV_15)
+    dialog = AceIssuesDialog(issues)
+    qtbot.addWidget(dialog)
+    assert dialog.list.item(0).text() == "2026-11-10  週二  1:30 PM  Todd Lane — 還沒有英文記錄或追蹤"
+    dialog.open_btn.click()
+    assert dialog.opened == issues[0].record.id
