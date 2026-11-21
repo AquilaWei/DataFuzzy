@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.24] - 2026-11-21
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 修正
+- 整天取消、預約延期、預約取消的勾選清單：勾選的列是藍底白勾、整列淡藍底色，沒勾的是空框、灰字，不用滑過去就看得出來；清單上方多了「全選」「全不選」。
+
 ## [0.7.0.37.23] - 2026-11-21
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
