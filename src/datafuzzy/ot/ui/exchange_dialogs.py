@@ -743,6 +743,7 @@ class AceExportDialog(QDialog):
         message = tr("已存 {count} 格到 {path}；其中 {manual} 格要手動填。", count=len(cells), path=path, manual=manual)
         self.status.setText(message)
         self._notify(True, message)
+        self.accept()  # saved: nothing more to do here
 
     def _review_issues(self, issues: list[ChartIssue]) -> AceIssuesDialog:
         dialog = AceIssuesDialog(issues, self)

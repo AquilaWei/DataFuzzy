@@ -227,8 +227,19 @@ def test_saving_says_so(qtbot, store, tmp_path):
     therapy(store, store.add_student("Todd", "Lane").id)
     store.set_ace_folder(str(tmp_path))
     said = []
-    ace_dialog(qtbot, store, said=said).save()
+    dialog = ace_dialog(qtbot, store, said=said)
+    dialog.save()
     assert [saved for saved, _ in said] == [True]
+    assert dialog.result() == dialog.DialogCode.Accepted
+
+
+def test_a_failed_write_leaves_the_dialog_open(qtbot, store, tmp_path):
+    therapy(store, store.add_student("Todd", "Lane").id)
+    (tmp_path / "file").write_text("")
+    store.set_ace_folder(str(tmp_path / "file" / "below"))
+    dialog = ace_dialog(qtbot, store)
+    dialog.save()
+    assert dialog.result() != dialog.DialogCode.Accepted
 
 
 def test_a_failed_write_says_so(qtbot, store, tmp_path):
