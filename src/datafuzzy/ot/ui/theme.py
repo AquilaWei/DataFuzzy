@@ -18,6 +18,7 @@ CALENDAR_ICON = Path(__file__).with_name("calendar.png")  # Qt picks calendar@2x
 CLOCK_ICON = Path(__file__).with_name("clock.png")
 PLACE_ICON = Path(__file__).with_name("place.png")
 CHEVRON_ICON = Path(__file__).with_name("chevron.png")
+CHECK_ICON = Path(__file__).with_name("check.png")  # white, on the accent fill of a ticked row
 
 # role -> (light, dark)
 COLORS: dict[QPalette.ColorRole, tuple[str, str]] = {
@@ -125,7 +126,10 @@ def stylesheet() -> str:
     """STYLESHEET plus the rules that need a file path: a calendar icon on date fields and
     a clock on time fields (combo boxes named "time") and a pin on location fields (named
     "place"), so it is clear what clicking there opens. Every other drop-down gets a chevron:
-    styling the drop-down button drops Fusion's own arrow, leaving nothing to show it opens."""
+    styling the drop-down button drops Fusion's own arrow, leaving nothing to show it opens.
+    The rows of a tick list (check boxes named "checkRow") read at a glance: a ticked one has a
+    filled accent box with a white tick and a tinted row, an unticked one an empty box and grey
+    text."""
     calendar, clock, place = CALENDAR_ICON.as_posix(), CLOCK_ICON.as_posix(), PLACE_ICON.as_posix()
     return STYLESHEET + (
         f"QComboBox::down-arrow {{ image: url(\"{CHEVRON_ICON.as_posix()}\"); width: 16px; height: 16px; }}\n"
@@ -133,7 +137,14 @@ def stylesheet() -> str:
         " { border: none; width: 26px; }\n"
         f"QDateEdit::down-arrow {{ image: url(\"{calendar}\"); width: 16px; height: 16px; }}\n"
         f"QComboBox#time::down-arrow {{ image: url(\"{clock}\"); width: 16px; height: 16px; }}\n"
-        f"QComboBox#place::down-arrow {{ image: url(\"{place}\"); width: 16px; height: 16px; }}\n")
+        f"QComboBox#place::down-arrow {{ image: url(\"{place}\"); width: 16px; height: 16px; }}\n"
+        "QCheckBox#checkRow { padding: 7px 10px; border-radius: 8px; spacing: 10px; color: palette(placeholder-text); }\n"
+        "QCheckBox#checkRow:hover { background: palette(midlight); }\n"
+        "QCheckBox#checkRow:checked { background: rgba(10, 132, 255, 0.14); color: palette(text); }\n"
+        "QCheckBox#checkRow::indicator { width: 16px; height: 16px; border-radius: 5px;"
+        " border: 2px solid palette(placeholder-text); background: palette(base); }\n"
+        f"QCheckBox#checkRow::indicator:checked {{ background: {ACCENT}; border-color: {ACCENT};"
+        f" image: url(\"{CHECK_ICON.as_posix()}\"); }}\n")
 
 
 def is_dark(scheme: Qt.ColorScheme) -> bool:

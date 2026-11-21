@@ -1,7 +1,6 @@
 from datetime import date, timedelta
 
 import pytest
-from PySide6.QtCore import Qt
 
 from datafuzzy.ot.db import RecordStore, Session, StudentProfile
 from datafuzzy.ot.schedule import Slot
@@ -32,7 +31,7 @@ def wang(store):
 
 
 def untick(dialog, row):
-    dialog.rows.item(row).setCheckState(Qt.CheckState.Unchecked)
+    dialog.rows.boxes[row].setChecked(False)
 
 
 def test_day_off_dialog_starts_with_every_session_ticked(qtbot):
@@ -55,6 +54,23 @@ def test_day_off_dialog_cannot_go_on_with_no_one_ticked(qtbot):
     qtbot.addWidget(dialog)
     untick(dialog, 0)
     assert not dialog.ok_button.isEnabled()
+
+
+def test_untick_all_leaves_no_row_ticked(qtbot):
+    slots = [("王小明", Slot(1, "09:00", "09:30")), ("陳美玲", Slot(2, "10:00", "10:30"))]
+    dialog = DayOffDialog("Therapist Absent", 0, [MONDAY], slots)
+    qtbot.addWidget(dialog)
+    dialog.rows.none_btn.click()
+    assert dialog.choice()[1] == []
+
+
+def test_tick_all_ticks_every_row_again(qtbot):
+    slots = [("王小明", Slot(1, "09:00", "09:30")), ("陳美玲", Slot(2, "10:00", "10:30"))]
+    dialog = DayOffDialog("Therapist Absent", 0, [MONDAY], slots)
+    qtbot.addWidget(dialog)
+    untick(dialog, 0)
+    dialog.rows.all_btn.click()
+    assert dialog.choice()[1] == [Slot(1, "09:00", "09:30"), Slot(2, "10:00", "10:30")]
 
 
 def test_clash_dialog_can_go_on_with_none_ticked_to_replace_them_all(qtbot, store, wang):

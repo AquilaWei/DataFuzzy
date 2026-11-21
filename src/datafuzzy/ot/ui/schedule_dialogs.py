@@ -7,17 +7,17 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import date, timedelta
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QHBoxLayout,
     QLabel,
-    QListWidget,
-    QListWidgetItem,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -29,22 +29,53 @@ from .cards import date_label, session_label, weekday_label
 from .i18n import tr
 
 
-class CheckList(QListWidget):
-    """Rows with a tick box each, all ticked to begin with; each row carries a value."""
+class CheckList(QWidget):
+    """Rows with a tick box each, all ticked to begin with, each carrying a value; buttons to
+    tick or untick them all. The rows are check boxes named "checkRow", which the theme makes
+    easy to tell apart ticked or not (see theme.stylesheet)."""
+
+    changed = Signal()  # a row was ticked or unticked
 
     def __init__(self, rows: Iterable[tuple[str, object]], parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.boxes: list[QCheckBox] = []
+        self.values: list[object] = []
+        inner = QWidget()
+        column = QVBoxLayout(inner)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(4)
         for text, value in rows:
-            item = QListWidgetItem(text)
-            item.setData(Qt.ItemDataRole.UserRole, value)
-            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-            item.setCheckState(Qt.CheckState.Checked)
-            self.addItem(item)
+            box = QCheckBox(text)
+            box.setObjectName("checkRow")
+            box.setChecked(True)
+            box.toggled.connect(lambda _: self.changed.emit())
+            column.addWidget(box)
+            self.boxes.append(box)
+            self.values.append(value)
+        column.addStretch(1)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(inner)
+        self.all_btn = QPushButton(tr("全選"))
+        self.none_btn = QPushButton(tr("全不選"))
+        self.all_btn.clicked.connect(lambda: self.set_all(True))
+        self.none_btn.clicked.connect(lambda: self.set_all(False))
+        actions = QHBoxLayout()
+        actions.addWidget(self.all_btn)
+        actions.addWidget(self.none_btn)
+        actions.addStretch(1)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addLayout(actions)
+        layout.addWidget(scroll, 1)
+
+    def set_all(self, ticked: bool) -> None:
+        for box in self.boxes:
+            box.setChecked(ticked)
 
     def checked(self) -> list:
         """The values of the ticked rows, in order."""
-        return [self.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.count())
-                if self.item(i).checkState() == Qt.CheckState.Checked]
+        return [value for box, value in zip(self.boxes, self.values) if box.isChecked()]
 
 
 def slot_text(name: str, start: str, end: str) -> str:
@@ -79,7 +110,7 @@ class _ChoiceDialog(QDialog):
         layout.addWidget(rows, 1)
         layout.addWidget(buttons)
         if need_one:
-            rows.itemChanged.connect(lambda _: self.ok_button.setEnabled(bool(rows.checked())))
+            rows.changed.connect(lambda: self.ok_button.setEnabled(bool(rows.checked())))
             self.ok_button.setEnabled(bool(rows.checked()))
 
 

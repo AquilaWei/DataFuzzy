@@ -355,6 +355,8 @@ ENGLISH = {
         " are replaced by the new charts: they are deleted for good.",
     "繼續": "Continue",
     "返回": "Back",
+    "全選": "Tick all",
+    "全不選": "Untick all",
     "{weeks} 週後": "{weeks} weeks later",
     "預約延期": "Postpone",
     "預約取消": "Cancel bookings",
