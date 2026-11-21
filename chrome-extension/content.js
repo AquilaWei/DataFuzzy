@@ -99,6 +99,7 @@
     .badge{font-size:11px;padding:1px 6px;border-radius:9px;background:#e8eaed;white-space:nowrap}
     .badge.saved{background:#d7f0dc;color:#1b5e20}.badge.problem{background:#fdecea;color:#8a1c12}
     .badge.filling{background:#fff4ce;color:#7a5b00}
+    .choice{background:#fff4ce;color:#5c4400;display:flex;flex-direction:column;gap:6px}
     .hidden{display:none}
   </style>
   <div class="panel">
@@ -110,6 +111,7 @@
         <button class="act" id="clear">清除</button>
         <input type="file" id="file" accept=".json,application/json" class="hidden">
       </div>
+      <div class="msg choice hidden" id="choice"></div>
       <div class="current hidden" id="current"></div>
       <ul class="cells" id="cells"></ul>
     </div>
@@ -190,6 +192,26 @@
     box.append(actions);
   }
 
+  // Asks in the panel, above the cells, and resolves with the key of the button pressed.
+  function choose(text, options) {
+    return new Promise((resolve) => {
+      const box = $("choice");
+      const question = document.createElement("div");
+      question.textContent = text;
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      for (const [key, label] of options) {
+        actions.append(button(label, key === options[0][0] ? "primary" : "", () => {
+          box.replaceChildren();
+          box.classList.add("hidden");
+          resolve(key);
+        }));
+      }
+      box.replaceChildren(question, actions);
+      box.classList.remove("hidden");
+    });
+  }
+
   function button(text, kind, onClick) {
     const b = document.createElement("button");
     b.className = `act ${kind}`;
@@ -217,14 +239,26 @@
       const billsMa = cell.rows.some((r) => r.type === "MA ACCESS Billing");
       const maNote = spot.maAccess !== null && spot.maAccess !== billsMa && cell.rows.length
         ? `注意：ACE 的 MA Access 是「${spot.maAccess ? "Yes" : "No"}」，和 TheraNote 的 MA billing 設定不同。` : "";
+      state.status[i] = "filling";
+      render();
       const existing = await ask("open", spot);
       const count = existing.direct + existing.group + existing.indirect;
-      if (count && !confirm(`ACE 這一格已經有 ${count} 筆資料。要在後面再加上 TheraNote 的資料嗎？`)) {
-        state.status[i] = "todo";
-        throw new Error("這一格已有資料，沒有填。ACE 視窗還開著，請按 Cancel 關掉。");
+      if (count) {
+        const choice = await choose(`ACE 這一格已經有 ${count} 筆資料（Direct ${existing.direct}、Group ${existing.group}、`
+          + `Indirect ${existing.indirect}）。要取代成 TheraNote 的資料，還是跳過這一格？`,
+        [["replace", "取代"], ["skip", "跳過"]]);
+        if (choice === "skip") {
+          await ask("cancel");
+          state.status[i] = "skipped";
+          state.current = nextTodo(i + 1);
+          $("msg").dataset.keep = "1";
+          say("已跳過這一格，ACE 原本的資料沒有動。");
+          save(); render();
+          return;
+        }
+        await ask("clear");
       }
-      state.status[i] = "filling";
-      save(); render();
+      save();
       const notes = await ask("fill", {rows: cell.rows});
       $("msg").dataset.keep = "1";
       say(["已填好。請在 ACE 視窗檢查，沒問題就按 Save Changes；按 Cancel 會標記為跳過。", maNote, ...notes]

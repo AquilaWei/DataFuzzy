@@ -147,6 +147,41 @@
     return notes;
   }
 
+  // Presses Yes or OK on an Ext message box ACE shows, e.g. to confirm removing an entry.
+  function confirmMessageBox() {
+    const box = Ext.Msg && Ext.Msg.isVisible() ? Ext.Msg.getDialog() : null;
+    const yes = box && (box.buttons || []).find((b) => !b.hidden && /^(yes|ok)$/i.test(norm(b.text)));
+    if (yes) press(yes);
+  }
+
+  // Removes every entry the open window has, for TheraNote's to replace them. ACE deletes them
+  // only when the user saves; Cancel keeps them.
+  async function clear() {
+    if (!activeEditWindow()) throw new Error("No time entry window is open");
+    for (const section of Object.keys(SECTIONS)) {
+      for (const entry of entryRows(section).reverse()) {
+        const remove = entry.btn_Remove;
+        if (!remove || remove.hidden || remove.disabled) {
+          throw new Error(`ACE does not let a ${SECTIONS[section]} Time entry be removed (it may be approved): `
+            + "press Cancel and enter this cell by hand");
+        }
+        press(remove);
+        await until(() => { confirmMessageBox(); return !entryRows(section).includes(entry); },
+          `the ${SECTIONS[section]} Time entry removed`);
+      }
+    }
+    return true;
+  }
+
+  // Closes the open window without saving, as its Cancel button does.
+  function cancel() {
+    const w = activeEditWindow();
+    if (!w) return false;
+    const button = (w.buttons || []).find((b) => /cancel/i.test(norm(b.text)));
+    if (button) press(button); else w.close();
+    return true;
+  }
+
   let watching = null;
 
   // After the window this filled closes: saved if ACE then says so.
@@ -178,7 +213,7 @@
     return notes;
   }
 
-  const OPS = {week, locate, open, fill};
+  const OPS = {week, locate, open, clear, cancel, fill};
 
   window.addEventListener("message", async (event) => {
     const msg = event.data;
