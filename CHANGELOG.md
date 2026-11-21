@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.18] - 2026-11-21
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 修正
+- ACE 擴充功能：Chrome 重開後、還沒點過工具列按鈕就打開 ACE 時，面板讀不到進度（Access to storage is not allowed）。現在背景程式在瀏覽器啟動時就開放，面板讀不到時也會自己請求一次。
+- ACE 擴充功能：重新載入擴充功能後，還開著的 ACE 頁面不再丟出「Extension context invalidated」錯誤，改成在面板提示重新整理頁面。
+
 ## [0.7.0.37.17] - 2026-11-21
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
