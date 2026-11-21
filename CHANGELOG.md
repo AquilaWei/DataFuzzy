@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.16] - 2026-11-21
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 修正
+- ACE 填寫檔：Annual IEP Report、Evaluation、Re-Evaluation、Screen、Student Observation、No-Show 不再加 Documentation。Direct Therapy Time、Make-Up、Absent Student、Unavailable Student、School Not in Session、Therapist Absent 照舊加。
+
 ## [0.7.0.37.15] - 2026-11-21
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
