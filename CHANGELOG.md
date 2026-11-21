@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.19] - 2026-11-21
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 修正
+- ACE 擴充功能掃描時只有第一格打得開：按 Cancel、Add、Remove 等按鈕改成像真人一樣點擊按鈕本身，不再只執行按鈕的程式，讓 ACE 完整關閉視窗後，下一格才打得開。
+- 找 Edit Therapist Time 視窗時，查看所有開著的視窗，不只最上層那一個。
+- 掃描遇到錯誤時停下，並顯示停在哪一格、原因是什麼；不再略過錯誤、繼續點下一格。
+
 ## [0.7.0.37.18] - 2026-11-21
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
