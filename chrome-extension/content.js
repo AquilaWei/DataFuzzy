@@ -32,7 +32,7 @@
       waiting.delete(msg.id);
       msg.ok ? resolve(msg.value) : reject(new Error(msg.error));
     } else if (msg.theranoteAce === "closed") {
-      windowClosed(msg.saved);
+      windowClosed(msg.saved, msg.viewed);
     }
   });
 
@@ -129,7 +129,24 @@
     .badge.filling{background:#fff4ce;color:#7a5b00}
     .badge.done{background:#d7f0dc;color:#1b5e20}.badge.check{background:#ffe2c2;color:#8a4500}
     .notes{margin:4px 0;padding-left:16px;color:#8a4500}
-    .choice{background:#fff4ce;color:#5c4400;display:flex;flex-direction:column;gap:6px}
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;
+      font:13px/1.4 -apple-system,system-ui,sans-serif;color:#1d2327}
+    .dialog{width:min(760px,94vw);max-height:86vh;display:flex;flex-direction:column;background:#fff;border-radius:10px;
+      box-shadow:0 10px 40px rgba(0,0,0,.3);overflow:hidden}
+    .dialog h2{margin:0;padding:10px 14px;font-size:15px;background:#8a4500;color:#fff}
+    .dialog .scroll{overflow:auto;padding:10px 14px;display:flex;flex-direction:column;gap:10px}
+    .dialog h4{margin:0 0 4px;font-size:13px}
+    .dialog .only{font-weight:400;font-size:12px;color:#8a1c12;margin-left:6px}
+    table.diff{width:100%;border-collapse:collapse;table-layout:fixed}
+    table.diff th,table.diff td{border:1px solid #e3e6e8;padding:4px 6px;vertical-align:top;text-align:left;
+      white-space:pre-wrap;word-break:break-word}
+    table.diff th{background:#f4f6f7;font-weight:600}
+    table.diff th:first-child{width:22%}
+    table.diff tr.differs td{background:#fff4ce}
+    table.diff tr.differs td:first-child{font-weight:600}
+    table.diff td.empty{color:#9aa1a6}
+    .dialog footer{display:flex;gap:8px;justify-content:flex-end;align-items:center;padding:10px 14px;border-top:1px solid #eee}
+    .dialog footer .hint{flex:1;color:#5f6b73;font-size:12px}
     .hidden{display:none}
   </style>
   <div class="panel">
@@ -142,11 +159,11 @@
         <button class="act" id="clear">清除</button>
         <input type="file" id="file" accept=".json,application/json" class="hidden">
       </div>
-      <div class="msg choice hidden" id="choice"></div>
       <div class="current hidden" id="current"></div>
       <ul class="cells" id="cells"></ul>
     </div>
-  </div>`;
+  </div>
+  <div class="modal hidden" id="modal"></div>`;
   const $ = (id) => root.getElementById(id);
 
   function say(text, error = false) {
@@ -229,32 +246,64 @@
     const fill = button("填這一格", "primary", () => fillCurrent());
     fill.disabled = scanning || status === "filling" || cell.problems.length > 0;
     const skip = button(status === "skipped" ? "改回待填" : "跳過", "", () => {
-      state.status[state.current] = status === "skipped" ? "todo" : "skipped";
-      if (status !== "skipped") state.current = nextTodo(state.current + 1);
-      save(); render();
+      const i = state.current;
+      state.status[i] = status === "skipped" ? "todo" : "skipped";
+      if (status === "skipped") { save(); render(); return; }
+      advance(i, "已跳過這一格。");
     });
     skip.disabled = scanning || status === "filling";
     actions.append(fill, skip);
     box.append(actions);
   }
 
-  // Asks in the panel, above the cells, and resolves with the key of the button pressed.
-  function choose(text, options) {
+  // Asks, in a dialog over the page, whether to replace what ACE has with TheraNote's rows,
+  // showing both side by side with what differs marked; resolves with "replace" or "keep".
+  function chooseReplace(cell, count, pairs) {
     return new Promise((resolve) => {
-      const box = $("choice");
-      const question = document.createElement("div");
-      question.textContent = text;
-      const actions = document.createElement("div");
-      actions.className = "actions";
-      for (const [key, label] of options) {
-        actions.append(button(label, key === options[0][0] ? "primary" : "", () => {
-          box.replaceChildren();
-          box.classList.add("hidden");
-          resolve(key);
-        }));
+      const modal = $("modal");
+      const el = (tag, text, cls) => {
+        const e = document.createElement(tag);
+        if (text != null) e.textContent = text;
+        if (cls) e.className = cls;
+        return e;
+      };
+      const dialog = el("div", null, "dialog");
+      const differ = pairs.some((p) => p.only || p.fields.some((f) => f.differs));
+      const scroll = el("div", null, "scroll");
+      scroll.append(el("div", `${cell.first} ${cell.last} ${monthDay(cell.date)}：ACE 這一格已經有 ${count} 筆資料。`
+        + (differ ? "黃底是 ACE 現在的內容和準備填入的 TheraNote 資料不同的地方。"
+          : "內容和準備填入的 TheraNote 資料相同。")));
+      for (const pair of pairs) {
+        const block = el("div");
+        const head = el("h4", pair.label);
+        if (pair.only) {
+          head.append(el("span", pair.only === "ace" ? "只有 ACE 有：取代後會刪除" : "ACE 沒有：取代後會新增", "only"));
+        }
+        const table = el("table", null, "diff");
+        const top = el("tr");
+        top.append(el("th", "欄位"), el("th", "ACE 現在"), el("th", "TheraNote（準備填入）"));
+        table.append(top);
+        for (const f of pair.fields) {
+          const tr = el("tr", null, f.differs ? "differs" : "");
+          tr.append(el("td", f.name), el("td", f.ace || "（空白）", f.ace ? "" : "empty"),
+            el("td", f.file || "（空白）", f.file ? "" : "empty"));
+          table.append(tr);
+        }
+        block.append(head, table);
+        scroll.append(block);
       }
-      box.replaceChildren(question, actions);
-      box.classList.remove("hidden");
+      const done = (key) => {
+        modal.replaceChildren();
+        modal.classList.add("hidden");
+        resolve(key);
+      };
+      const foot = el("footer");
+      foot.append(el("span", "取代後仍要在 ACE 視窗按 Save Changes 才會存。", "hint"),
+        button("保留 ACE 原本的資料", "", () => done("keep")),
+        button("取代成 TheraNote 的資料", "primary", () => done("replace")));
+      dialog.append(el("h2", "這一格 ACE 已經有資料"), scroll, foot);
+      modal.replaceChildren(dialog);
+      modal.classList.remove("hidden");
     });
   }
 
@@ -285,6 +334,7 @@
 
   // The cell whose ACE window the panel opened for looking at (not filling), or -1.
   let shown = -1;
+  let shownSpot = null;
 
   // Closes, with Cancel, the window opened by showCell, so another can be opened.
   async function closeShown() {
@@ -295,7 +345,7 @@
 
   // Picks a cell from the list and opens its ACE window for the user to look at, so they need
   // not find it in the grid; nothing is filled in. Not while a cell is being filled or scanned.
-  async function showCell(i) {
+  async function showCell(i, lead = "") {
     if (scanning || state.status.includes("filling")) {
       state.current = i; save(); render();
       return;
@@ -308,40 +358,62 @@
       const spot = await findCell(cell);
       await ask("open", {...spot, watch: true});
       shown = i;
+      shownSpot = spot;
       $("msg").dataset.keep = "1";
-      say(`已在 ACE 打開 ${cell.first} ${cell.last} ${monthDay(cell.date)}。看完按 Cancel 關閉；`
+      say(`${lead}已在 ACE 打開 ${cell.first} ${cell.last} ${monthDay(cell.date)}。看完按 Cancel 關閉；`
         + "要用 TheraNote 的資料填，按「填這一格」。");
     } catch (error) {
       $("msg").dataset.keep = "1";
-      say(error.message, true);
+      say(`${lead}${error.message}`, true);
     }
     render();
+  }
+
+  // After a cell is done with (filled, saved, cancelled or skipped): the next cell still to go
+  // through is picked and its ACE window opened, so the user need not look for it.
+  function advance(from, lead) {
+    state.current = nextTodo(from + 1);
+    save();
+    if (state.current < 0) {
+      $("msg").dataset.keep = "1";
+      say(`${lead}全部處理完了。填完請刪除下載的填寫檔。`);
+      render();
+      return;
+    }
+    showCell(state.current, `${lead}\n`);
   }
 
   async function fillCurrent() {
     const i = state.current;
     const cell = state.file.cells[i];
     try {
-      await closeShown();
-      const spot = await findCell(cell);
+      // The window already opened for looking at this cell is used as it is.
+      let spot = null, existing = null;
+      if (shown === i) {
+        spot = shownSpot;
+        shown = -1;
+        existing = await ask("adopt").catch(() => null);
+      }
+      if (!existing) {
+        await closeShown();
+        spot = await findCell(cell);
+      }
       const billsMa = cell.rows.some((r) => r.type === "MA ACCESS Billing");
       const maNote = spot.maAccess !== null && spot.maAccess !== billsMa && cell.rows.length
         ? `注意：ACE 的 MA Access 是「${spot.maAccess ? "Yes" : "No"}」，和 TheraNote 的 MA billing 設定不同。` : "";
       state.status[i] = "filling";
       render();
-      const existing = await ask("open", spot);
+      if (!existing) existing = await ask("open", spot);
       const count = existing.direct + existing.group + existing.indirect;
       if (count) {
-        const choice = await choose(`ACE 這一格已經有 ${count} 筆資料（Direct ${existing.direct}、Group ${existing.group}、`
-          + `Indirect ${existing.indirect}）。要取代成 TheraNote 的資料，還是跳過這一格？`,
-        [["replace", "取代"], ["skip", "跳過"]]);
-        if (choice === "skip") {
+        const pairs = await ask("diff", {rows: cell.rows});
+        $("msg").dataset.keep = "1";
+        say("ACE 這一格已經有資料：請在對話框選擇取代或保留。");
+        const choice = await chooseReplace(cell, count, pairs);
+        if (choice === "keep") {
           await ask("cancel");
           state.status[i] = "skipped";
-          state.current = nextTodo(i + 1);
-          $("msg").dataset.keep = "1";
-          say("已跳過這一格，ACE 原本的資料沒有動。");
-          save(); render();
+          advance(i, "已保留 ACE 原本的資料（這一格標記為跳過）。");
           return;
         }
         await ask("clear");
@@ -404,16 +476,14 @@
     }
   }
 
-  function windowClosed(saved) {
+  function windowClosed(saved, viewed) {
     if (!state) return;
     shown = -1;
+    if (viewed) return; // a window opened only to look at
     const i = state.status.indexOf("filling");
     if (i < 0) return;
     state.status[i] = saved ? "saved" : "skipped";
-    state.current = nextTodo(i + 1);
-    $("msg").dataset.keep = "1";
-    say(saved ? "已存。下一格準備好了，按「填這一格」繼續。" : "視窗關閉但沒有看到「Time entries saved.」，這格標記為跳過。", !saved);
-    save(); render();
+    advance(i, saved ? "已存。" : "視窗關閉但沒有看到「Time entries saved.」，這格標記為跳過。");
   }
 
   // --- wiring ------------------------------------------------------------------------
