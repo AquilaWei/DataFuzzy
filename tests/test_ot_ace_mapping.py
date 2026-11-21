@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from datafuzzy.ot.ace_mapping import AceRow, ace_rows, ace_time, group_names
+from datafuzzy.ot.ace_mapping import AceGroup, AceRow, ace_rows, ace_time, group_names
 from datafuzzy.ot.db import Record
 
 OCT_1 = date(2026, 10, 1)
@@ -30,7 +30,7 @@ def test_a_student_billed_to_ma_also_gets_ma_access_billing():
 
 
 def test_a_group_make_up_fills_group_time_with_its_group():
-    [main, _] = ace_rows(chart(session_type="Make-Up", mode="group"), ma_billing=False, group=("Group B", 3))
+    [main, _] = ace_rows(chart(session_type="Make-Up", mode="group"), ma_billing=False, group=AceGroup("Group B", 3))
     assert (main.section, main.type, main.group, main.group_size) == ("group", "Make-Up", "Group B", 3)
 
 
@@ -50,7 +50,7 @@ def test_an_annual_iep_report_takes_its_minutes():
 
 
 def test_a_group_absence_goes_under_group_time():
-    [main, _] = ace_rows(chart(session_type="Therapist Absent", mode="group"), ma_billing=False, group=("Group A", 2))
+    [main, _] = ace_rows(chart(session_type="Therapist Absent", mode="group"), ma_billing=False, group=AceGroup("Group A", 2))
     assert (main.section, main.group) == ("group", "Group A")
 
 
@@ -94,12 +94,12 @@ def test_missing_times_give_no_minutes():
 
 def test_group_charts_starting_together_are_one_group():
     names = group_names([chart(1, mode="group"), chart(2, mode="group"), chart(3, mode="group", start="09:00")])
-    assert names == {3: ("Group A", 1), 1: ("Group B", 2), 2: ("Group B", 2)}
+    assert names == {3: ("Group A", 1, True), 1: ("Group B", 2, False), 2: ("Group B", 2, False)}
 
 
 def test_each_day_names_its_groups_from_a():
     names = group_names([chart(1, mode="group"), chart(2, mode="group", day=date(2026, 10, 2))])
-    assert names == {1: ("Group A", 1), 2: ("Group A", 1)}
+    assert names == {1: ("Group A", 1, True), 2: ("Group A", 1, True)}
 
 
 def test_individual_charts_form_no_group():
@@ -107,22 +107,22 @@ def test_individual_charts_form_no_group():
 
 
 def test_a_group_plan_student_s_one_to_one_therapy_fills_group_time():
-    [main, _] = ace_rows(chart(en_followup="Zippers."), ma_billing=False, group=("Group A", 1), plan_group=True)
+    [main, _] = ace_rows(chart(en_followup="Zippers."), ma_billing=False, group=AceGroup("Group A", 1, alone=True), plan_group=True)
     assert (main.section, main.group, main.group_size) == ("group", "Group A", 1)
 
 
 def test_a_group_plan_student_s_one_to_one_therapy_says_why_before_its_follow_up():
-    [main, _] = ace_rows(chart(en_followup="Zippers."), ma_billing=False, group=("Group A", 1), plan_group=True)
+    [main, _] = ace_rows(chart(en_followup="Zippers."), ma_billing=False, group=AceGroup("Group A", 1, alone=True), plan_group=True)
     assert main.comments_on_log == "No appropriate student to group with.\nZippers."
 
 
 def test_a_group_plan_student_s_one_to_one_therapy_takes_no_ma_billing():
-    rows = ace_rows(chart(), ma_billing=True, group=("Group A", 1), plan_group=True)
+    rows = ace_rows(chart(), ma_billing=True, group=AceGroup("Group A", 1, alone=True), plan_group=True)
     assert rows[1:] == [DOCUMENTATION]
 
 
 def test_a_group_plan_student_s_group_therapy_keeps_ma_billing():
-    rows = ace_rows(chart(mode="group"), ma_billing=True, group=("Group A", 2), plan_group=True)
+    rows = ace_rows(chart(mode="group"), ma_billing=True, group=AceGroup("Group A", 2), plan_group=True)
     assert rows[1:] == [DOCUMENTATION, AceRow("indirect", "MA ACCESS Billing", 5)]
 
 
@@ -131,6 +131,45 @@ def test_a_group_plan_student_s_evaluation_stays_in_direct_time():
     assert (main.section, main.comments_on_log) == ("direct", "Comments.")
 
 
-def test_a_chart_held_alone_is_a_group_of_its_own():
+def test_a_group_plan_student_s_one_to_one_therapy_is_a_group_of_its_own():
     records = [chart(1, mode="group"), chart(2, mode="group"), chart(3)]
-    assert group_names(records, alone=[3]) == {1: ("Group A", 2), 2: ("Group A", 2), 3: ("Group B", 1)}
+    assert group_names(records, {3: True}) == {1: ("Group A", 2, False), 2: ("Group A", 2, False),
+                                               3: ("Group B", 1, True)}
+
+
+def test_an_individual_plan_student_s_one_to_one_therapy_forms_no_group():
+    assert group_names([chart(1)], {1: False}) == {}
+
+
+def test_the_only_group_student_who_came_was_held_alone():
+    records = [chart(1, mode="group"), chart(2, "Unavailable Student", mode="group"),
+               chart(3, "Absent Student", mode="group")]
+    assert group_names(records) == {1: ("Group A", 1, True), 2: ("Group A", 1, False), 3: ("Group A", 1, False)}
+
+
+def test_a_group_therapy_held_alone_says_why_and_takes_no_ma_billing():
+    rows = ace_rows(chart(mode="group", en_followup="Zippers."), ma_billing=True, group=AceGroup("Group A", 1, alone=True))
+    assert rows[0].comments_on_log == "No appropriate student to group with.\nZippers."
+    assert rows[1:] == [DOCUMENTATION]
+
+
+def test_a_group_whose_students_were_all_away_counts_one():
+    records = [chart(1, "Unavailable Student", mode="group"), chart(2, "Absent Student", mode="group")]
+    assert group_names(records) == {1: ("Group A", 1, False), 2: ("Group A", 1, False)}
+
+
+def test_a_group_plan_student_s_unavailable_chart_fills_group_time():
+    [main, _] = ace_rows(chart(session_type="Unavailable Student"), ma_billing=False, group=AceGroup("Group A", 1),
+                         plan_group=True)
+    assert (main.section, main.type, main.group, main.comments_on_log) == ("group", "Unavailable Student",
+                                                                          "Group A", "Comments.")
+
+
+def test_a_group_plan_student_s_unavailable_chart_joins_the_group_of_its_time():
+    records = [chart(1, mode="group"), chart(2, mode="group"), chart(3, "Unavailable Student")]
+    assert group_names(records, {3: True})[3] == ("Group A", 2, False)
+
+
+def test_an_individual_plan_student_s_unavailable_chart_stays_in_direct_time():
+    [main, _] = ace_rows(chart(session_type="Unavailable Student"), ma_billing=False)
+    assert main.section == "direct"

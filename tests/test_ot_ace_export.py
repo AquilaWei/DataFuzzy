@@ -195,3 +195,15 @@ def test_the_group_plan_in_effect_on_the_chart_s_day_decides(store):
     therapy(store, todd, day=NOV_10)
     [cell] = week(store)
     assert cell.rows[0].section == "group"
+
+
+def test_a_group_student_who_came_alone_is_noted_and_the_absent_one_joins_the_group(store):
+    therapy(store, store.add_student("Todd", "Lane").id, session_mode="group")
+    amy = store.add_student("Amy", "Chen").id
+    store.set_profile(amy, StudentProfile(group=True))
+    therapy(store, amy, session_type="Unavailable Student", en_followup="")
+    amy_cell, todd_cell = week(store)
+    assert (todd_cell.rows[0].group, todd_cell.rows[0].group_size) == ("Group A", 1)
+    assert todd_cell.rows[0].comments_on_log.startswith("No appropriate student to group with.\n")
+    assert (amy_cell.rows[0].section, amy_cell.rows[0].type, amy_cell.rows[0].group) == (
+        "group", "Unavailable Student", "Group A")

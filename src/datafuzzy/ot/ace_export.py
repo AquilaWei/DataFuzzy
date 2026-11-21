@@ -11,7 +11,7 @@ import json
 from dataclasses import asdict, dataclass, field
 from datetime import date
 
-from .ace_mapping import TIMED_WITHOUT_TIMES, AceRow, ace_rows, group_names, held_alone
+from .ace_mapping import EMPTY_GROUP, TIMED_WITHOUT_TIMES, AceRow, ace_rows, group_names
 from .db import COMMENT_TYPES, FULL_TYPES, Record, RecordStore
 
 FORMAT = "theranote-ace/1"  # bumped whenever the extension must read the file differently
@@ -64,13 +64,13 @@ def ace_cells(store: RecordStore, date_from: date, date_to: date) -> list[AceCel
     profiles = {sid: store.get_profile(sid) for sid in students}
     ma_billing = {sid: profile.ma_billing for sid, profile in profiles.items()}
     plan_group = {r.id: profiles[r.student_id].plan_on(r.visit_date).group for r in records}
-    groups = group_names(records, [r.id for r in records if held_alone(r, plan_group[r.id])])
+    groups = group_names(records, plan_group)
     cells: dict[tuple[date, int], AceCell] = {}
     for record in records:
         student = students[record.student_id]
         cell = cells.setdefault((record.visit_date, student.id), AceCell(
             student.given_name, student.family_name, record.visit_date.isoformat()))
-        rows = ace_rows(record, ma_billing[student.id], groups.get(record.id, ("", 0)), plan_group[record.id])
+        rows = ace_rows(record, ma_billing[student.id], groups.get(record.id, EMPTY_GROUP), plan_group[record.id])
         cell.rows.extend(rows or [])
         cell.problems.extend(p for p in chart_problems(record, rows) if p not in cell.problems)
     return sorted(cells.values(), key=lambda c: (c.date, c.last.casefold(), c.first.casefold()))

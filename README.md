@@ -63,6 +63,10 @@ uv run theranote
   No-Show 填在 Direct Time（ACE 名稱 `No Show`），分鐘數＝結束減開始。
   學生當天的計畫是 Group、但治療病歷是 Individual 時，改填在 Group Time，自成一組（人數 1），
   Comments on Log 第一行是 `No appropriate student to group with.`，換行後才是英文追蹤，而且不加 MA ACCESS Billing。
+  Group 病歷也一樣：同一天、同一開始時間的組裡只有一位學生有上課（其他人 Unavailable、Absent 等）時，
+  那位學生的治療照上面加註、不加 MA ACCESS Billing。Group Size 只算有上課的學生（全組都沒來時填 1）。
+  當天計畫是 Group 的學生，Absent Student、School Not in Session、Therapist Absent、Unavailable Student
+  即使病歷是 Individual，也填在 Group Time，和同一時間的組同一個 Group。
   Consult、缺英文、缺時間的格子會標「要手動」，不自動填；ACE 那格已有資料、週次不對、名單找不到學生時也會停下。
   安裝：Chrome 開 `chrome://extensions` → 開啟「開發人員模式」→「載入未封裝項目」→ 選 `chrome-extension/` 資料夾
   （Chrome 直接使用這個資料夾，請勿搬動；更新後在 `chrome://extensions` 按重新載入）。擴充功能的圖示和版本號與 TheraNote 相同。
