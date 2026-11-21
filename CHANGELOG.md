@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.13] - 2026-11-21
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 變更
+- ACE 擴充功能：那一格已經有資料時，面板改問「取代」或「跳過」。取代會先刪掉 ACE 視窗裡原有的資料再填入，按 Save Changes 才生效；跳過會關掉 ACE 視窗，不改任何資料，這格標記為跳過。原本只能選擇加在後面或停下。
+
 ## [0.7.0.37.12] - 2026-11-21
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
