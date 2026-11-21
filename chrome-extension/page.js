@@ -90,7 +90,9 @@
   }
 
   // Opens the cell's "Edit Therapist Time" window; says which sections already have entries.
-  async function open({row, col}) {
+  // With `watch`, posts {theranoteAce: "closed", saved: false} when the window closes again, so
+  // the panel knows a window it opened to look at is gone.
+  async function open({row, col, watch = false}) {
     if (activeEditWindow()) throw new Error("A time entry window is already open: save or cancel it first");
     const g = grid();
     g.getView().focusCell(row, col);
@@ -106,6 +108,9 @@
     await until(() => Ext.getCmp("TimeEntryTimeRowContainer_Direct") && w.findById("TimeEntryTimeRowContainer_Direct"),
       "the Direct Time section");
     await sleep(500); // its sections load their entries after it shows
+    if (watch) {
+      w.on("hide", () => window.postMessage({theranoteAce: "closed", saved: false}, location.origin), null, {single: true});
+    }
     return Object.fromEntries(Object.keys(SECTIONS).map((s) => [s, entryRows(s).length]));
   }
 

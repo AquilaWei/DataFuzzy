@@ -183,7 +183,7 @@
       badge.className = `badge ${state.status[i]}`;
       badge.textContent = STATUS[state.status[i]];
       li.append(who, badge);
-      li.addEventListener("click", () => { state.current = i; save(); render(); });
+      li.addEventListener("click", () => showCell(i));
       $("cells").append(li);
     });
     if (state.current >= 0) renderCurrent(state.file.cells[state.current], state.status[state.current]);
@@ -268,20 +268,62 @@
 
   // --- filling -----------------------------------------------------------------------
 
+  // The grid cell of `cell` in ACE, or an error saying why it cannot be found.
+  async function findCell(cell) {
+    const week = await ask("week");
+    if (!week.length || !week[0].endsWith(` ${monthDay(state.file.week[0])}`)) {
+      throw new Error(`ACE 現在顯示的週（${week[0] || "?"}）不是檔案的週（${state.file.week[0]} 起），請先切換週次。`);
+    }
+    const spot = await ask("locate", cell);
+    if (spot.matches !== 1) {
+      throw new Error(spot.matches ? `ACE 清單有 ${spot.matches} 位 ${cell.first} ${cell.last}，請手動填。`
+        : spot.partial ? `ACE 清單這一頁找不到 ${cell.first} ${cell.last}，請翻到這位學生所在的那一頁再按一次。`
+        : `ACE 清單找不到 ${cell.first} ${cell.last}（可能被篩選掉，或 ACE 上的名字拼法不同），請手動填。`);
+    }
+    return spot;
+  }
+
+  // The cell whose ACE window the panel opened for looking at (not filling), or -1.
+  let shown = -1;
+
+  // Closes, with Cancel, the window opened by showCell, so another can be opened.
+  async function closeShown() {
+    if (shown < 0) return;
+    shown = -1;
+    await ask("cancel");
+  }
+
+  // Picks a cell from the list and opens its ACE window for the user to look at, so they need
+  // not find it in the grid; nothing is filled in. Not while a cell is being filled or scanned.
+  async function showCell(i) {
+    if (scanning || state.status.includes("filling")) {
+      state.current = i; save(); render();
+      return;
+    }
+    state.current = i;
+    save(); render();
+    const cell = state.file.cells[i];
+    try {
+      await closeShown();
+      const spot = await findCell(cell);
+      await ask("open", {...spot, watch: true});
+      shown = i;
+      $("msg").dataset.keep = "1";
+      say(`已在 ACE 打開 ${cell.first} ${cell.last} ${monthDay(cell.date)}。看完按 Cancel 關閉；`
+        + "要用 TheraNote 的資料填，按「填這一格」。");
+    } catch (error) {
+      $("msg").dataset.keep = "1";
+      say(error.message, true);
+    }
+    render();
+  }
+
   async function fillCurrent() {
     const i = state.current;
     const cell = state.file.cells[i];
     try {
-      const week = await ask("week");
-      if (!week.length || !week[0].endsWith(` ${monthDay(state.file.week[0])}`)) {
-        throw new Error(`ACE 現在顯示的週（${week[0] || "?"}）不是檔案的週（${state.file.week[0]} 起），請先切換週次。`);
-      }
-      const spot = await ask("locate", cell);
-      if (spot.matches !== 1) {
-        throw new Error(spot.matches ? `ACE 清單有 ${spot.matches} 位 ${cell.first} ${cell.last}，請手動填。`
-          : spot.partial ? `ACE 清單這一頁找不到 ${cell.first} ${cell.last}，請翻到這位學生所在的那一頁再按一次。`
-          : `ACE 清單找不到 ${cell.first} ${cell.last}（可能被篩選掉，或 ACE 上的名字拼法不同），請手動填。`);
-      }
+      await closeShown();
+      const spot = await findCell(cell);
       const billsMa = cell.rows.some((r) => r.type === "MA ACCESS Billing");
       const maNote = spot.maAccess !== null && spot.maAccess !== billsMa && cell.rows.length
         ? `注意：ACE 的 MA Access 是「${spot.maAccess ? "Yes" : "No"}」，和 TheraNote 的 MA billing 設定不同。` : "";
@@ -324,6 +366,7 @@
   async function scanAll() {
     if (!state || scanning) return;
     scanning = true;
+    await closeShown().catch(() => {});
     let done = 0, check = 0, stopped = "";
     try {
       const week = await ask("week");
@@ -363,6 +406,7 @@
 
   function windowClosed(saved) {
     if (!state) return;
+    shown = -1;
     const i = state.status.indexOf("filling");
     if (i < 0) return;
     state.status[i] = saved ? "saved" : "skipped";
