@@ -180,3 +180,15 @@ def test_a_group_plan_student_s_unavailable_chart_joins_the_group_of_its_time():
 def test_an_individual_plan_student_s_unavailable_chart_stays_in_direct_time():
     [main, _] = ace_rows(chart(session_type="Unavailable Student"), ma_billing=False)
     assert main.section == "direct"
+
+
+def test_an_unavailable_student_takes_0_minutes_whatever_the_chart_s_times():
+    for plan_group in (False, True):
+        [main, _] = ace_rows(chart(session_type="Unavailable Student"), ma_billing=False,
+                             group=AceGroup("Group A", 1), plan_group=plan_group)
+        assert main.minutes == 0
+
+
+def test_an_unavailable_student_without_times_still_takes_0_minutes():
+    [main, _] = ace_rows(chart(session_type="Unavailable Student", start="", end=""), ma_billing=False)
+    assert main.minutes == 0

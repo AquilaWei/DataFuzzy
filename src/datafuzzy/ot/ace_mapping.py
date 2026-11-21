@@ -24,6 +24,8 @@ UNMAPPED_TYPES = frozenset({"Consult"})
 ACE_NAMES = {NO_SHOW: "No Show"}
 # Of the types ACE asks no time for, those that still take minutes.
 TIMED_WITHOUT_TIMES = frozenset({"Annual IEP Report", NO_SHOW})
+# Types ACE enters with 0 minutes, whatever the chart's times.
+ZERO_MINUTE_TYPES = frozenset({"Unavailable Student"})
 # The types ACE's Group Time takes; a group student's chart of another type goes under Direct Time.
 GROUP_TIME_TYPES = frozenset({"Absent Student", DIRECT_THERAPY, "Make-Up", "School Not in Session",
                               "Therapist Absent", "Unavailable Student"})
@@ -116,7 +118,7 @@ def ace_rows(record: Record, ma_billing: bool, group: AceGroup = EMPTY_GROUP,
     kind = record.session_type
     if kind in UNMAPPED_TYPES:
         return None
-    minutes = minutes_between(record.start_time, record.end_time)
+    minutes = 0 if kind in ZERO_MINUTE_TYPES else minutes_between(record.start_time, record.end_time)
     documentation = AceRow("indirect", "Documentation", DOCUMENTATION_MINUTES)
     if kind in INDIRECT_TYPES:
         comments = record.en_text if kind in COMMENT_TYPES else ""
