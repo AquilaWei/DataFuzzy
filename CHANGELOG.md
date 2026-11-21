@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.12] - 2026-11-21
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 修正
+- ACE 填寫檔：Group 病歷同一時段只有一位學生有上課時，那份治療的 Comments on Log 也先加一行 `No appropriate student to group with.`，並且不加 MA ACCESS Billing；Group Size 只算有上課的學生。
+- ACE 填寫檔：當天計畫是 Group 的學生，Unavailable Student、Absent Student、School Not in Session、Therapist Absent 即使病歷是 Individual，也填在 Group Time，和同一時間的組同一個 Group。
+
 ## [0.7.0.37.11] - 2026-11-21
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
