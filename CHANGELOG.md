@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.8] - 2026-11-20
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 修正
+- 「預約下次治療」只出現在學生最新的一份病歷上。在舊病歷上按這個按鈕，而下一次已經有病歷時，程式會黑屏關閉。
+
 ## [0.7.0.37.7] - 2026-11-14
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
