@@ -211,7 +211,8 @@
       const spot = await ask("locate", cell);
       if (spot.matches !== 1) {
         throw new Error(spot.matches ? `ACE 清單有 ${spot.matches} 位 ${cell.first} ${cell.last}，請手動填。`
-          : `ACE 清單找不到 ${cell.first} ${cell.last}（可能被篩選掉），請手動填。`);
+          : spot.partial ? `ACE 清單這一頁找不到 ${cell.first} ${cell.last}，請翻到這位學生所在的那一頁再按一次。`
+          : `ACE 清單找不到 ${cell.first} ${cell.last}（可能被篩選掉，或 ACE 上的名字拼法不同），請手動填。`);
       }
       const billsMa = cell.rows.some((r) => r.type === "MA ACCESS Billing");
       const maNote = spot.maAccess !== null && spot.maAccess !== billsMa && cell.rows.length

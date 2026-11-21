@@ -35,18 +35,30 @@
       .map((c) => norm(c.header));
   }
 
-  // The grid row and column of a student's day; `matches` is how many rows have the name.
+  // A whole name as one string: TheraNote's family name is optional, so "Cole Crudup" may be all
+  // in its given name while ACE splits it.
+  const fullName = (first, last) => norm(`${first} ${last}`).replace(/\s+/g, " ");
+
+  // The grid row and column of a student's day; `matches` is how many rows have the name. A
+  // student with no family name in TheraNote is found by the first name alone when only one
+  // student in the grid has it.
   function locate({first, last, date}) {
     const g = grid();
     const store = g.getStore();
-    const rows = [];
-    store.each((r, i) => {
-      if (norm(r.get("student_name_first")) === norm(first) && norm(r.get("student_name_last")) === norm(last)) rows.push(i);
-    });
+    const name = fullName(first, last);
+    const find = (test) => {
+      const found = [];
+      store.each((r, i) => { if (test(r)) found.push(i); });
+      return found;
+    };
+    let rows = find((r) => fullName(r.get("student_name_first"), r.get("student_name_last")) === name);
+    if (!rows.length && !norm(last)) rows = find((r) => norm(r.get("student_name_first")) === name);
     const day = DAYS[new Date(`${date}T12:00:00`).getDay()];
     const col = g.getColumnModel().findColumnIndex(`${day}_id`);
     const record = rows.length === 1 ? store.getAt(rows[0]) : null;
-    return {matches: rows.length, row: rows[0] ?? -1, col, maAccess: record ? norm(record.get("ma_access")) === "yes" : null};
+    const partial = typeof store.getTotalCount === "function" && store.getTotalCount() > store.getCount();
+    return {matches: rows.length, row: rows[0] ?? -1, col, partial,
+      maAccess: record ? norm(record.get("ma_access")) === "yes" : null};
   }
 
   function activeEditWindow() {
