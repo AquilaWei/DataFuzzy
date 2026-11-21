@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.21] - 2026-11-21
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- ACE 擴充功能：在清單上點任一格，自動在 ACE 打開那一格的 Edit Therapist Time 視窗，方便檢查，不用自己在週表上找；只打開、不填資料。再點別格會先按 Cancel 關掉前一個；按「填這一格」或「掃描 ACE」也會先關掉它。
+
+### 修正
+- ACE 填寫檔：Unavailable Student 的 Minutes 一律是 0，不論病歷的時間。
+
 ## [0.7.0.37.20] - 2026-11-21
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。

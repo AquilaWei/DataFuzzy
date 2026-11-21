@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml/badge.svg)](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/AquilaWei/DataFuzzy/graph/badge.svg)](https://codecov.io/gh/AquilaWei/DataFuzzy)
-![Version](https://img.shields.io/badge/version-0.7.0.37.20-blue)
+![Version](https://img.shields.io/badge/version-0.7.0.37.21-blue)
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
@@ -60,7 +60,7 @@ uv run theranote
   依服務類型填的內容與 `src/datafuzzy/ot/ace_mapping.py` 一致：Direct Therapy Time／Make-Up 填分鐘、時間、
   Comments on Log（英文追蹤）、Data Towards Goals（英文記錄）、Underlying Deficits，Group 另填 Group（A、B…）與 Group Size；
   Collaboration、Home Program、IEP Meeting/Meeting、Progress Report、Scheduling 只填 Indirect 該類型一列（分鐘數＝結束減開始），不加 Documentation；
-  Direct Therapy Time、Make-Up、Absent Student、Unavailable Student、School Not in Session、Therapist Absent 每份病歷加 Documentation 5 分（同一天兩份病歷就兩列），MA billing 學生的治療再加 MA ACCESS Billing 5 分；
+  Unavailable Student 的分鐘數一律填 0（不論病歷時間）。Direct Therapy Time、Make-Up、Absent Student、Unavailable Student、School Not in Session、Therapist Absent 每份病歷加 Documentation 5 分（同一天兩份病歷就兩列），MA billing 學生的治療再加 MA ACCESS Billing 5 分；
   Annual IEP Report、Evaluation、Re-Evaluation、Screen、Student Observation、No-Show 不加 Documentation。
   No-Show 填在 Direct Time（ACE 名稱 `No Show`），分鐘數＝結束減開始。
   學生當天的計畫是 Group、但治療病歷是 Individual 時，改填在 Group Time，自成一組（人數 1），
@@ -70,7 +70,7 @@ uv run theranote
   當天計畫是 Group 的學生，Absent Student、School Not in Session、Therapist Absent、Unavailable Student
   即使病歷是 Individual，也填在 Group Time，和同一時間的組同一個 Group。
   Consult、缺英文、缺時間的格子會標「要手動」，不自動填；週次不對、名單找不到學生時也會停下。
-  選好填寫檔後會先待機，不會自動動作；按「掃描 ACE」才比對：ACE 已經有資料的格子會打開讀取、和填寫檔比對後按 Cancel 關閉（不改任何資料），一致的標成「已完成」，不一致的標成「需確認」並列出哪裡不同，空的格子照原本「待填」；可以隨時再按一次重新比對。也可以不掃描，直接選一格按「填這一格」。
+  選好填寫檔後會先待機，不會自動動作；按「掃描 ACE」才比對：ACE 已經有資料的格子會打開讀取、和填寫檔比對後按 Cancel 關閉（不改任何資料），一致的標成「已完成」，不一致的標成「需確認」並列出哪裡不同，空的格子照原本「待填」；可以隨時再按一次重新比對。也可以不掃描，直接選一格按「填這一格」。在清單上點任一格，就會自動在 ACE 打開那一格的視窗方便檢查（不填任何資料），看完按 Cancel；再點別格會先關掉前一個。
   ACE 那格已有資料時，面板先問「取代」或「跳過」：取代會先刪掉 ACE 視窗裡原有的資料再填入（按 Save Changes 才真的刪除，按 Cancel 原資料不變；已核准而 ACE 不讓刪的資料會停下請你手動處理），跳過會按 Cancel 關掉 ACE 視窗、不改任何資料，等週表重新載入後才找下一位學生。面板可以拖曳標題列移動，位置會記住。
   安裝：Chrome 開 `chrome://extensions` → 開啟「開發人員模式」→「載入未封裝項目」→ 選 `chrome-extension/` 資料夾
   （Chrome 直接使用這個資料夾，請勿搬動；更新後在 `chrome://extensions` 按重新載入）。擴充功能的圖示和版本號與 TheraNote 相同。
