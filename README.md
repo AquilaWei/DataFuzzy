@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml/badge.svg)](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/AquilaWei/DataFuzzy/graph/badge.svg)](https://codecov.io/gh/AquilaWei/DataFuzzy)
-![Version](https://img.shields.io/badge/version-0.7.0.37.13-blue)
+![Version](https://img.shields.io/badge/version-0.7.0.37.14-blue)
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
@@ -15,7 +15,7 @@
 中英文內容可分別編輯並自動儲存。地點記在學生的基本資訊裡，寫病歷時不用再填；新增病歷會自動帶入這個地點，時段優先使用基本資訊裡設定的「看診時段」（每位學生可設定多個，例如週五 10:00 AM–10:30 AM），沒有設定時沿用該學生最近一次「同一個星期幾」的開始與結束時間（每週兩天不同時段也能各自帶對），沒有同星期幾的紀錄時才用最近一次的開始時間。
 開啟病歷時，學生的基本資訊顯示在最上方，下面才是這次的病歷內容。學生換地點後，舊病歷保留當時的地點。
 在日期或地點模式新增病歷時，會先選地點，學生清單只列出地點是這裡的學生（日期模式預設為所選日期）。
-日期模式的當天清單可切換「依時間」或「依名字」排序，每列最左邊的時間欄醒目標示開始與結束時間。地點模式點地點列出在該地點看過的學生卡片（名字加上 Diagnosis、Age、Grade、Classroom 與看診時段），點學生再看這位學生在所有地點的全部病歷與份數。學生頁的每張病歷卡片右上角會標出當次每個目標的表現（G1 met 綠、G2 not met 紅、not addressed 與未填 -- 灰），滑鼠停在標籤上可看目標全文。開始與結束時間以 AM／PM 顯示與輸入（也接受 14:05 這種寫法）；結束時間預設為開始後 30 分鐘，可自行修改；改版前已有開始時間的舊病歷，第一次開啟時會自動補上開始後 30 分鐘的結束時間（只讀寫時間欄位，不解密病歷內容）。
+日期模式的當天清單可切換「依時間」或「依名字」排序，每列最左邊的時間欄醒目標示開始與結束時間。地點模式點地點列出在該地點看過的學生卡片（名字加上 Diagnosis、Age、Grade、Classroom 與看診時段），點學生再看這位學生在所有地點的全部病歷與份數。學生頁的每張病歷卡片右上角會標出當次每個目標的表現（G1 met 綠、G2 not met 紅、not addressed 與未填 -- 灰），滑鼠停在標籤上可看目標全文。今天以前的病歷還有沒填的部分（依服務類型需要的時間、目標表現、活動、記錄、追蹤，記錄與追蹤中英文任一種即可）時，卡片和日期、地點清單會以紅框標示並寫出「缺：時間、追蹤」；再打開這份病歷，上方會用紅字提醒，缺的欄位標題也變紅，填好就消失（剛新增或預約的病歷第一次開啟時不提醒，預約到未來日期的也不算）。開始與結束時間以 AM／PM 顯示與輸入（也接受 14:05 這種寫法）；結束時間預設為開始後 30 分鐘，可自行修改；改版前已有開始時間的舊病歷，第一次開啟時會自動補上開始後 30 分鐘的結束時間（只讀寫時間欄位，不解密病歷內容）。
 **課表模式**依啟用學生的「看診時段」排出每週課表（星期 × 開始時間，圓角卡片式課表，今天的星期以藍色標示，每位學生有固定顏色），每個時段可註明「領取教室」（去哪裡找這個孩子），點學生名字看他的所有病歷，修改時段後課表立即更新；當天計畫是 Group 的學生，同一時段（開始和結束都相同）有兩位以上時合併成一張有外框的「Group · N 人」卡片，點裡面的名字一樣打開該學生的病歷；側邊欄列出尚未設定時段的學生。學生計畫完成後，可在名單上按右鍵「停用學生」，停用的學生不出現在課表、排在名單最後，病歷仍保留。
 **設定**（側邊欄左下角，或 macOS 選單 TheraNote → 設定…，⌘,）可切換介面語言：中文或 English，切換後視窗立即換成新語言，下次開啟也沿用。
 病歷預覽跟著介面語言：中文介面優先顯示中文病歷，English 介面優先顯示英文病歷（沒有該語言版本時顯示另一種），開啟病歷時也先停在該語言的分頁。
@@ -52,6 +52,7 @@ uv run theranote
   匯出時以名為主換代號，病歷寫「Emma」貼回就是「Emma」，寫全名「Emma Wang」才還原成全名。
   舊學生的姓名整個存在「名」欄，按 ✎ 把姓移到「姓」欄後才會照這個方式處理。
 - **ACE 自動填寫**：側邊欄「ACE 填寫檔」選一週（預設本週一到週日），存成 `TheraNote-ACE-<週一>.json`，存放資料夾按「選擇資料夾…」設定一次即會記住（沒設定時存到「下載」）。
+  存檔前若有病歷還不能填進 ACE（缺英文、缺時間、Consult 等），會先列出每一份（日期、時間、學生、缺什麼），點兩下就打開那份病歷去修改，也可以「照樣存檔」；存好或寫入失敗都會跳出提醒。
   再用 Chrome 擴充功能（repo 的 `chrome-extension/`）在 ACE Portal 的 Therapist's Accountability 週表逐格填寫：
   學生依完整姓名在 ACE 清單裡找（TheraNote 沒填姓、整個名字寫在名字欄也找得到），
   面板按「填這一格」會打開該學生那天的 Edit Therapist Time 視窗並填好 Direct／Group／Indirect，
@@ -68,7 +69,7 @@ uv run theranote
   當天計畫是 Group 的學生，Absent Student、School Not in Session、Therapist Absent、Unavailable Student
   即使病歷是 Individual，也填在 Group Time，和同一時間的組同一個 Group。
   Consult、缺英文、缺時間的格子會標「要手動」，不自動填；週次不對、名單找不到學生時也會停下。
-  ACE 那格已有資料時，面板先問「取代」或「跳過」：取代會先刪掉 ACE 視窗裡原有的資料再填入（按 Save Changes 才真的刪除，按 Cancel 原資料不變；已核准而 ACE 不讓刪的資料會停下請你手動處理），跳過會關掉 ACE 視窗、不改任何資料。
+  ACE 那格已有資料時，面板先問「取代」或「跳過」：取代會先刪掉 ACE 視窗裡原有的資料再填入（按 Save Changes 才真的刪除，按 Cancel 原資料不變；已核准而 ACE 不讓刪的資料會停下請你手動處理），跳過會按 Cancel 關掉 ACE 視窗、不改任何資料，等週表重新載入後才找下一位學生。面板可以拖曳標題列移動，位置會記住。
   安裝：Chrome 開 `chrome://extensions` → 開啟「開發人員模式」→「載入未封裝項目」→ 選 `chrome-extension/` 資料夾
   （Chrome 直接使用這個資料夾，請勿搬動；更新後在 `chrome://extensions` 按重新載入）。擴充功能的圖示和版本號與 TheraNote 相同。
   面板平常不顯示，在 ACE 頁面點工具列上的 TheraNote 圖示才打開，再點一次或按 ✕ 關閉。
