@@ -44,6 +44,8 @@
   // student in the grid has it.
   async function locate({first, last, date}) {
     if (activeEditWindow()) throw new Error("A time entry window is still open: save or cancel it first");
+    const other = windowTitles();
+    if (other) throw new Error(`ACE 還開著 ${other} 視窗，請先關掉它`);
     await gridReady();
     const g = grid();
     const store = g.getStore();
@@ -63,10 +65,24 @@
       maAccess: record ? norm(record.get("ma_access")) === "yes" : null};
   }
 
-  function activeEditWindow() {
-    const w = Ext.WindowMgr.getActive();
-    return w && w.isVisible() && Ext.getCmp("TimeEntryTimeRowContainer_Direct") && w.findById("TimeEntryTimeRowContainer_Direct") ? w : null;
+  // Every Ext window now showing, the frontmost first.
+  function shownWindows() {
+    const found = [];
+    Ext.WindowMgr.each((w) => { if (w.isVisible && w.isVisible() && !w.isDestroyed) found.push(w); });
+    const front = Ext.WindowMgr.getActive();
+    return found.sort((a, b) => (b === front) - (a === front));
   }
+
+  // The "Edit Therapist Time" window, wherever it is in the stack of windows: the one holding the
+  // Direct Time section (or titled so, while its sections are still being built).
+  function activeEditWindow() {
+    const sections = Ext.getCmp("TimeEntryTimeRowContainer_Direct");
+    return shownWindows().find((w) => (sections && w.findById && w.findById("TimeEntryTimeRowContainer_Direct"))
+      || /therapist time/i.test(norm(w.title))) || null;
+  }
+
+  // What windows are open, by title, for a message when the time entry window is not found.
+  const windowTitles = () => shownWindows().map((w) => `「${norm(w.title) || "?"}」`).join("、");
 
   function entryRows(section) {
     const box = Ext.getCmp(`TimeEntryTimeRowContainer_${SECTIONS[section]}`);
@@ -82,14 +98,31 @@
     for (const type of ["mousedown", "mouseup", "click"]) {
       cell.dispatchEvent(new MouseEvent(type, {bubbles: true, cancelable: true, view: window}));
     }
-    const w = await until(activeEditWindow, "the time entry window");
+    const w = await until(activeEditWindow, "the time entry window").catch(() => {
+      const open = windowTitles();
+      throw new Error(open ? `ACE 開了 ${open}，但認不出是 Edit Therapist Time 視窗：請按 Cancel 關掉它`
+        : "點了格子，但 ACE 沒有打開 Edit Therapist Time 視窗");
+    });
+    await until(() => Ext.getCmp("TimeEntryTimeRowContainer_Direct") && w.findById("TimeEntryTimeRowContainer_Direct"),
+      "the Direct Time section");
     await sleep(500); // its sections load their entries after it shows
     return Object.fromEntries(Object.keys(SECTIONS).map((s) => [s, entryRows(s).length]));
   }
 
+  // Presses an Ext button the way a person does, with a click on its own element, so ACE runs
+  // everything it ties to that click (not only the button's handler); a button not on the page
+  // gets its handler called instead.
   function press(button) {
-    if (button.handler) button.handler.call(button.scope || button, button, Ext.EventObject);
-    else button.fireEvent("click", button, Ext.EventObject);
+    const dom = (button.btnEl && button.btnEl.dom) || (button.el && button.el.dom);
+    if (dom && dom.isConnected) {
+      for (const type of ["mousedown", "mouseup", "click"]) {
+        dom.dispatchEvent(new MouseEvent(type, {bubbles: true, cancelable: true, view: window, button: 0}));
+      }
+    } else if (button.handler) {
+      button.handler.call(button.scope || button, button, Ext.EventObject);
+    } else {
+      button.fireEvent("click", button, Ext.EventObject);
+    }
   }
 
   // A new empty entry row in `section`: the section's own add button when it has no row yet,

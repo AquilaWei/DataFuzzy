@@ -324,7 +324,7 @@
   async function scanAll() {
     if (!state || scanning) return;
     scanning = true;
-    let done = 0, check = 0, failed = 0;
+    let done = 0, check = 0, stopped = "";
     try {
       const week = await ask("week");
       if (!week.length || !week[0].endsWith(` ${monthDay(state.file.week[0])}`)) {
@@ -341,15 +341,17 @@
             state.status[i] = "check"; state.notes[i] = result.notes; check++;
           }
         } catch (error) {
-          failed++;
+          // Stop here rather than click on behind a window left open; say why.
           await ask("cancel").catch(() => {});
+          stopped = `掃描在第 ${i + 1} 格（${cells[i].first} ${cells[i].last} ${monthDay(cells[i].date)}）停下：${error.message}`;
+          break;
         }
       }
       state.current = nextTodo(0);
       $("msg").dataset.keep = "1";
       const left = state.status.filter((s) => WAITING.includes(s)).length;
-      say(`掃描完成：${done} 格和 ACE 一致（已完成），${check} 格 ACE 有資料但不同（需確認），還有 ${left} 格要一個個處理。`
-        + (failed ? `\n${failed} 格沒能掃描，照原本的狀態。` : ""));
+      say(`${stopped ? "掃描未完成" : "掃描完成"}：${done} 格和 ACE 一致（已完成），${check} 格 ACE 有資料但不同（需確認），還有 ${left} 格要一個個處理。`
+        + (stopped ? `\n${stopped}\n其餘的格子照原本的狀態，處理好後可以再按「掃描 ACE」。` : ""), Boolean(stopped));
     } catch (error) {
       $("msg").dataset.keep = "1";
       say(error.message, true);
