@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml/badge.svg)](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/AquilaWei/DataFuzzy/graph/badge.svg)](https://codecov.io/gh/AquilaWei/DataFuzzy)
-![Version](https://img.shields.io/badge/version-0.7.0.37.8-blue)
+![Version](https://img.shields.io/badge/version-0.7.0.37.9-blue)
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
@@ -179,6 +179,7 @@ uv run theranote
 - 模型鎖定固定版本並以 SHA-256 驗證。個資偵測與中文人名模型直接從 Hugging Face 下載；中英夾雜模型的原作者沒有提供 ONNX 格式，由本專案轉換後放在 [GitHub Release `models-v1`](https://github.com/AquilaWei/DataFuzzy/releases/tag/models-v1)（`tools/export_xlmr.py` 可重現同樣的檔案）
 - 代號檔存於系統暫存目錄 `datafuzzy-<pid>/`，以 **AES-256-GCM** 加密，金鑰只存在記憶體
 - 關閉視窗、`Ctrl+C`、`SIGTERM` 都會刪除代號檔；若程式被強制結束，下次啟動時自動清除殘留
+- TheraNote 的診斷記錄 `~/Library/Logs/TheraNote/theranote.log` 只寫程式結束的原因（錯誤訊息與程式位置），不含病歷內容，不會傳出這台電腦
 
 ## ⚠️ 已知限制
 

@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.9] - 2026-11-20
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 診斷記錄：`~/Library/Logs/TheraNote/theranote.log` 記下程式結束的原因（未處理的錯誤、當機、Qt 警告、哪段程式關了視窗或結束程式），只有程式位置和錯誤訊息，不含病歷內容，也不會傳出這台電腦。用來找全螢幕時按 Compare 或 Book next session 會黑屏關閉的原因。
+
 ## [0.7.0.37.8] - 2026-11-20
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
