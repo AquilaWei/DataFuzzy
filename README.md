@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml/badge.svg)](https://github.com/AquilaWei/DataFuzzy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/AquilaWei/DataFuzzy/graph/badge.svg)](https://codecov.io/gh/AquilaWei/DataFuzzy)
-![Version](https://img.shields.io/badge/version-0.7.0.37.16-blue)
+![Version](https://img.shields.io/badge/version-0.7.0.37.17-blue)
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
@@ -52,7 +52,7 @@ uv run theranote
   匯出時以名為主換代號，病歷寫「Emma」貼回就是「Emma」，寫全名「Emma Wang」才還原成全名。
   舊學生的姓名整個存在「名」欄，按 ✎ 把姓移到「姓」欄後才會照這個方式處理。
 - **ACE 自動填寫**：側邊欄「ACE 填寫檔」選一週（預設本週一到週日），存成 `TheraNote-ACE-<週一>.json`，存放資料夾按「選擇資料夾…」設定一次即會記住（沒設定時存到「下載」）。
-  存檔前若有病歷還不能填進 ACE（缺英文、缺時間、Consult 等），會先列出每一份（日期、時間、學生、缺什麼），點兩下就打開那份病歷去修改，也可以「照樣存檔」；存好或寫入失敗都會跳出提醒。
+  存檔前若有病歷還不能填進 ACE（缺英文、缺時間、Consult 等），會先列出每一份（日期、時間、學生、缺什麼），點兩下就打開那份病歷去修改，也可以「照樣存檔」；存好或寫入失敗都會跳出提醒，存好後視窗自動關閉。
   再用 Chrome 擴充功能（repo 的 `chrome-extension/`）在 ACE Portal 的 Therapist's Accountability 週表逐格填寫：
   學生依完整姓名在 ACE 清單裡找（TheraNote 沒填姓、整個名字寫在名字欄也找得到），
   面板按「填這一格」會打開該學生那天的 Edit Therapist Time 視窗並填好 Direct／Group／Indirect，
@@ -70,7 +70,7 @@ uv run theranote
   當天計畫是 Group 的學生，Absent Student、School Not in Session、Therapist Absent、Unavailable Student
   即使病歷是 Individual，也填在 Group Time，和同一時間的組同一個 Group。
   Consult、缺英文、缺時間的格子會標「要手動」，不自動填；週次不對、名單找不到學生時也會停下。
-  選好填寫檔後會先掃描一次：ACE 已經有資料的格子會打開讀取、和填寫檔比對後按 Cancel 關閉（不改任何資料），一致的標成「已完成」，不一致的標成「需確認」並列出哪裡不同，空的格子照原本「待填」；之後可按「重新掃描」再比對一次。
+  選好填寫檔後會先待機，不會自動動作；按「掃描 ACE」才比對：ACE 已經有資料的格子會打開讀取、和填寫檔比對後按 Cancel 關閉（不改任何資料），一致的標成「已完成」，不一致的標成「需確認」並列出哪裡不同，空的格子照原本「待填」；可以隨時再按一次重新比對。也可以不掃描，直接選一格按「填這一格」。
   ACE 那格已有資料時，面板先問「取代」或「跳過」：取代會先刪掉 ACE 視窗裡原有的資料再填入（按 Save Changes 才真的刪除，按 Cancel 原資料不變；已核准而 ACE 不讓刪的資料會停下請你手動處理），跳過會按 Cancel 關掉 ACE 視窗、不改任何資料，等週表重新載入後才找下一位學生。面板可以拖曳標題列移動，位置會記住。
   安裝：Chrome 開 `chrome://extensions` → 開啟「開發人員模式」→「載入未封裝項目」→ 選 `chrome-extension/` 資料夾
   （Chrome 直接使用這個資料夾，請勿搬動；更新後在 `chrome://extensions` 按重新載入）。擴充功能的圖示和版本號與 TheraNote 相同。

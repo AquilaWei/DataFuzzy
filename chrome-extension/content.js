@@ -115,7 +115,7 @@
       <div class="msg" id="msg"></div>
       <div class="actions">
         <button class="act" id="pick">選擇填寫檔…</button>
-        <button class="act" id="scan" title="打開 ACE 裡已經有資料的格子，和填寫檔比對（按 Cancel 關閉，不改任何資料）">重新掃描</button>
+        <button class="act" id="scan" title="打開 ACE 裡已經有資料的格子，和填寫檔比對（按 Cancel 關閉，不改任何資料）">掃描 ACE</button>
         <button class="act" id="clear">清除</button>
         <input type="file" id="file" accept=".json,application/json" class="hidden">
       </div>
@@ -295,7 +295,7 @@
     }
   }
 
-  // Before filling one by one: each cell ACE already has entries in is opened, compared with
+  // On the user's word only (the 掃描 ACE button), never on loading a file. Each cell ACE already has entries in is opened, compared with
   // the file and closed again with Cancel. The same entries mark it done, other entries mark it
   // for checking (with what differs), and an empty cell stays as it was.
   async function scanAll() {
@@ -305,7 +305,7 @@
     try {
       const week = await ask("week");
       if (!week.length || !week[0].endsWith(` ${monthDay(state.file.week[0])}`)) {
-        throw new Error(`ACE 現在顯示的週（${week[0] || "?"}）不是檔案的週（${state.file.week[0]} 起），請先切換週次再按「重新掃描」。`);
+        throw new Error(`ACE 現在顯示的週（${week[0] || "?"}）不是檔案的週（${state.file.week[0]} 起），請先切換週次再按「掃描 ACE」。`);
       }
       const cells = state.file.cells;
       for (let i = 0; i < cells.length; i++) {
@@ -357,8 +357,9 @@
     try {
       openFile(await f.text());
       await save();
+      $("msg").dataset.keep = "1";
+      say(`已載入 ${state.file.cells.length} 格。按「掃描 ACE」先比對 ACE 已有的資料，或選一格按「填這一格」。`);
       render();
-      await scanAll();
     } catch (error) {
       say(error.message, true);
     }
