@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.26] - 2026-11-27
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- ACE 填寫檔與 Excel 交接匯出前檢查病歷：有病歷沒填完整就不匯出，改在主視窗旁列出清單，點兩下打開病歷補齊，補好的即時標成「✓ 已補齊」，全部補齊後可直接回到匯出（保留日期與學生名單）。取代原本的「照樣存檔」。
+
+### 修正
+- KeepCurrent：學生改用名字比對、不分大小寫（Dashboard 是「姓, 名」，TheraNote 多半只有名字），先前大多找不到或找錯。
+- KeepCurrent：Dashboard 上有同名學生而 TheraNote 沒有姓氏（或姓氏分不出來）時，面板警告並用黃框標出那幾位，由使用者點選正確學生的表單後才填入，填好後再提醒確認。
+
 ## [0.7.0.37.25] - 2026-11-27
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
