@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.28] - 2026-11-28
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- 學生名單標出基本資訊沒填完整的啟用中學生：名字改成橘色加 ⚠，名單下方寫出共有幾位；滑鼠移到名字上會列出缺哪些欄位，右鍵新增「編輯基本資訊…」可直接補齊，補好後標示即消失。
+
 ## [0.7.0.37.27] - 2026-11-27
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
