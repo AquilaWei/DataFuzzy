@@ -940,3 +940,23 @@ def test_comparing_or_booking_opens_no_window_of_its_own(qtbot, store):
         QApplication.instance().removeEventFilter(watch)
     assert window.editor.compare.record_id == second
     assert shown == []
+
+
+def test_an_ace_export_with_incomplete_charts_lists_them_beside_the_window(qtbot, store, tmp_path, monkeypatch):
+    from datafuzzy.ot.ui import exchange_dialogs
+
+    monkeypatch.setattr(exchange_dialogs.AceExportDialog, "exec", lambda self: self.save())
+    store.set_ace_folder(str(tmp_path))
+    sid = store.add_student("Amy").id
+    record = store.add_record(sid, date.today(), "Lincoln", en_text="Cut.", start_time="09:00", end_time="09:30")
+    window = make_window(qtbot, store)
+    window.open_ace_export()
+    listed = window.incomplete
+    assert listed is not None and listed.isVisible() and listed.list.count() == 1
+    assert list(tmp_path.glob("*.json")) == []
+    listed.open_current()
+    assert window.editor is not None and window.editor.record_id == record.id
+    store.update_record(record.id, en_followup="Zips.")
+    window.refresh_after_change()
+    assert listed.list.item(0).text().startswith("✓ 已補齊")
+    assert listed.retry_btn.isEnabled()

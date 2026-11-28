@@ -32,6 +32,10 @@ MANUAL_TYPE = "manual_type"  # a type ACE has no place for (Consult)
 NO_ENGLISH = "no_english"  # ACE asks for English text the chart does not have yet
 NO_TIMES = "no_times"  # ACE asks for minutes or times the chart does not have
 NO_GROUP = "no_group"  # a group chart without a start time, so no group to put it in
+KC_NO_START = "kc_no_start"  # a pre-school student's chart KeepCurrent asks a start time for
+# What no edit of the chart can fix: the cell is left for entering by hand, and the file is
+# saved all the same. Any other problem keeps the file from being saved until it is fixed.
+UNFIXABLE = frozenset({MANUAL_TYPE})
 
 
 @dataclass
@@ -92,8 +96,10 @@ def kc_visit(record: Record, first: str, last: str, plan_goals: tuple[str, ...])
     problems = []
     if direct and not record.en_text.strip():
         problems.append(NO_ENGLISH)
-    if not record.start_time or minutes is None:
+    if direct and minutes is None:
         problems.append(NO_TIMES)
+    elif not direct and not record.start_time:
+        problems.append(KC_NO_START)
     goals = [goal for goal, score in zip(plan_goals, record.goal_scores)
              if goal.strip() and score.strip().casefold() in KC_GOAL_SCORES] if direct else []
     return KcVisit(first, last, record.visit_date.isoformat(), record.start_time, minutes or 0,
@@ -101,13 +107,13 @@ def kc_visit(record: Record, first: str, last: str, plan_goals: tuple[str, ...])
                    record.en_text.strip() if direct else "", goals, problems)
 
 
-def kc_visits(store: RecordStore, date_from: date, date_to: date) -> list[KcVisit]:
-    """The charts from `date_from` to `date_to` (inclusive) of the pre-school students, for
-    KeepCurrent, by day, start time and name. Reads the profiles of the charts' students only."""
+def _kc_pairs(store: RecordStore, date_from: date, date_to: date) -> list[tuple[Record, str, KcVisit]]:
+    """(record, student name, visit) for the pre-school students' charts KeepCurrent takes.
+    Reads the profiles of the charts' students only."""
     records = store.records_between(date_from, date_to)
     students = {sid: store.get_student(sid) for sid in {r.student_id for r in records}}
     profiles = {sid: store.get_profile(sid) for sid in students}
-    visits = []
+    pairs = []
     for record in records:
         profile = profiles[record.student_id]
         if profile.grade != PRESCHOOL:
@@ -115,8 +121,33 @@ def kc_visits(store: RecordStore, date_from: date, date_to: date) -> list[KcVisi
         student = students[record.student_id]
         visit = kc_visit(record, student.given_name, student.family_name, profile.plan_on(record.visit_date).goals)
         if visit:
-            visits.append(visit)
+            pairs.append((record, student.name, visit))
+    return pairs
+
+
+def kc_visits(store: RecordStore, date_from: date, date_to: date) -> list[KcVisit]:
+    """The charts from `date_from` to `date_to` (inclusive) of the pre-school students, for
+    KeepCurrent, by day, start time and name."""
+    visits = [visit for _, _, visit in _kc_pairs(store, date_from, date_to)]
     return sorted(visits, key=lambda v: (v.date, v.start or "99:99", v.last.casefold(), v.first.casefold()))
+
+
+def fill_issues(store: RecordStore, date_from: date, date_to: date) -> list[ChartIssue]:
+    """The charts from `date_from` to `date_to` (inclusive) that keep the fill-in file from
+    being saved: what ACE or, for a pre-school student, KeepCurrent asks of them and they lack
+    (see UNFIXABLE for what does not count), by day, start time and name."""
+    found: dict[int, ChartIssue] = {}
+    for issue in ace_week(store, date_from, date_to)[1]:
+        problems = [p for p in issue.problems if p not in UNFIXABLE]
+        if problems:
+            found[issue.record.id] = ChartIssue(issue.record, issue.student_name, problems)
+    for record, name, visit in _kc_pairs(store, date_from, date_to):
+        if not visit.problems:
+            continue
+        issue = found.setdefault(record.id, ChartIssue(record, name, []))
+        issue.problems.extend(p for p in visit.problems if p not in issue.problems)
+    return sorted(found.values(), key=lambda i: (i.record.visit_date, i.record.start_time or "99:99",
+                                                 i.student_name.casefold()))
 
 
 @dataclass

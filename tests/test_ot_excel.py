@@ -213,8 +213,10 @@ def test_more_visits_than_the_template_has_slots(store, tmp_path):
     assert ws["A15"].border.bottom.style == "thin"
 
 
-def make_dialog(qtbot, store, confirm=lambda path: True, folder=""):
-    dialog = ExcelExportDialog(store, today=TODAY, confirm=confirm, choose=lambda start: folder)
+def make_dialog(qtbot, store, confirm=lambda path: True, folder="", check=lambda store, records: [], start=None):
+    # The charts here are sketches, incomplete on purpose: the check is left out unless a test is about it.
+    dialog = ExcelExportDialog(store, today=TODAY, confirm=confirm, choose=lambda start: folder, check=check,
+                               start=start)
     qtbot.addWidget(dialog)
     dialog.from_edit.setDate(QDate(2026, 10, 1))
     dialog.to_edit.setDate(QDate(2026, 10, 31))
@@ -462,3 +464,42 @@ def test_progress_mode_writes_the_report_of_the_picked_day(qtbot, class_list, tm
     path = tmp_path / "Progress Report-2026-11-02.xlsx"
     assert dialog.written == [path]
     assert load_workbook(path).sheetnames[0] == "Lincoln"
+
+
+
+# --- incomplete charts ----------------------------------------------------------------------
+
+def test_a_handover_with_an_incomplete_chart_is_not_exported(qtbot, charts, tmp_path):
+    from datafuzzy.ot.ui.exchange_dialogs import excel_issues
+
+    charts.set_excel_folder(str(tmp_path))
+    dialog = make_dialog(qtbot, charts, check=excel_issues)
+    pick(dialog, "Lincoln", "王小明")
+    dialog.export_btn.click()
+    assert dialog.written == []
+    assert list(tmp_path.glob("*.xlsx")) == []
+    ming = next(s.id for s in charts.students() if s.name == "王小明")
+    assert dialog.incomplete == (date(2026, 10, 1), date(2026, 10, 31), [("Lincoln", ming)])
+
+
+def test_the_dialog_comes_back_with_the_same_range_and_students(qtbot, charts):
+    ming = next(s.id for s in charts.students() if s.name == "王小明")
+    dialog = ExcelExportDialog(charts, today=TODAY, start=(date(2026, 10, 1), date(2026, 10, 31), [("Lincoln", ming)]))
+    qtbot.addWidget(dialog)
+    assert table_rows(dialog) == [("Lincoln", "王小明", "2")]
+
+
+def test_excel_issues_name_what_each_chart_lacks(store):
+    from datafuzzy.ot.ui.exchange_dialogs import excel_issues
+
+    sid = store.add_student("Amy").id
+    store.set_profile(sid, StudentProfile(goals=("Grasp",)))
+    done = store.add_record(sid, date(2026, 10, 1), "Lincoln", en_text="Cut.", en_followup="Zips.",
+                            activity="Paper", start_time="09:00", end_time="09:30", goal_scores=("met",))
+    chinese = store.add_record(sid, date(2026, 10, 2), "Lincoln", "剪紙", activity="Paper", start_time="09:00",
+                               end_time="09:30", goal_scores=("met",), zh_followup="拉鍊")
+    bare = store.add_record(sid, date(2026, 10, 3), "Lincoln")
+    issues = {i.record.id: i.problems for i in excel_issues(store, [done, chinese, bare])}
+    assert done.id not in issues
+    assert issues[chinese.id] == ["english"]
+    assert issues[bare.id] == ["times", "scores", "activity", "comments", "followup"]

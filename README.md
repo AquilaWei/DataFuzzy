@@ -24,6 +24,7 @@
 在病歷卡片或日期清單上按右鍵可刪除病歷（警告視窗預設是「取消」，要按「刪除」才會刪掉），日期清單的右鍵選單也能「複製英文病歷」；在學生名單上按右鍵可刪除學生與其所有病歷（都會先警告，無法復原）。學生姓名、病歷日期填錯時，按旁邊的 ✎ 修改。點兩下「中文」或「English」分頁可複製該語言的記錄與追蹤。編輯病歷時按「對照其他病歷」，可從最近的上一次往前挑一份同一位學生的病歷，並排顯示在右邊；學生基本資訊仍留在最上方，兩份病歷的日期、時間、活動與內容逐列對齊。同一位學生同一天可以有多份病歷（例如上午、下午各一次）。按「預約下次治療」會新增七天後同一時段的病歷（例如這週一 10:00 → 下週一 10:00，沿用模式與服務類型），並和原本那份左右對照；重複按不會多出第二份。這個按鈕只出現在這位學生最新的一份病歷上。下拉選單和日期欄只能點擊修改，滑鼠滾輪滑過時會捲動頁面，不會誤改選項。
 **Excel 匯出**有兩種模式。**交接模式**依學校表單格式產生檔案：選日期區間後，用「地點 → 學生」下拉選單把要匯出的學生加入名單（或「加入此地點全部」），
 每位學生一個檔案（`姓名-開始日期至結束日期.xlsx`），只含所選地點的病歷，每次一列：日期、時段（如 9:30-10:00）、Session Type（模式＋服務類型，如 `Individual - Direct Therapy Time`）、活動、Comment（英文記錄；有追蹤時空一行接 `* **Follow-up:** …`），以及每個目標一欄的分數（Goal 1、Goal 2…，欄數依學生的目標數量增減；從 met、not met、not addressed 選一個，沒選的顯示 --）。期間內跨了新的 IEP/504 日期或新學年時，同一個檔案會分成多個頁籤，各用當時的計畫日期與目標，頁籤名稱如 `2026-2027_IEP 10∕29∕26`。**Progress Report 模式**選一個日期，產生 `Progress Report-日期.xlsx`：每個地點（依基本資訊的地點）一個分頁，列出所有啟用中學生在那天有效計畫的每個 goal（Name、Goal、Progress 三欄，有三個 goal 就三列，名字合併成一格），Progress 欄先填入 goal 原文方便直接修改。匯出資料夾設定一次即會記住。
+交接模式匯出前會檢查所選學生的病歷：有缺時間、目標表現、活動、記錄、追蹤，或只有中文還沒有英文的，**不會匯出**，改列出「有病歷還沒填完整」清單（見下方 ACE 填寫檔）。
 每份病歷在時間下方選 **模式**（Individual 對應 ACE 的 Direct Time、Group 對應 Group Time）和 **服務類型**（ACE 的名稱，預設 Direct Therapy Time）。兩種模式都有 Absent Student、Direct Therapy Time、Make-Up、School Not in Session、Therapist Absent、Unavailable Student、Consult、Collaboration、Home Program、IEP Meeting/Meeting、Progress Report、Scheduling；只有 Individual 有 Annual IEP Report、Evaluation、Re-Evaluation、Screen、Student Observation；Grade 是 Pre-School 的學生，Individual 另有 No-Show（之後 Grade 改了，已經是 No-Show 的病歷仍保留）。下方顯示哪些欄位依服務類型而定：
 
 | 服務類型 | 下方顯示 |
@@ -53,7 +54,10 @@ uv run theranote
   匯出時以名為主換代號，病歷寫「Emma」貼回就是「Emma」，寫全名「Emma Wang」才還原成全名。
   舊學生的姓名整個存在「名」欄，按 ✎ 把姓移到「姓」欄後才會照這個方式處理。
 - **ACE 自動填寫**：側邊欄「ACE 填寫檔」選一週（預設本週一到週日），存成 `TheraNote-ACE-<週一>.json`，存放資料夾按「選擇資料夾…」設定一次即會記住（沒設定時存到「下載」）。
-  存檔前若有病歷還不能填進 ACE（缺英文、缺時間、Consult 等），會先列出每一份（日期、時間、學生、缺什麼），點兩下就打開那份病歷去修改，也可以「照樣存檔」；存好或寫入失敗都會跳出提醒，存好後視窗自動關閉。
+  存檔前若有病歷還沒填完整（缺英文、缺時間、Group 缺開始時間，Pre-School 學生的病歷 KeepCurrent 需要開始時間），**不會存檔**，
+  改在主視窗旁開一個「有病歷還沒填完整」清單（日期、時間、學生、缺什麼）：點兩下就打開那份病歷補齊，清單一直留著，
+  補好的會即時標成「✓ 已補齊」；全部補齊後按「回到 ACE 填寫檔」重新存檔（Excel 交接也一樣，按「回到 Excel 匯出」，日期和學生名單都會保留）。
+  Consult 無法靠修改病歷補齊，不擋存檔，那格照舊標「要手動」。存好或寫入失敗都會跳出提醒，存好後視窗自動關閉。
   再用 Chrome 擴充功能（repo 的 `chrome-extension/`）在 ACE Portal 的 Therapist's Accountability 週表逐格填寫：
   學生依完整姓名在 ACE 清單裡找（TheraNote 沒填姓、整個名字寫在名字欄也找得到），
   面板按「填這一格」會打開該學生那天的 Edit Therapist Time 視窗並填好 Direct／Group／Indirect，

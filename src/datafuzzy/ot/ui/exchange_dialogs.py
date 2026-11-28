@@ -32,12 +32,14 @@ from PySide6.QtWidgets import (
 from ...core.pipeline import Pipeline
 from ...ui.worker import run_task
 from ..ace_export import (
+    KC_NO_START,
     MANUAL_TYPE,
     NO_ENGLISH,
     NO_GROUP,
     NO_TIMES,
     ChartIssue,
     ace_week,
+    fill_issues,
     kc_visits,
     to_json,
 )
@@ -61,6 +63,7 @@ from .cards import date_label, time_label
 from .date_view import to_date, to_qdate
 from .i18n import tr
 from .location_view import NO_LOCATION
+from .session_fields import MISSING_NAMES, missing_parts, needed_parts
 from .widgets import SegmentedControl
 
 REASONS = {
@@ -268,7 +271,9 @@ class ExcelExportDialog(QDialog):
     """Two modes. Handover: pick a date range and, location by location, the students to
     export; each student gets their own file of the school's Excel form with that location's
     visits. Progress report: pick a day; one file lists every active student's goals, a sheet
-    per location. Either way into one folder (remembered)."""
+    per location. Either way into one folder (remembered). No handover is exported while a
+    chart of it is incomplete (see excel_issues): the dialog closes with `incomplete` set, for
+    the window to list those charts and bring the dialog back once they are fixed."""
 
     LOCATION, STUDENT, COUNT = range(3)
     HANDOVER, PROGRESS = range(2)
@@ -276,12 +281,18 @@ class ExcelExportDialog(QDialog):
     def __init__(self, store: RecordStore, today: date | None = None,
                  confirm: Callable[[Path], bool] | None = None,
                  choose: Callable[[str], str] | None = None,
-                 parent: QWidget | None = None) -> None:
+                 parent: QWidget | None = None,
+                 start: tuple[date, date, list[tuple[str, int]]] | None = None,
+                 check: Callable[[RecordStore, list[Record]], list[ChartIssue]] | None = None) -> None:
         super().__init__(parent)
         self.store = store
         self.today = today or date.today()
+        self._check = check or excel_issues
         self.written: list[Path] = []
         self.entries: list[tuple[str, int]] = []  # (location, student id), in the order added
+        # The range and entries, when their charts need fixing before the handover is exported
+        # (see excel_issues); `start` brings them back.
+        self.incomplete: tuple[date, date, list[tuple[str, int]]] | None = None
         self._confirm = confirm or (lambda path: ask_replace_file(self, path))
         self._choose = choose or (lambda start: QFileDialog.getExistingDirectory(
             self, tr("Excel 匯出資料夾"), start))
@@ -386,6 +397,10 @@ class ExcelExportDialog(QDialog):
         self.folder_btn.clicked.connect(self.choose_folder)
         self.export_btn.clicked.connect(self.export)
         self.reveal_btn.clicked.connect(self.reveal)
+        if start:
+            self.from_edit.setDate(to_qdate(start[0]))
+            self.to_edit.setDate(to_qdate(start[1]))
+            self.entries = list(start[2])
         self.refresh()
 
     def set_mode(self, mode: int) -> None:
@@ -520,6 +535,11 @@ class ExcelExportDialog(QDialog):
         if self.mode.index() == self.PROGRESS:
             self.export_progress()
             return
+        records = [r for location, sid in self.entries for r in self._records(location, sid)]
+        if self._check(self.store, records):
+            self.incomplete = (*self._range(), list(self.entries))
+            self.reject()  # the window lists them, to be fixed first
+            return
         folder = Path(self.store.excel_folder())
         self.written = []
         lines: list[str] = []
@@ -571,9 +591,13 @@ class ExcelExportDialog(QDialog):
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.written[-1].parent)))
 
 
-# What each of chart_problems' codes asks the user to fix.
-ACE_PROBLEMS = {MANUAL_TYPE: "Consult：ACE 沒有對應類型，要手動填", NO_ENGLISH: "還沒有英文記錄或追蹤",
-                NO_TIMES: "缺開始或結束時間", NO_GROUP: "Group 病歷缺開始時間，無法分組"}
+# What each problem code of a ChartIssue asks the user to fix: chart_problems' and kc_visit's
+# for the ACE fill-in file, missing_parts' (and ENGLISH) for the Excel handover.
+ENGLISH = "english"
+ISSUE_TEXTS = {MANUAL_TYPE: "Consult：ACE 沒有對應類型，要手動填", NO_ENGLISH: "還沒有英文記錄或追蹤",
+               NO_TIMES: "缺開始或結束時間", NO_GROUP: "Group 病歷缺開始時間，無法分組",
+               KC_NO_START: "KeepCurrent 需要開始時間", ENGLISH: "還沒有英文記錄或追蹤",
+               **{part: f"缺{name}" for part, name in MISSING_NAMES.items()}}
 
 
 def issue_text(issue: ChartIssue) -> str:
@@ -581,57 +605,108 @@ def issue_text(issue: ChartIssue) -> str:
     when = date_label(issue.record.visit_date)
     if issue.record.start_time:
         when += f"  {time_label(issue.record.start_time)}"
-    return f"{when}  {issue.student_name} — " + tr("、").join(tr(ACE_PROBLEMS.get(p, p)) for p in issue.problems)
+    return f"{when}  {issue.student_name} — " + tr("、").join(tr(ISSUE_TEXTS.get(p, p)) for p in issue.problems)
 
 
-class AceIssuesDialog(QDialog):
-    """The charts of a week that cannot be filled into ACE as they are, before its file is saved:
-    open one to fix it (`opened` is then its record id), save the file anyway (those cells are
-    marked for entering by hand) or cancel."""
+def excel_issues(store: RecordStore, records: list[Record]) -> list[ChartIssue]:
+    """The charts among `records` the Excel handover form would show incomplete: what they
+    have yet to be filled in with (see missing_parts, against the goals of the plan on their
+    day), and English for the comments and follow-up they have only in Chinese. By day, start
+    time and name."""
+    students = {sid: store.get_student(sid) for sid in {r.student_id for r in records}}
+    profiles = {sid: store.get_profile(sid) for sid in students}
+    issues = []
+    for record in records:
+        problems = missing_parts(record, profiles[record.student_id].plan_on(record.visit_date).goals)
+        needed = needed_parts(record.session_type)
+        if record.visit_date <= date.today() and (
+                ("comments" in needed and record.zh_text.strip() and not record.en_text.strip())
+                or ("followup" in needed and record.zh_followup.strip() and not record.en_followup.strip())):
+            problems.append(ENGLISH)
+        if problems:
+            issues.append(ChartIssue(record, students[record.student_id].name, problems))
+    return sorted(issues, key=lambda i: (i.record.visit_date, i.record.start_time or "99:99",
+                                         i.student_name.casefold()))
 
-    def __init__(self, issues: list[ChartIssue], parent: QWidget | None = None) -> None:
+
+class IncompleteChartsDialog(QDialog):
+    """The charts that keep a file from being exported, left open beside the main window while
+    they are fixed: double-click one (or pick it and press 打開這份病歷) to open it. `check`
+    finds them again; refresh (called whenever charts change) marks those fixed as such and,
+    once none is left, lets `retry` export the file."""
+
+    open_record = Signal(int)
+    retry = Signal()
+
+    def __init__(self, check: Callable[[], list[ChartIssue]], what: str, retry_text: str,
+                 parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.opened: int | None = None
-        self.save_anyway = False
+        self.setModal(False)
+        self._check = check
+        self._what = what
+        self._retry_text = retry_text
+        self.listed: list[ChartIssue] = []  # every chart listed so far, in order
+        self.left: set[int] = set()  # the ids of those not fixed yet
         self.setWindowTitle(tr("有病歷還沒填完整"))
-        self.resize(620, 360)
-        intro = QLabel(tr("這 {count} 份病歷還不能填進 ACE。點兩下或選好後按「打開這份病歷」去修改；"
-                          "也可以照樣存檔，這些格子會標成「要手動」。", count=len(issues)))
-        intro.setWordWrap(True)
+        self.resize(640, 380)
+        self.intro = QLabel()
+        self.intro.setWordWrap(True)
         self.list = QListWidget()
-        for issue in issues:
-            item = QListWidgetItem(issue_text(issue))
-            item.setData(Qt.ItemDataRole.UserRole, issue.record.id)
-            self.list.addItem(item)
-        self.list.setCurrentRow(0)
         self.open_btn = QPushButton(tr("打開這份病歷"))
-        self.open_btn.setObjectName("primary")
-        self.save_btn = QPushButton(tr("照樣存檔"))
-        cancel = QPushButton(tr("取消"))
+        self.retry_btn = QPushButton(retry_text)
+        self.retry_btn.setObjectName("primary")
+        close = QPushButton(tr("關閉"))
         buttons = QHBoxLayout()
-        buttons.addWidget(self.save_btn)
-        buttons.addStretch(1)
-        buttons.addWidget(cancel)
         buttons.addWidget(self.open_btn)
+        buttons.addStretch(1)
+        buttons.addWidget(close)
+        buttons.addWidget(self.retry_btn)
         layout = QVBoxLayout(self)
-        layout.addWidget(intro)
+        layout.addWidget(self.intro)
         layout.addWidget(self.list, 1)
         layout.addLayout(buttons)
         self.open_btn.clicked.connect(self.open_current)
         self.list.itemDoubleClicked.connect(lambda _: self.open_current())
-        self.save_btn.clicked.connect(self._save)
-        cancel.clicked.connect(self.reject)
-        self.open_btn.setDefault(True)
+        self.retry_btn.clicked.connect(self._retry)
+        close.clicked.connect(self.close)
+        self.refresh()
+        self.list.setCurrentRow(0)
+
+    def refresh(self) -> None:
+        """Check the charts again: those fixed are marked, any newly found are added."""
+        issues = {issue.record.id: issue for issue in self._check()}
+        known = {issue.record.id for issue in self.listed}
+        self.listed = [issues.get(i.record.id, i) for i in self.listed] + [
+            i for rid, i in issues.items() if rid not in known]
+        self.left = set(issues)
+        row = self.list.currentRow()
+        self.list.clear()
+        for issue in self.listed:
+            fixed = issue.record.id not in self.left
+            text = issue_text(issue)
+            if fixed:
+                text = tr("✓ 已補齊　") + text.split(" — ")[0]
+            item = QListWidgetItem(text)
+            item.setData(Qt.ItemDataRole.UserRole, issue.record.id)
+            if fixed:
+                item.setForeground(self.palette().placeholderText())
+            self.list.addItem(item)
+        self.list.setCurrentRow(min(max(row, 0), self.list.count() - 1))
+        count = len(self.left)
+        self.intro.setText(
+            tr("這 {count} 份病歷還沒填完整，{what}還不能匯出。點兩下或選好後按「打開這份病歷」去補齊；"
+               "補好的會標成「已補齊」。", count=count, what=self._what) if count
+            else tr("全部補齊了，可以按「{retry}」。", retry=self._retry_text))
+        self.retry_btn.setEnabled(not count)
 
     def open_current(self) -> None:
         item = self.list.currentItem()
         if item is not None:
-            self.opened = item.data(Qt.ItemDataRole.UserRole)
-            self.accept()
+            self.open_record.emit(item.data(Qt.ItemDataRole.UserRole))
 
-    def _save(self) -> None:
-        self.save_anyway = True
-        self.accept()
+    def _retry(self) -> None:
+        self.close()
+        self.retry.emit()
 
 
 class AceExportDialog(QDialog):
@@ -639,20 +714,20 @@ class AceExportDialog(QDialog):
     ACE Portal (see ace_export.py), into a folder the user picks once (remembered; Downloads
     until then). The file is not encrypted, which the dialog says.
 
-    Charts that cannot be filled in as they are are listed first (see AceIssuesDialog); picking
-    one closes the dialog with `opened` set to its record id, for the window to open. Whether
-    the file was saved is said in a message box as well as in the dialog."""
+    Nothing is saved while a chart of the range is incomplete (see fill_issues): the dialog
+    closes with `incomplete` set to the range instead, for the window to list those charts
+    (IncompleteChartsDialog) and come back here once they are fixed. Whether the file was saved
+    is said in a message box as well as in the dialog."""
 
     def __init__(self, store: RecordStore, today: date | None = None,
                  choose: Callable[[str], str] | None = None,
                  confirm: Callable[[Path], bool] | None = None, parent: QWidget | None = None,
-                 review: Callable[[list[ChartIssue]], AceIssuesDialog] | None = None,
-                 notify: Callable[[bool, str], None] | None = None) -> None:
+                 notify: Callable[[bool, str], None] | None = None,
+                 start: tuple[date, date] | None = None) -> None:
         super().__init__(parent)
         self.store = store
         self.written: Path | None = None
-        self.opened: int | None = None
-        self._review = review or self._review_issues
+        self.incomplete: tuple[date, date] | None = None  # the range, when its charts need fixing first
         self._notify = notify or self._message
         self._choose = choose or (lambda start: QFileDialog.getExistingDirectory(
             self, tr("ACE 填寫檔資料夾"), start))
@@ -662,8 +737,9 @@ class AceExportDialog(QDialog):
         self.setWindowTitle(tr("ACE 填寫檔"))
         self.resize(560, 240)
 
-        self.from_edit = QDateEdit(to_qdate(monday))
-        self.to_edit = QDateEdit(to_qdate(monday + timedelta(days=6)))
+        first, last = start or (monday, monday + timedelta(days=6))
+        self.from_edit = QDateEdit(to_qdate(first))
+        self.to_edit = QDateEdit(to_qdate(last))
         for edit in (self.from_edit, self.to_edit):
             edit.setCalendarPopup(True)
             edit.setDisplayFormat("yyyy-MM-dd")
@@ -714,19 +790,15 @@ class AceExportDialog(QDialog):
         if date_from > date_to:
             self.status.setText(tr("開始日期晚於結束日期。"))
             return
-        cells, issues = ace_week(self.store, date_from, date_to)
+        cells, _ = ace_week(self.store, date_from, date_to)
         if not cells:
             self.status.setText(tr("這段期間沒有病歷。"))
             return
-        if issues:
-            review = self._review(issues)
-            if review.opened is not None:
-                self.opened = review.opened
-                self.reject()
-                return
-            if not review.save_anyway:
-                self.status.setText(tr("沒有存檔：有 {count} 份病歷還沒填完整。", count=len(issues)))
-                return
+        if fill_issues(self.store, date_from, date_to):
+            self.status.setText(tr("沒有存檔：有病歷還沒填完整。"))
+            self.incomplete = (date_from, date_to)
+            self.reject()  # the window lists them, to be fixed first
+            return
         visits = kc_visits(self.store, date_from, date_to)
         path = self.folder() / f"TheraNote-ACE-{date_from.isoformat()}.json"
         if path.exists() and not self._confirm(path):
@@ -748,11 +820,6 @@ class AceExportDialog(QDialog):
         self.status.setText(message)
         self._notify(True, message)
         self.accept()  # saved: nothing more to do here
-
-    def _review_issues(self, issues: list[ChartIssue]) -> AceIssuesDialog:
-        dialog = AceIssuesDialog(issues, self)
-        dialog.exec()
-        return dialog
 
     def _message(self, saved: bool, message: str) -> None:
         if saved:

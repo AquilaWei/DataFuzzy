@@ -5,12 +5,13 @@ from pathlib import Path
 import pytest
 
 from datafuzzy.ot.ace_export import (
+    KC_NO_START,
     MANUAL_TYPE,
     NO_ENGLISH,
     NO_GROUP,
     NO_TIMES,
     ace_cells,
-    ace_week,
+    fill_issues,
     kc_visits,
     to_json,
 )
@@ -144,22 +145,11 @@ def test_the_file_holds_each_row_s_fields(store):
 TUESDAY = date(2026, 11, 10)
 
 
-class Review:
-    """Stands in for AceIssuesDialog: records the issues shown and answers as told."""
-
-    def __init__(self, opened=None, save_anyway=False):
-        self.opened, self.save_anyway, self.shown = opened, save_anyway, None
-
-    def __call__(self, issues):
-        self.shown = issues
-        return self
-
-
-def ace_dialog(qtbot, store, choose=lambda start: "", confirm=lambda path: True, review=None, said=None):
+def ace_dialog(qtbot, store, choose=lambda start: "", confirm=lambda path: True, said=None, start=None):
     from datafuzzy.ot.ui.exchange_dialogs import AceExportDialog
 
     said = [] if said is None else said
-    dialog = AceExportDialog(store, today=TUESDAY, choose=choose, confirm=confirm, review=review or Review(),
+    dialog = AceExportDialog(store, today=TUESDAY, choose=choose, confirm=confirm, start=start,
                              notify=lambda saved, message: said.append((saved, message)))
     qtbot.addWidget(dialog)
     return dialog
@@ -252,43 +242,60 @@ def test_a_failed_write_says_so(qtbot, store, tmp_path):
     assert [saved for saved, _ in said] == [False]
 
 
-def test_incomplete_charts_are_listed_before_saving(qtbot, store, tmp_path):
-    todd = therapy(store, store.add_student("Todd", "Lane").id, en_followup="")
+def test_nothing_is_saved_while_a_chart_is_incomplete(qtbot, store, tmp_path):
+    therapy(store, store.add_student("Todd", "Lane").id, en_followup="")
     therapy(store, store.add_student("Amy", "Chen").id)
     store.set_ace_folder(str(tmp_path))
-    review = Review()
-    ace_dialog(qtbot, store, review=review).save()
-    assert [(issue.record.id, issue.student_name, issue.problems) for issue in review.shown] == [
-        (todd.id, "Todd Lane", [NO_ENGLISH])]
-    assert not (tmp_path / "TheraNote-ACE-2026-11-09.json").exists()  # not without saying so
-
-
-def test_picking_an_incomplete_chart_closes_the_dialog_to_open_it(qtbot, store, tmp_path):
-    todd = therapy(store, store.add_student("Todd", "Lane").id, en_followup="")
-    store.set_ace_folder(str(tmp_path))
-    dialog = ace_dialog(qtbot, store, review=Review(opened=todd.id))
+    dialog = ace_dialog(qtbot, store)
     dialog.save()
-    assert dialog.opened == todd.id
+    assert dialog.incomplete == (NOV_9, NOV_15)
     assert not (tmp_path / "TheraNote-ACE-2026-11-09.json").exists()
 
 
-def test_incomplete_charts_can_be_saved_anyway(qtbot, store, tmp_path):
-    therapy(store, store.add_student("Todd", "Lane").id, en_followup="")
-    store.set_ace_folder(str(tmp_path))
-    ace_dialog(qtbot, store, review=Review(save_anyway=True)).save()
-    assert json.loads((tmp_path / "TheraNote-ACE-2026-11-09.json").read_text())["cells"][0]["problems"] == [NO_ENGLISH]
+def test_the_dialog_can_come_back_to_the_same_range(qtbot, store):
+    dialog = ace_dialog(qtbot, store, start=(NOV_10, NOV_15))
+    assert (dialog.from_edit.date().toString("yyyy-MM-dd"), dialog.to_edit.date().toString("yyyy-MM-dd")) == (
+        "2026-11-10", "2026-11-15")
 
 
-def test_the_issues_dialog_names_each_chart_and_what_to_fix(qtbot, store):
-    from datafuzzy.ot.ui.exchange_dialogs import AceIssuesDialog
+def test_fill_issues_lists_each_incomplete_chart_and_what_to_fix(store):
+    todd = therapy(store, store.add_student("Todd", "Lane").id, en_followup="")
+    therapy(store, store.add_student("Amy", "Chen").id)
+    assert [(i.record.id, i.student_name, i.problems) for i in fill_issues(store, NOV_9, NOV_15)] == [
+        (todd.id, "Todd Lane", [NO_ENGLISH])]
 
-    therapy(store, store.add_student("Todd", "Lane").id, en_followup="")
-    _, issues = ace_week(store, NOV_9, NOV_15)
-    dialog = AceIssuesDialog(issues)
+
+def test_a_consult_does_not_keep_the_file_from_being_saved(store):
+    therapy(store, store.add_student("Todd", "Lane").id, session_type="Consult")
+    assert fill_issues(store, NOV_9, NOV_15) == []
+
+
+def test_a_pre_school_absence_without_a_start_time_must_be_fixed_for_keepcurrent(store):
+    therapy(store, preschooler(store), session_type="Absent Student", start_time="", end_time="")
+    [issue] = fill_issues(store, NOV_9, NOV_15)
+    assert issue.problems == [KC_NO_START]
+
+
+def test_the_incomplete_list_marks_charts_fixed_and_then_offers_to_export(qtbot, store):
+    from datafuzzy.ot.ui.exchange_dialogs import IncompleteChartsDialog
+
+    todd = therapy(store, store.add_student("Todd", "Lane").id, en_followup="")
+    dialog = IncompleteChartsDialog(lambda: fill_issues(store, NOV_9, NOV_15), "ACE 填寫檔", "回到 ACE 填寫檔")
     qtbot.addWidget(dialog)
     assert dialog.list.item(0).text() == "2026-11-10  週二  1:30 PM  Todd Lane — 還沒有英文記錄或追蹤"
+    assert not dialog.retry_btn.isEnabled()
+    opened = []
+    dialog.open_record.connect(opened.append)
     dialog.open_btn.click()
-    assert dialog.opened == issues[0].record.id
+    assert opened == [todd.id]
+    store.update_record(todd.id, en_followup="Zippers.")
+    dialog.refresh()
+    assert dialog.list.item(0).text().startswith("✓ 已補齊")
+    assert dialog.retry_btn.isEnabled()
+    retried = []
+    dialog.retry.connect(lambda: retried.append(True))
+    dialog.retry_btn.click()
+    assert retried == [True]
 
 
 # --- KeepCurrent (pre-school students) ------------------------------------------------------

@@ -34,6 +34,7 @@ from ...core.models import ModelSpec
 from ...core.pipeline import Pipeline
 from ...ui.model_manager import ModelManager
 from .. import APP_NAME
+from ..ace_export import fill_issues
 from ..db import RecordStore, Student, StudentProfile
 from .about import AboutDialog
 from .date_view import DayRecordsView, MarkedCalendar, to_date, to_qdate
@@ -43,6 +44,8 @@ from .exchange_dialogs import (
     ExcelExportDialog,
     ExportDialog,
     ImportDialog,
+    IncompleteChartsDialog,
+    excel_issues,
 )
 from .followup_dialog import offer_followup_review
 from .i18n import language, mode_names, save_language, tr
@@ -162,6 +165,7 @@ class TheraNoteWindow(QMainWindow):
         self.models_root = models_root
         self._editor_kwargs = {} if debounce_ms is None else {"debounce_ms": debounce_ms}
         self.editor: RecordEditor | None = None
+        self.incomplete: IncompleteChartsDialog | None = None  # charts to fix before an export
         self.setWindowTitle(f"{APP_NAME} {__version__}")
         self.resize(1100, 720)
 
@@ -598,6 +602,8 @@ class TheraNoteWindow(QMainWindow):
         self.refresh_locations()
         self.refresh_timetable()
         self.calendar.refresh_markers()
+        if self.incomplete is not None:
+            self.incomplete.refresh()
 
     def flush(self) -> None:
         """Write any pending edit now (used on quit)."""
@@ -610,16 +616,42 @@ class TheraNoteWindow(QMainWindow):
         self.flush()  # export what is on screen, not what was last auto-saved
         ExportDialog(self.store, self.pipeline, parent=self).exec()
 
-    def open_excel_export(self) -> None:
+    def open_excel_export(self, start: tuple | None = None) -> None:
         self.flush()
-        ExcelExportDialog(self.store, parent=self).exec()
-
-    def open_ace_export(self) -> None:
-        self.flush()
-        dialog = AceExportDialog(self.store, parent=self)
+        dialog = ExcelExportDialog(self.store, parent=self, start=start)
         dialog.exec()
-        if dialog.opened is not None:  # a chart to fix before the file is saved
-            self.open_record(dialog.opened)
+        if dialog.incomplete is not None:  # charts to fix before the handover is exported
+            date_from, date_to, entries = dialog.incomplete
+            store = self.store
+
+            def check():
+                records = [r for r in store.records_between(date_from, date_to)
+                           if (r.location, r.student_id) in set(entries)]
+                return excel_issues(store, records)
+
+            self.show_incomplete(check, tr("Excel 交接檔"), tr("回到 Excel 匯出"),
+                                 lambda: self.open_excel_export(dialog.incomplete))
+
+    def open_ace_export(self, start: tuple | None = None) -> None:
+        self.flush()
+        dialog = AceExportDialog(self.store, parent=self, start=start)
+        dialog.exec()
+        if dialog.incomplete is not None:  # charts to fix before the file is saved
+            date_from, date_to = dialog.incomplete
+            self.show_incomplete(lambda: fill_issues(self.store, date_from, date_to), tr("ACE 填寫檔"),
+                                 tr("回到 ACE 填寫檔"), lambda: self.open_ace_export(dialog.incomplete))
+
+    def show_incomplete(self, check, what: str, retry_text: str, retry) -> None:
+        """List the charts `check` finds incomplete, beside the window, until they are fixed;
+        `retry` (offered once none is left) goes back to the export."""
+        if self.incomplete is not None:
+            self.incomplete.close()
+        dialog = IncompleteChartsDialog(check, what, retry_text, parent=self)
+        dialog.open_record.connect(self.open_record)
+        dialog.retry.connect(retry)
+        dialog.finished.connect(lambda _: setattr(self, "incomplete", None) if self.incomplete is dialog else None)
+        self.incomplete = dialog
+        dialog.show()
 
     def open_import(self) -> None:
         self.flush()
