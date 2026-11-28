@@ -78,10 +78,11 @@ ENGLISH = {
     "存檔": "Save",
     "ACE 填寫檔資料夾": "ACE fill-in file folder",
     "存放資料夾：": "Save to:",
-    "檔案裡有學生姓名和英文病歷，沒有加密。在 ACE 填完後請刪除。":
-        "The file holds the students' names and English charts, unencrypted. Delete it once ACE is filled in.",
+    "檔案裡有學生姓名和英文病歷，沒有加密。在 ACE 和 KeepCurrent 填完後請刪除。":
+        "The file holds the students' names and English charts, unencrypted. Delete it once ACE and KeepCurrent are filled in.",
     "已存 {count} 格到 {path}；其中 {manual} 格要手動填。":
         "Saved {count} cells to {path}; {manual} of them to fill in by hand.",
+    "另有 {count} 筆 Pre-School 病歷可填 KeepCurrent。": " Also {count} pre-school charts for KeepCurrent.",
     "交接模式": "Handover",
     "Progress Report": "Progress Report",
     "每個地點一個分頁，列出 {count} 位啟用中學生在這天的 goals；Progress 欄先填入 goal 方便編輯。":

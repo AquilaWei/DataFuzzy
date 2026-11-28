@@ -11,10 +11,21 @@ import json
 from dataclasses import asdict, dataclass, field
 from datetime import date
 
-from .ace_mapping import EMPTY_GROUP, TIMED_WITHOUT_TIMES, AceRow, ace_rows, group_names
-from .db import COMMENT_TYPES, FULL_TYPES, Record, RecordStore
+from .ace_mapping import (
+    DIRECT_KC,
+    EMPTY_GROUP,
+    KC_GOAL_SCORES,
+    KC_TYPES,
+    TIMED_WITHOUT_TIMES,
+    AceRow,
+    ace_rows,
+    group_names,
+    minutes_between,
+)
+from .db import COMMENT_TYPES, FULL_TYPES, PRESCHOOL, Record, RecordStore
 
-FORMAT = "theranote-ace/1"  # bumped whenever the extension must read the file differently
+# Bumped whenever the extension must read the file differently: 2 added "visits", for KeepCurrent.
+FORMAT = "theranote-ace/2"
 
 # Why a cell is left for the user to enter by hand; the extension shows these and fills nothing.
 MANUAL_TYPE = "manual_type"  # a type ACE has no place for (Consult)
@@ -51,6 +62,61 @@ def chart_problems(record: Record, rows: list[AceRow] | None) -> list[str]:
     if main.section == "group" and not main.group:
         problems.append(NO_GROUP)
     return problems
+
+
+@dataclass
+class KcVisit:
+    """One chart of a pre-school student as KeepCurrent's Create Service History form takes it.
+    The student's page is found by first and last name on the KeepCurrent dashboard."""
+    first: str
+    last: str
+    date: str  # "2026-11-10"
+    start: str  # "HH:MM", or ""
+    minutes: int  # Direct Time: the session's for a direct one, 0 otherwise
+    mode: str  # "Individual" or "Group"
+    application_type: str  # as KeepCurrent's drop-down begins it (see KC_TYPES)
+    direct: bool  # D or DM: the session note below the routines is filled in
+    comment: str = ""  # the English comments, for a direct one
+    goals: list[str] = field(default_factory=list)  # the plan's goals scored met or not met
+    problems: list[str] = field(default_factory=list)
+
+
+def kc_visit(record: Record, first: str, last: str, plan_goals: tuple[str, ...]) -> KcVisit | None:
+    """`record` for KeepCurrent, or None for a type it does not take (see KC_TYPES).
+    `plan_goals` are the goals of the plan in effect on the chart's day."""
+    kind = record.session_type
+    if kind not in KC_TYPES:
+        return None
+    direct = kind in DIRECT_KC
+    minutes = minutes_between(record.start_time, record.end_time) if direct else 0
+    problems = []
+    if direct and not record.en_text.strip():
+        problems.append(NO_ENGLISH)
+    if not record.start_time or minutes is None:
+        problems.append(NO_TIMES)
+    goals = [goal for goal, score in zip(plan_goals, record.goal_scores)
+             if goal.strip() and score.strip().casefold() in KC_GOAL_SCORES] if direct else []
+    return KcVisit(first, last, record.visit_date.isoformat(), record.start_time, minutes or 0,
+                   record.session_mode.capitalize(), KC_TYPES[kind], direct,
+                   record.en_text.strip() if direct else "", goals, problems)
+
+
+def kc_visits(store: RecordStore, date_from: date, date_to: date) -> list[KcVisit]:
+    """The charts from `date_from` to `date_to` (inclusive) of the pre-school students, for
+    KeepCurrent, by day, start time and name. Reads the profiles of the charts' students only."""
+    records = store.records_between(date_from, date_to)
+    students = {sid: store.get_student(sid) for sid in {r.student_id for r in records}}
+    profiles = {sid: store.get_profile(sid) for sid in students}
+    visits = []
+    for record in records:
+        profile = profiles[record.student_id]
+        if profile.grade != PRESCHOOL:
+            continue
+        student = students[record.student_id]
+        visit = kc_visit(record, student.given_name, student.family_name, profile.plan_on(record.visit_date).goals)
+        if visit:
+            visits.append(visit)
+    return sorted(visits, key=lambda v: (v.date, v.start or "99:99", v.last.casefold(), v.first.casefold()))
 
 
 @dataclass
@@ -95,7 +161,9 @@ def ace_week(store: RecordStore, date_from: date, date_to: date) -> tuple[list[A
     return sorted(cells.values(), key=lambda c: (c.date, c.last.casefold(), c.first.casefold())), issues
 
 
-def to_json(cells: list[AceCell], date_from: date, date_to: date) -> str:
-    """The file's text; `date_from`..`date_to` is the week the extension checks the grid shows."""
+def to_json(cells: list[AceCell], date_from: date, date_to: date, visits: list[KcVisit] = ()) -> str:
+    """The file's text; `date_from`..`date_to` is the week the extension checks ACE's grid
+    shows. `visits` are the pre-school charts for KeepCurrent (see kc_visits)."""
     return json.dumps({"format": FORMAT, "week": [date_from.isoformat(), date_to.isoformat()],
-                       "cells": [asdict(cell) for cell in cells]}, ensure_ascii=False, indent=1)
+                       "cells": [asdict(cell) for cell in cells],
+                       "visits": [asdict(visit) for visit in visits]}, ensure_ascii=False, indent=1)

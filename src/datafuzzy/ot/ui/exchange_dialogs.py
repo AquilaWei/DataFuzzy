@@ -38,6 +38,7 @@ from ..ace_export import (
     NO_TIMES,
     ChartIssue,
     ace_week,
+    kc_visits,
     to_json,
 )
 from ..db import Record, RecordStore
@@ -671,7 +672,7 @@ class AceExportDialog(QDialog):
         self.folder_btn = QPushButton(tr("選擇資料夾…"))
         self.save_btn = QPushButton(tr("存檔"))
         self.save_btn.setObjectName("primary")
-        warning = QLabel(tr("檔案裡有學生姓名和英文病歷，沒有加密。在 ACE 填完後請刪除。"))
+        warning = QLabel(tr("檔案裡有學生姓名和英文病歷，沒有加密。在 ACE 和 KeepCurrent 填完後請刪除。"))
         warning.setWordWrap(True)
         self.status = QLabel("")
         self.status.setObjectName("subtle")
@@ -726,13 +727,14 @@ class AceExportDialog(QDialog):
             if not review.save_anyway:
                 self.status.setText(tr("沒有存檔：有 {count} 份病歷還沒填完整。", count=len(issues)))
                 return
+        visits = kc_visits(self.store, date_from, date_to)
         path = self.folder() / f"TheraNote-ACE-{date_from.isoformat()}.json"
         if path.exists() and not self._confirm(path):
             self.status.setText(tr("略過 {path}：沒有取代既有檔案。", path=path.name))
             return
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(to_json(cells, date_from, date_to), encoding="utf-8")
+            path.write_text(to_json(cells, date_from, date_to, visits), encoding="utf-8")
         except OSError as e:
             message = tr("{label}寫入失敗：{error}", label=path.name, error=e.strerror or e)
             self.status.setText(message)
@@ -741,6 +743,8 @@ class AceExportDialog(QDialog):
         self.written = path
         manual = sum(bool(cell.problems) for cell in cells)
         message = tr("已存 {count} 格到 {path}；其中 {manual} 格要手動填。", count=len(cells), path=path, manual=manual)
+        if visits:
+            message += tr("另有 {count} 筆 Pre-School 病歷可填 KeepCurrent。", count=len(visits))
         self.status.setText(message)
         self._notify(True, message)
         self.accept()  # saved: nothing more to do here

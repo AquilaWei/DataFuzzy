@@ -32,6 +32,18 @@ GROUP_TIME_TYPES = frozenset({"Absent Student", DIRECT_THERAPY, "Make-Up", "Scho
 # The first line of the comments of a group student's therapy session held with no other student.
 NO_GROUP_NOTE = "No appropriate student to group with."
 
+# KeepCurrent (mykeepcurrent.com, for pre-school students): the Service Application Type each
+# TheraNote type is entered as, as the drop-down begins it. The direct ones (DIRECT_KC) take the
+# session's minutes and its note; the others 0 minutes and only the type's own name as the note.
+# Types missing here are not entered in KeepCurrent at all.
+KC_TYPES = {DIRECT_THERAPY: "D - Direct", "Make-Up": "DM - Direct Session",
+            "Absent Student": "SA - Student Absent", NO_SHOW: "SA - Student Absent",
+            "Therapist Absent": "PA - Provider Absent", "School Not in Session": "School Closed",
+            "Unavailable Student": "SNA - Student Not Available"}
+DIRECT_KC = frozenset({DIRECT_THERAPY, "Make-Up"})
+# Goal scores that mean the goal was worked on, so KeepCurrent's tick for it is set.
+KC_GOAL_SCORES = frozenset({"met", "not met"})
+
 
 @dataclass(frozen=True)
 class AceRow:
