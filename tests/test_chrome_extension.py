@@ -133,3 +133,33 @@ def test_the_family_name_picks_among_students_sharing_a_given_name():
 
 def test_a_given_name_spelled_otherwise_finds_no_one():
     assert students("Myah") == []
+
+
+@pytest.mark.parametrize(("text", "minutes"), [
+    ("11:00", 660), ("11:00 AM", 660), ("1:05 pm", 785), ("12:15 AM", 15), ("12:30 PM", 750), ("", None), ("soon", None)])
+def test_keepcurrent_times_are_read_either_way(text, minutes):
+    assert run_match(f"TheraNoteKcMatch.clockMinutes({json.dumps(text)})") == minutes
+
+
+VISIT = {"date": "2026-11-13", "start": "11:00", "minutes": 30}
+
+
+@pytest.mark.parametrize(("entry", "state"), [
+    ({"start": "11:00 AM", "minutes": "30"}, "same"),
+    ({"start": "11:00", "minutes": "30"}, "same"),
+    ({"start": "11:00 AM", "minutes": "45"}, "different"),
+    ({"start": "1:00 PM", "minutes": "30"}, "different"),
+    ({"start": "", "minutes": "30"}, "unknown"),
+])
+def test_an_entry_of_the_same_day_is_the_same_only_with_the_same_start_and_length(entry, state):
+    assert run_match(f"TheraNoteKcMatch.compareEntry({json.dumps(VISIT)}, {json.dumps(entry)})") == state
+
+
+def test_an_absence_entered_with_no_minutes_is_the_same_as_zero():
+    visit = {"date": "2026-11-13", "start": "09:00", "minutes": 0}
+    assert run_match(f"TheraNoteKcMatch.compareEntry({json.dumps(visit)}, "
+                     f"{json.dumps({'start': '09:00 AM', 'minutes': ''})})") == "same"
+
+
+def test_keepcurrent_lists_write_dates_month_first():
+    assert run_match('TheraNoteKcMatch.usDate("2026-11-03")') == "11/03/2026"

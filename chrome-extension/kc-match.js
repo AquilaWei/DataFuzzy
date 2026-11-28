@@ -70,7 +70,33 @@ var TheraNoteKcMatch = (() => {
     return narrowed.length ? narrowed : same;
   }
 
-  return {TICK, ASK, normalize, similarity, matchGoals, letters, firstWord, students};
+  // Minutes after midnight of "11:00", "11:00 AM" or "1:05 pm"; null when it is none of these.
+  function clockMinutes(text) {
+    const m = String(text || "").trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([ap]\.?m\.?)?$/i);
+    if (!m) return null;
+    let hour = Number(m[1]);
+    const half = m[3] && m[3][0].toLowerCase();
+    if (half === "p" && hour < 12) hour += 12;
+    if (half === "a" && hour === 12) hour = 0;
+    return hour * 60 + Number(m[2]);
+  }
+
+  // "2026-11-13" as KeepCurrent's lists write it: "11/13/2026".
+  const usDate = (iso) => { const [y, m, d] = iso.split("-"); return `${m}/${d}/${y}`; };
+
+  // How a service history KeepCurrent already has ({start, minutes}, as its form shows them)
+  // stands to TheraNote's `visit` of the same day: "same" when the start time and the Direct
+  // Time agree (it was entered already), "different" when either differs, "unknown" when the
+  // entry's start time cannot be read.
+  function compareEntry(visit, entry) {
+    const start = clockMinutes(entry.start);
+    if (start === null) return "unknown";
+    const minutes = Number(String(entry.minutes || "0").trim() || 0);
+    return start === clockMinutes(visit.start) && minutes === Number(visit.minutes) ? "same" : "different";
+  }
+
+  return {TICK, ASK, normalize, similarity, matchGoals, letters, firstWord, students, clockMinutes, usDate,
+    compareEntry};
 })();
 
 if (typeof module !== "undefined") module.exports = TheraNoteKcMatch;

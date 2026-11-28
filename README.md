@@ -98,6 +98,9 @@ uv run theranote
   每筆都填 Session Date、Session Type、Title（Occupational Therapist）、Start Time（End Time 由網站算），並勾 Include Session Note；
   Attendance、Staff Note 不動。其他類型（Collaboration、Scheduling…）不會填進 KeepCurrent。
   IEP 目標依文字比對 KeepCurrent 的勾選項，明確對上的才勾；不確定的面板會標「需確認」並寫出最像的一項。
+  **避免重複填寫**：打開每一筆的表單前，先讀那位學生的 Sessions → View All Session Notes，找同一天的 Occupational Therapy，
+  再打開它看 Start Time 和 Direct Time：都相同就標「已存在」並跳過；同一天但時間或時長不同（或讀不到）就標「需確認」停下來，
+  由你選「照樣填寫」或「跳過」。只讀取、不改 KeepCurrent 的任何資料。
 - **資料位置**：macOS 為 `~/Library/Application Support/TheraNote/theranote.db`，
   Linux 為 `~/.local/share/TheraNote/theranote.db`（遵循 `XDG_DATA_HOME`）。
   可用 `THERANOTE_DB=/path/to/charts.db uv run theranote` 指定其他資料庫。

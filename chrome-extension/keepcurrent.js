@@ -12,7 +12,8 @@
   const SUBMITTED = "theranoteKcSubmitted"; // sessionStorage: the chart whose form was sent
   const MATCH = TheraNoteKcMatch; // kc-match.js
   const PROBLEMS = {no_english: "還沒有英文 comment", no_times: "缺開始／結束時間"};
-  const STATUS = {todo: "待填", filling: "填寫中", choose: "請選學生", saved: "已存", skipped: "跳過", problem: "要手動"};
+  const STATUS = {todo: "待填", filling: "填寫中", choose: "請選學生", saved: "已存", done: "已存在", check: "需確認",
+    skipped: "跳過", problem: "要手動"};
   const TITLE = "Occupational Therapist";
   const STRATEGIES = ["Verbal/Visual Redirection", "Verbal/Visual Prompting"];
   // The routine and strategy tick boxes beside the IEP goals, as KeepCurrent names them: never
@@ -126,6 +127,87 @@
   // Whether this page is the form of one of the students `visit` may be.
   const pageIsFor = (visit) => onCreate() && candidates(visit).some((l) => personId(l.url) === personId(location.href));
 
+  // --- already entered? -----------------------------------------------------------
+
+  async function page(url) {
+    const response = await fetch(url, {credentials: "same-origin"});
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return new DOMParser().parseFromString(await response.text(), "text/html");
+  }
+
+  // What KeepCurrent already has of `visit` for the student `id` (studentPersonId): the
+  // student's Session Notes list (Sessions → View All Session Notes) is read for Occupational
+  // Therapy entries on the visit's day, and each one's form for its Start Time and Direct
+  // Time. Returns {state: "none" | "same" | "different" | "unknown", notes: [...]}; nothing is
+  // changed in KeepCurrent.
+  async function existing(visit, id) {
+    const day = MATCH.usDate(visit.date);
+    let list;
+    try {
+      list = await page(`/IepSession/ListForProgram?studentPersonId=${encodeURIComponent(id)}`);
+    } catch (error) {
+      return {state: "unknown", notes: [`讀不到這位學生的 Session Notes（${error.message}），無法確認是否已經填過。`]};
+    }
+    const rows = [...list.querySelectorAll("tr")].filter((tr) => tr.querySelector("td"));
+    if (!rows.length) {
+      return {state: "unknown", notes: ["這位學生的 Session Notes 讀不到任何一筆，無法確認是否已經填過。"]};
+    }
+    const sameDay = rows.filter((tr) => {
+      const first = [...tr.querySelectorAll("td")].map(textOf).find((t) => /^\d{2}\/\d{2}\/\d{4}$/.test(t));
+      return first === day && /occupational/i.test(textOf(tr));
+    });
+    if (!sameDay.length) return {state: "none", notes: []};
+    const notes = [], states = [];
+    for (const tr of sameDay) {
+      const a = tr.querySelector("a[href*='ServiceHistoryId'], a[href*='IepSession/Edit'], a[href*='IepSession/Details']");
+      let entry = null;
+      try {
+        if (a) {
+          const form = await page(a.getAttribute("href"));
+          const read = (label) => {
+            const el = field(label, "input, select, textarea", form);
+            return el ? (el.value || el.getAttribute("value") || "") : "";
+          };
+          entry = {start: read("Start Time"), minutes: read("Direct Time (Minutes)")};
+        }
+      } catch (error) {
+        entry = null;
+      }
+      const state = entry ? MATCH.compareEntry(visit, entry) : "unknown";
+      states.push(state);
+      notes.push(entry && state !== "unknown"
+        ? `KeepCurrent 在 ${day} 已有一筆：開始 ${entry.start || "?"}，Direct Time ${entry.minutes || 0} 分`
+        : `KeepCurrent 在 ${day} 已有一筆 Occupational Therapy，但讀不到它的開始時間`);
+    }
+    return {state: states.includes("same") ? "same" : states.includes("different") ? "different" : "unknown", notes};
+  }
+
+  // Checks `visit` against KeepCurrent before filling: an entry with the same start and length
+  // marks it done (skipped); a different one, or one that cannot be read, stops for the user.
+  // Returns whether to go on and fill it.
+  async function clearToFill(i, id, lead = "") {
+    if (state.force && state.force[i]) return true; // the user said to fill it anyway
+    keep();
+    say(`${lead}${lead ? "\n" : ""}檢查 KeepCurrent 是否已經填過…`);
+    const visit = state.file.visits[i];
+    const found = await existing(visit, id);
+    if (found.state === "none") return true;
+    state.notes[i] = found.notes;
+    if (found.state === "same") {
+      state.status[i] = "done";
+      advance(i, "KeepCurrent 已經有這一筆（日期、開始時間、時長都相同），跳過。");
+      return false;
+    }
+    state.status[i] = "check";
+    state.notes[i].push(found.state === "different"
+      ? "日期相同但開始時間或時長不同，可能是同一天的另一次治療。請確認後選「照樣填寫」或「跳過」。"
+      : "請自己到這位學生的 Sessions 確認後，選「照樣填寫」或「跳過」。");
+    save(); render();
+    keep();
+    say(`${visit.first} ${visit.last} ${visit.date}：KeepCurrent 可能已經填過，請確認。`, true);
+    return false;
+  }
+
   // Opens the current chart's form, or says why it cannot.
   function openCurrent(lead = "") {
     const visit = state.file.visits[state.current];
@@ -157,10 +239,14 @@
       return;
     }
     const link = found[0].url;
-    state.status[state.current] = "filling";
-    save().then(() => {
-      if (onCreate() && personId(location.href) === personId(link)) fillPage();
-      else location.href = link;
+    const i = state.current;
+    clearToFill(i, personId(link), lead).then((go) => {
+      if (!go) return;
+      state.status[i] = "filling";
+      save().then(() => {
+        if (onCreate() && personId(location.href) === personId(link)) fillPage();
+        else location.href = link;
+      });
     });
   }
 
@@ -187,12 +273,12 @@
 
   // The field labelled `label` (exactly, ignoring case and spaces): the label's `for` target,
   // or the first field after the label in its box.
-  function field(label, selector = "input, select, textarea") {
-    for (const l of document.querySelectorAll("label")) {
+  function field(label, selector = "input, select, textarea", doc = document) {
+    for (const l of doc.querySelectorAll("label")) {
       if (squash(textOf(l)) !== squash(label)) continue;
-      const target = l.htmlFor && document.getElementById(l.htmlFor);
+      const target = l.htmlFor && doc.getElementById(l.htmlFor);
       if (target && target.matches(selector)) return target;
-      for (let box = l.parentElement; box && box !== document.body; box = box.parentElement) {
+      for (let box = l.parentElement; box && box !== doc.body; box = box.parentElement) {
         const found = [...box.querySelectorAll(selector)].find(
           (f) => l.compareDocumentPosition(f) & Node.DOCUMENT_POSITION_FOLLOWING && f.type !== "hidden");
         if (found) return found;
@@ -283,6 +369,7 @@
       say(`這一頁不是 ${visit.first} ${visit.last} 的表單（${title}），沒有填。`, true);
       return;
     }
+    if (state.status[i] === "choose" && !(await clearToFill(i, personId(location.href)))) return;
     state.chose = state.status[i] === "choose" ? i : -1; // the user picked this student themselves
     state.status[i] = "filling";
     save(); render();
@@ -418,7 +505,8 @@
     ul.cells .who{flex:1}
     .badge{font-size:11px;padding:1px 6px;border-radius:9px;background:#e8eaed;white-space:nowrap}
     .badge.saved{background:#d7f0dc;color:#1b5e20}.badge.problem{background:#fdecea;color:#8a1c12}
-    .badge.filling{background:#fff4ce;color:#7a5b00}.badge.choose{background:#ffe2c2;color:#8a4500}
+    .badge.filling{background:#fff4ce;color:#7a5b00}.badge.done{background:#d7f0dc;color:#1b5e20}
+    .badge.check{background:#ffe2c2;color:#8a4500}.badge.choose{background:#ffe2c2;color:#8a4500}
     .hidden{display:none}
   </style>
   <div class="panel">
@@ -516,17 +604,26 @@
     actions.className = "actions";
     if (status === "filling" && onCreate()) {
       actions.append(button("重新填這頁", "", () => fillPage()));
-    } else if (status !== "saved") {
+    } else if (!["saved", "done", "check"].includes(status)) {
       const fill = button("打開並填這一筆", "primary", () => openCurrent());
       fill.disabled = visit.problems.length > 0 || !state.links;
       actions.append(fill);
     }
+    if (status === "check") {
+      actions.append(button("照樣填寫", "primary", () => {
+        state.force = state.force || {};
+        state.force[state.current] = true;
+        state.status[state.current] = "todo";
+        openCurrent();
+      }));
+    }
     if (status === "filling") {
       actions.append(button("已存，下一筆", "", () => { state.status[state.current] = "saved"; advance(state.current, "已存。"); }));
     }
-    actions.append(button(status === "skipped" || status === "saved" ? "改回待填" : "跳過", "", () => {
+    const back = ["skipped", "saved", "done"].includes(status);
+    actions.append(button(back ? "改回待填" : "跳過", "", () => {
       const i = state.current;
-      if (status === "skipped" || status === "saved") { state.status[i] = "todo"; save(); render(); return; }
+      if (back) { state.status[i] = "todo"; save(); render(); return; }
       state.status[i] = "skipped";
       advance(i, "已跳過。");
     }));
