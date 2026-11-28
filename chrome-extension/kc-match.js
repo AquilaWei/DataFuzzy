@@ -53,7 +53,24 @@ var TheraNoteKcMatch = (() => {
     return result;
   }
 
-  return {TICK, ASK, normalize, similarity, matchGoals};
+  // Names compared by their letters only, whatever the case: "DREE", "Dree" and "dree" are one.
+  const letters = (s) => String(s).toLowerCase().replace(/[^a-z]+/g, " ").trim();
+  const firstWord = (s) => letters(s).split(" ")[0] || "";
+
+  // The dashboard students ({first, last} as firstWord and letters make them) that TheraNote's
+  // `visit` ({first, last}) may be. TheraNote mostly has the given name only, so the given name
+  // decides; when several share it, the family name (or the rest of a whole name typed as the
+  // given name) picks among them if it can. More than one left: the user must choose.
+  function students(visit, links) {
+    const words = letters(`${visit.first} ${visit.last}`).split(" ").filter(Boolean);
+    const same = links.filter((l) => l.first === words[0]);
+    const rest = words.slice(1).join(" ");
+    if (same.length < 2 || !rest) return same;
+    const narrowed = same.filter((l) => l.last === rest || ` ${rest} `.includes(` ${l.last} `));
+    return narrowed.length ? narrowed : same;
+  }
+
+  return {TICK, ASK, normalize, similarity, matchGoals, letters, firstWord, students};
 })();
 
 if (typeof module !== "undefined") module.exports = TheraNoteKcMatch;

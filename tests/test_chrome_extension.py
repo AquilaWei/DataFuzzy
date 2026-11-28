@@ -100,3 +100,36 @@ def test_a_doubtful_match_is_left_for_the_user_naming_the_likeliest():
     [m] = match(["Dree will follow familiar routine directions in class."])
     assert m["tick"] is False
     assert m["best"] in (1, -1)
+
+
+DASHBOARD = [{"first": "ava", "last": "lee"}, {"first": "ben", "last": "cho"},
+             {"first": "mia", "last": "kim"}, {"first": "mia", "last": "park"}]
+
+
+def students(first, last=""):
+    """The dashboard rows TheraNote's student may be, by their family names."""
+    found = run_match(f"TheraNoteKcMatch.students({json.dumps({'first': first, 'last': last})}, "
+                      f"{json.dumps(DASHBOARD)})")
+    return [row["last"] for row in found]
+
+
+def test_a_student_is_found_by_the_given_name_alone_whatever_the_case():
+    assert students("AVA") == ["lee"]
+    assert students("Ava") == ["lee"]
+
+
+def test_a_family_name_that_differs_does_not_hide_the_only_student_of_that_name():
+    assert students("Ben", "Chou") == ["cho"]
+
+
+def test_students_sharing_a_given_name_are_all_offered_when_theranote_has_no_family_name():
+    assert students("mia") == ["kim", "park"]
+
+
+def test_the_family_name_picks_among_students_sharing_a_given_name():
+    assert students("Mia", "PARK") == ["park"]
+    assert students("Mia Park") == ["park"]  # the whole name typed as the given name
+
+
+def test_a_given_name_spelled_otherwise_finds_no_one():
+    assert students("Myah") == []

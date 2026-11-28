@@ -82,7 +82,8 @@ uv run theranote
   **填寫檔含學生姓名與英文病歷且未加密，填完請刪除。**
 - **KeepCurrent 自動填寫（Pre-School 學生）**：同一份「ACE 填寫檔」也會存進 Grade 是 Pre-School 的學生的病歷。
   在 KeepCurrent 的 Dashboard 點工具列的 TheraNote 圖示，選填寫檔，按「開始」：擴充功能依名字找出每位學生的
-  「+ Create Service History」，一筆一筆打開表單填好後停下，**勾好 Routines（和需要的 Treatment Keys）、檢查後自己按 Save**；
+  「+ Create Service History」（以名字比對、不分大小寫，TheraNote 只有名字也找得到；Dashboard 上有同名的學生時，
+  有姓氏就用姓氏區分，分不出來會警告並用黃框標出那幾位，請自己判斷點正確那位的連結，打開後才自動填入），一筆一筆打開表單填好後停下，**勾好 Routines（和需要的 Treatment Keys）、檢查後自己按 Save**；
   存好會自動打開下一筆，不存就按「跳過」。
 
   | TheraNote 類型 | Service Application Type | Direct Time | 其他 |

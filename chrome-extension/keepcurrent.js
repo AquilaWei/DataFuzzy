@@ -12,7 +12,7 @@
   const SUBMITTED = "theranoteKcSubmitted"; // sessionStorage: the chart whose form was sent
   const MATCH = TheraNoteKcMatch; // kc-match.js
   const PROBLEMS = {no_english: "還沒有英文 comment", no_times: "缺開始／結束時間"};
-  const STATUS = {todo: "待填", filling: "填寫中", saved: "已存", skipped: "跳過", problem: "要手動"};
+  const STATUS = {todo: "待填", filling: "填寫中", choose: "請選學生", saved: "已存", skipped: "跳過", problem: "要手動"};
   const TITLE = "Occupational Therapist";
   const STRATEGIES = ["Verbal/Visual Redirection", "Verbal/Visual Prompting"];
   // The routine and strategy tick boxes beside the IEP goals, as KeepCurrent names them: never
@@ -24,7 +24,9 @@
     "Prompt/Fade", "Waiting", "Request/Model", "Directive Talking", "Imitate", "Hand over Hand",
     "Verbal/Visual Redirection", "Verbal/Visual Prompting", "Errorless Teaching"].map((n) => n.toLowerCase().replace(/\s+/g, "")));
 
-  let state = null; // {file, status: [..per visit], notes: [..per visit], current, links: {key: url}}
+  // {file, status: [..per visit], notes: [..per visit], current,
+  //  links: [{first, last, name, url}] from the dashboard, dashboard: its address}
+  let state = null;
 
   // --- state -------------------------------------------------------------------------
 
@@ -69,9 +71,7 @@
     return i >= 0 ? i : state.status.findIndex((s) => s === "todo");
   }
 
-  // "todd|dree": a student as both TheraNote and KeepCurrent's "Todd, Dree A." name them.
-  const letters = (s) => String(s).toLowerCase().replace(/[^a-z]+/g, " ").trim();
-  const nameKey = (first, last) => `${letters(last)}|${letters(first).split(" ")[0]}`;
+  const {letters, firstWord} = MATCH;
   const monthDay = (iso) => iso.split("-").slice(1).map(Number).join("/");
   const clock = (hhmm) => {
     if (!hhmm) return "";
@@ -85,10 +85,10 @@
   const onCreate = () => /\/IepSession\/Create/i.test(location.pathname);
   const personId = (url) => new URL(url, location.href).searchParams.get("studentPersonId");
 
-  // Name key -> Create Service History link, from the dashboard's rows ("Todd, Dree (08/17/2022)");
-  // a name found on more than one row maps to null.
+  // The dashboard's students, each with their Create Service History link: its rows read
+  // "Todd, Dree (08/17/2022)", the family name first.
   function dashboardLinks() {
-    const links = {};
+    const links = [];
     for (const a of document.querySelectorAll("a[href]")) {
       if (!/IepSession\/Create/i.test(a.getAttribute("href"))) continue;
       const row = a.closest("tr") || a.parentElement;
@@ -96,16 +96,35 @@
         .find((t) => /^[^,(]+,[^,(]+\(/.test(t));
       if (!name) continue;
       const [last, first] = name.replace(/\(.*$/, "").split(",");
-      const key = nameKey(first, last);
-      links[key] = key in links ? null : a.href;
+      links.push({first: firstWord(first), last: letters(last), name: name.trim(), url: a.href});
     }
     return links;
   }
 
+  // The dashboard students `visit` may be (see kc-match.js).
+  const candidates = (visit) => MATCH.students(visit, Array.isArray(state.links) ? state.links : []);
+
   function linkOf(visit) {
-    const link = state.links && state.links[nameKey(visit.first, visit.last)];
-    return link || null;
+    const found = candidates(visit);
+    return found.length === 1 ? found[0].url : null;
   }
+
+  // On the dashboard: outlines the rows of the students the current chart may be.
+  function markChoices() {
+    if (!onDashboard() || !state || state.status[state.current] !== "choose") return;
+    const urls = new Set(candidates(state.file.visits[state.current]).map((l) => l.url));
+    for (const a of document.querySelectorAll("a[href]")) {
+      if (!urls.has(a.href)) continue;
+      const row = a.closest("tr") || a.parentElement;
+      row.style.outline = "3px solid #f0b400";
+      row.style.background = "#fff8db";
+    }
+    const first = [...document.querySelectorAll("a[href]")].find((a) => urls.has(a.href));
+    if (first) first.scrollIntoView({block: "center"});
+  }
+
+  // Whether this page is the form of one of the students `visit` may be.
+  const pageIsFor = (visit) => onCreate() && candidates(visit).some((l) => personId(l.url) === personId(location.href));
 
   // Opens the current chart's form, or says why it cannot.
   function openCurrent(lead = "") {
@@ -116,15 +135,28 @@
       say(`${lead}請先打開 KeepCurrent 的 Dashboard，再按「開始」。`, true);
       return;
     }
-    const link = linkOf(visit);
-    if (!link) {
-      const twice = state.links[nameKey(visit.first, visit.last)] === null;
+    const found = candidates(visit);
+    const who = `${visit.first} ${visit.last}`.trim();
+    if (!found.length) {
       state.status[state.current] = "problem";
-      state.notes[state.current] = [twice ? `Dashboard 有不只一位 ${visit.first} ${visit.last}，請手動填。`
-        : `Dashboard 找不到 ${visit.first} ${visit.last}（名字拼法可能不同），請手動填。`];
+      state.notes[state.current] = [`Dashboard 找不到名字是 ${who} 的學生（拼法可能不同），請手動填。`];
       advance(state.current, lead);
       return;
     }
+    if (found.length > 1) {
+      // Several students share the name: the user picks the right one on the dashboard.
+      state.status[state.current] = "choose";
+      state.notes[state.current] = [`⚠ Dashboard 有 ${found.length} 位學生叫 ${who}，TheraNote 無法分辨是哪一位：`,
+        ...found.map((l) => `・${l.name}`),
+        "請自行判斷，在 Dashboard 點正確那位的「+ Create Service History」（黃框標出的列），打開表單後會自動填入。"];
+      save().then(() => {
+        if (pageIsFor(visit)) fillPage();
+        else if (!onDashboard() && state.dashboard) location.href = state.dashboard;
+        else { markChoices(); render(); keep(); say(`${lead}\n${state.notes[state.current].join("\n")}`, true); }
+      });
+      return;
+    }
+    const link = found[0].url;
     state.status[state.current] = "filling";
     save().then(() => {
       if (onCreate() && personId(location.href) === personId(link)) fillPage();
@@ -244,13 +276,14 @@
     const done = [], missing = [], goalNotes = [];
     const title = textOf([...document.querySelectorAll("h1, h2, h3, .page-title")]
       .find((h) => /create service history/i.test(h.textContent))) || document.title;
-    if (!letters(title).includes(letters(visit.first).split(" ")[0]) || !letters(title).includes(letters(visit.last))) {
+    if (!` ${letters(title)} `.includes(` ${firstWord(visit.first)} `)) {
       state.status[i] = "todo";
       save(); render();
       keep();
       say(`這一頁不是 ${visit.first} ${visit.last} 的表單（${title}），沒有填。`, true);
       return;
     }
+    state.chose = state.status[i] === "choose" ? i : -1; // the user picked this student themselves
     state.status[i] = "filling";
     save(); render();
     keep();
@@ -322,7 +355,9 @@
       pick("Student Progress", "PR - Progressing", (t) => /^pr\b/i.test(t));
     }
 
-    state.notes[i] = [...goalNotes, ...missing.map((m) => `沒填到：${m}`)];
+    const chose = state.status[i] === "filling" && state.chose === i
+      ? [`⚠ 這位是你在 Dashboard 選的學生（${title.replace(/\s*-\s*Create Service History.*/i, "")}），請再確認是不是要填的那位。`] : [];
+    state.notes[i] = [...chose, ...goalNotes, ...missing.map((m) => `沒填到：${m}`)];
     state.filled = done;
     save(); render();
     keep();
@@ -383,7 +418,7 @@
     ul.cells .who{flex:1}
     .badge{font-size:11px;padding:1px 6px;border-radius:9px;background:#e8eaed;white-space:nowrap}
     .badge.saved{background:#d7f0dc;color:#1b5e20}.badge.problem{background:#fdecea;color:#8a1c12}
-    .badge.filling{background:#fff4ce;color:#7a5b00}
+    .badge.filling{background:#fff4ce;color:#7a5b00}.badge.choose{background:#ffe2c2;color:#8a4500}
     .hidden{display:none}
   </style>
   <div class="panel">
@@ -519,8 +554,8 @@
     if (!state) return;
     if (onDashboard()) {
       state.links = dashboardLinks();
-      const found = Object.values(state.links).filter(Boolean).length;
-      if (!found) {
+      state.dashboard = location.href;
+      if (!state.links.length) {
         state.links = null;
         keep();
         say("Dashboard 上找不到任何「Create Service History」連結。", true);
@@ -582,15 +617,21 @@
 
   document.documentElement.append(host);
   load().then(() => {
+    if (state && !Array.isArray(state.links)) state.links = null; // read by an older version: find them again
     render();
     if (!state) return;
     // While going through the charts, the panel stays open from page to page.
-    if (state.status.includes("filling") || sessionStorage.getItem(SUBMITTED) !== null) show(true);
+    if (state.status.includes("filling") || state.status.includes("choose")
+      || sessionStorage.getItem(SUBMITTED) !== null) show(true);
     if (afterSubmit()) { render(); return; }
     const i = state.current;
-    if (i >= 0 && state.status[i] === "filling" && onCreate()) {
-      const link = linkOf(state.file.visits[i]);
-      if (link && personId(link) === personId(location.href)) fillPage();
+    if (i < 0) return;
+    const visit = state.file.visits[i];
+    if (state.status[i] === "choose") {
+      if (pageIsFor(visit)) fillPage();
+      else if (onDashboard()) { markChoices(); keep(); say(state.notes[i].join("\n"), true); render(); }
+    } else if (state.status[i] === "filling" && onCreate()) {
+      if (pageIsFor(visit) && (linkOf(visit) || state.chose === i)) fillPage();
       else { state.status[i] = "todo"; save(); render(); }
     }
   }, (error) => {
