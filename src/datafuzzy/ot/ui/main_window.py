@@ -7,7 +7,7 @@ from datetime import date
 from pathlib import Path
 
 from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QAction, QCloseEvent, QPalette
+from PySide6.QtGui import QAction, QCloseEvent, QColor, QPalette
 from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QStackedWidget,
+    QStyle,
     QVBoxLayout,
     QWidget,
 )
@@ -50,7 +51,7 @@ from .exchange_dialogs import (
 from .followup_dialog import offer_followup_review
 from .i18n import language, mode_names, save_language, tr
 from .location_view import NO_LOCATION, LocationRecordsView
-from .profile_dialog import StudentProfileDialog
+from .profile_dialog import StudentProfileDialog, profile_gaps
 from .settings_dialog import SettingsDialog
 from .student_view import StudentRecordsView
 from .timetable_view import TimetableView
@@ -60,6 +61,7 @@ STUDENT_MODE = 0
 DATE_MODE = 1
 LOCATION_MODE = 2
 TIMETABLE_MODE = 3
+GAPS_COLOR = "#e07b00"  # orange, readable light or dark: a student whose 基本資訊 is not filled in yet
 
 # Content pages
 PLACEHOLDER, STUDENT_PAGE, DAY_PAGE, EDITOR_PAGE, LOCATION_PAGE, TIMETABLE_PAGE = range(6)
@@ -183,7 +185,18 @@ class TheraNoteWindow(QMainWindow):
         self.calendar = MarkedCalendar(store)
         self.location_list = QListWidget()
         self.sidebar_stack = QStackedWidget()
-        self.sidebar_stack.addWidget(self.student_list)
+        # Student mode: the list, and below it how many active students' 基本資訊 is not filled in yet.
+        self.gaps_note = QLabel("")
+        self.gaps_note.setObjectName("gaps")
+        self.gaps_note.setWordWrap(True)
+        self.gaps_note.setStyleSheet(f"color: {GAPS_COLOR};")
+        self.gaps_note.hide()
+        students_page = QWidget()
+        students_layout = QVBoxLayout(students_page)
+        students_layout.setContentsMargins(0, 0, 0, 0)
+        students_layout.addWidget(self.student_list, 1)
+        students_layout.addWidget(self.gaps_note)
+        self.sidebar_stack.addWidget(students_page)
         self.sidebar_stack.addWidget(self.calendar)
         self.sidebar_stack.addWidget(self.location_list)
         # Timetable mode: who is active but has no session time yet, to be fitted in.
@@ -295,15 +308,24 @@ class TheraNoteWindow(QMainWindow):
         self.student_list.clear()
         students = self.store.students()
         grey = self.palette().color(QPalette.ColorRole.PlaceholderText)
+        warning = self.style().standardIcon(QStyle.StandardPixmap.SP_MessageBoxWarning)
+        incomplete = 0
         for student in sorted(students, key=lambda s: not s.active):  # stable: by name within each
             item = QListWidgetItem(student.name if student.active else tr("{name}（停用）", name=student.name))
             item.setData(Qt.ItemDataRole.UserRole, student.id)
             if not student.active:
                 item.setForeground(grey)
+            elif gaps := profile_gaps(self.store.get_profile(student.id), self.store.student_location(student.id)):
+                incomplete += 1
+                item.setIcon(warning)
+                item.setForeground(QColor(GAPS_COLOR))
+                item.setToolTip(tr("基本資訊還沒填完整，缺：{parts}", parts="、".join(tr(g) for g in gaps)))
             self.student_list.addItem(item)
             if student.id == keep:
                 self.student_list.setCurrentItem(item)
         self.student_list.blockSignals(False)
+        self.gaps_note.setText(tr("⚠ {count} 位學生的基本資訊還沒填完整（橘色），右鍵點名字可以直接編輯", count=incomplete))
+        self.gaps_note.setVisible(incomplete > 0)
         self.add_record_btn.setEnabled(self.student_list.count() > 0)
         self.student_view.show_student(self.current_student_id())
         if self.mode_switch.index() == STUDENT_MODE and self.editor is None:
@@ -369,6 +391,7 @@ class TheraNoteWindow(QMainWindow):
             self.editor.show_profile()
         self.refresh_locations()  # a location may be new
         self.refresh_timetable()  # the session times may have changed
+        self.refresh_students()  # it may be filled in now, or no longer
         return True
 
     def set_active(self, student_id: int, active: bool) -> None:
@@ -399,6 +422,8 @@ class TheraNoteWindow(QMainWindow):
             return None
         student_id = item.data(Qt.ItemDataRole.UserRole)
         menu = QMenu(self)
+        menu.addAction(tr("編輯基本資訊…")).triggered.connect(lambda: self.edit_profile(student_id))
+        menu.addSeparator()
         if self.store.get_student(student_id).active:
             menu.addAction(tr("停用學生")).triggered.connect(lambda: self.set_active(student_id, False))
         else:

@@ -650,3 +650,18 @@ def summary_value(profile: StudentProfile, field: str, plan: Plan | None = None)
     if field == "ma_billing":
         return "Yes" if profile.ma_billing else ""
     return getattr(profile, field)
+
+
+def profile_gaps(profile: StudentProfile, location: str = "") -> list[str]:
+    """The parts of a student's 基本資訊 left blank, named as the dialog names them: the
+    location (`location`, else the profile's), diagnosis, age, grade, classroom, case manager,
+    the latest plan's date, frequency (a pre-school student's times per days and units, a
+    minutes a month otherwise) and goals, and the session times. MA billing and the school
+    year always have a value."""
+    plan = profile.plan
+    frequency = (plan.visits and plan.days and plan.units) if profile.grade == PRESCHOOL else plan.frequency
+    parts = (("地點", location or profile.location), ("Diagnosis", profile.diagnosis), ("Age", profile.age),
+             ("Grade", profile.grade), ("Classroom", profile.classroom), ("Case manager", profile.case_manager),
+             ("IEP/504 Date", plan.plan_date), ("Frequency", frequency),
+             ("Goals", "".join(plan.goals)), ("看診時段", profile.sessions))
+    return [name for name, value in parts if not (value.strip() if isinstance(value, str) else value)]

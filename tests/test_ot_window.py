@@ -960,3 +960,32 @@ def test_an_ace_export_with_incomplete_charts_lists_them_beside_the_window(qtbot
     window.refresh_after_change()
     assert listed.list.item(0).text().startswith("✓ 已補齊")
     assert listed.retry_btn.isEnabled()
+
+
+def test_students_with_a_profile_not_filled_in_are_marked_in_the_list(qtbot, store, monkeypatch):
+    wang = store.add_student("王小明")
+    chen = store.add_student("陳美玲")
+    store.set_profile(wang.id, StudentProfile(
+        diagnosis="ASD", age="7", grade="2", classroom="101", case_manager="Lee", location="A校",
+        sessions=(Session(0, "10:00", "10:30"),), plan_date="09/01/2026", frequency=60, goals=("Write name",)))
+    store.set_profile(chen.id, StudentProfile(diagnosis="ADHD", location="A校"))
+    window = make_window(qtbot, store)
+    assert student_names(window) == ["王小明", "陳美玲"]  # the names stay as they are
+    wang_row, chen_row = (window.student_list.item(i) for i in range(2))
+    assert (wang_row.toolTip(), wang_row.icon().isNull()) == ("", True)
+    assert chen_row.toolTip().startswith("基本資訊還沒填完整，缺：Age、Grade")
+    assert not chen_row.icon().isNull()
+    assert window.gaps_note.isVisibleTo(window) and "1 位學生" in window.gaps_note.text()
+    filled = replace(store.get_profile(wang.id), diagnosis="ADHD")
+    monkeypatch.setattr(window, "_ask_profile", lambda name, current: filled)
+    student_menu_action(window, "編輯基本資訊…", row=1).trigger()
+    assert window.student_list.item(1).toolTip() == ""
+    assert not window.gaps_note.isVisibleTo(window)
+
+
+def test_a_stopped_student_is_not_marked_for_a_profile_not_filled_in(qtbot, store):
+    wang = store.add_student("王小明")
+    store.set_active(wang.id, False)
+    window = make_window(qtbot, store)
+    assert window.student_list.item(0).toolTip() == ""
+    assert not window.gaps_note.isVisibleTo(window)

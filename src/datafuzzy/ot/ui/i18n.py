@@ -208,6 +208,10 @@ ENGLISH = {
     "學校或診所；新病歷會帶入": "School or clinic; new charts use it",
     "到": "to",
     "編輯基本資訊": "Edit profile",
+    "編輯基本資訊…": "Edit profile…",
+    "基本資訊還沒填完整，缺：{parts}": "Profile not complete, missing: {parts}",
+    "⚠ {count} 位學生的基本資訊還沒填完整（橘色），右鍵點名字可以直接編輯":
+        "⚠ {count} students' profiles are not complete (orange); right-click a name to edit",
     "看診時段": "Sessions",
     "領取教室": "Pickup room",
     "去哪裡找這個孩子": "Where to find the child for the session",

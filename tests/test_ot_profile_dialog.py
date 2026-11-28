@@ -1,9 +1,14 @@
+from dataclasses import replace
 from datetime import date
 
 from PySide6.QtCore import QDate
 
 from datafuzzy.ot.db import Plan, Session, StudentProfile
-from datafuzzy.ot.ui.profile_dialog import ProfileSummary, StudentProfileDialog
+from datafuzzy.ot.ui.profile_dialog import (
+    ProfileSummary,
+    StudentProfileDialog,
+    profile_gaps,
+)
 
 
 def test_dialog_starts_from_the_saved_profile(qtbot):
@@ -380,3 +385,28 @@ def test_typed_visits_are_saved_with_the_plan(qtbot):
 def test_a_plan_s_visits_show_when_it_opens(qtbot):
     dialog = grade_dialog(qtbot, "Pre-School", Plan(visits=1, days=7, units=2))
     assert [b.currentText() for b in (dialog.plans.visits, dialog.plans.days, dialog.plans.units)] == ["1", "7", "2"]
+
+
+FULL = StudentProfile(diagnosis="ASD", age="7", grade="2", classroom="101", case_manager="Ms. Lee",
+                      location="A校", sessions=(Session(0, "10:00", "10:30"),), plan_date="09/01/2026",
+                      frequency=60, goals=("Write name",))
+
+
+def test_a_filled_in_profile_has_no_gaps():
+    assert profile_gaps(FULL) == []
+
+
+def test_profile_gaps_name_every_blank_part():
+    assert profile_gaps(StudentProfile()) == ["地點", "Diagnosis", "Age", "Grade", "Classroom", "Case manager",
+                                              "IEP/504 Date", "Frequency", "Goals", "看診時段"]
+
+
+def test_profile_gaps_take_the_location_given():
+    assert profile_gaps(replace(FULL, location=""), "B校") == []
+    assert profile_gaps(replace(FULL, location="", diagnosis=" ")) == ["地點", "Diagnosis"]
+
+
+def test_a_preschool_profile_needs_its_times_per_days_and_units():
+    preschool = replace(FULL, grade="Pre-School", frequency=0)
+    assert profile_gaps(preschool) == ["Frequency"]
+    assert profile_gaps(replace(preschool, visits=1, days=7, units=2)) == []

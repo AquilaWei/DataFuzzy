@@ -34,7 +34,7 @@
 | 其他 | 不顯示 |
 
 學生模式的病歷卡片（地點旁）和日曆模式的清單（名字右側）都會顯示這份病歷的模式＋服務類型，例如 `Individual - Direct Therapy Time`。已經有內容的欄位不會因為換類型而被藏起來；清空後游標離開，才依目前的類型隱藏。記錄框按右鍵「移到追蹤」可把選取的文字搬到追蹤。舊版病歷會自動轉換：individual、group 變成該模式的 Direct Therapy Time，consult、collaboration、make up 變成 Individual 的同名類型。第一次開啟新版時，記錄裡以 `Follow-up:`、`* **Follow-up:**`、`F/U:`、`追蹤：`、`Plan:`、`Next session`、`下次` 等開頭的段落會列成清單，勾選後才搬到追蹤（之後可從 TheraNote 選單「重新檢查 Follow-up…」再做一次）。
-學生頁姓名旁或病歷上方的「基本資訊」可填地點、Diagnosis、Age、Grade（下拉選 Pre-School、K、1–12；舊資料依內容自動對應，例如 `Pre-K` → Pre-School、`3rd` → 3，認不出的保留原文）、Classroom、Case manager、MA billing（勾選表示這位學生的治療走 MA billing）、Service plan、School year 與 Goals（一個目標一列，可自行新增或移除），匯出時自動填入表頭。每份 Service plan 一列一項：Plan type（IEP 或 504，預設 IEP；504 匯出成 504 Date）、Date（從日曆選計畫開始日期）、Service type（Individual 或 Group，預設 Individual）、Frequency（每月治療分鐘數，以 30 分鐘為單位選，匯出成 `30 mins/month`；Pre-School 學生改填次數、天數、單位三個下拉，也可直接打字，匯出成 `1 times per 7 days, 2 units`）。IEP/504 快到期時按「＋ 新的計畫」填入新的日期、Frequency 與目標，舊的計畫連同目標都會保留，可從下拉選單切換顯示；每份病歷依它的日期使用當時有效的計畫目標。
+學生頁姓名旁或病歷上方的「基本資訊」可填地點、Diagnosis、Age、Grade（下拉選 Pre-School、K、1–12；舊資料依內容自動對應，例如 `Pre-K` → Pre-School、`3rd` → 3，認不出的保留原文）、Classroom、Case manager、MA billing（勾選表示這位學生的治療走 MA billing）、Service plan、School year 與 Goals（一個目標一列，可自行新增或移除），匯出時自動填入表頭。每份 Service plan 一列一項：Plan type（IEP 或 504，預設 IEP；504 匯出成 504 Date）、Date（從日曆選計畫開始日期）、Service type（Individual 或 Group，預設 Individual）、Frequency（每月治療分鐘數，以 30 分鐘為單位選，匯出成 `30 mins/month`；Pre-School 學生改填次數、天數、單位三個下拉，也可直接打字，匯出成 `1 times per 7 days, 2 units`）。IEP/504 快到期時按「＋ 新的計畫」填入新的日期、Frequency 與目標，舊的計畫連同目標都會保留，可從下拉選單切換顯示；每份病歷依它的日期使用當時有效的計畫目標。基本資訊沒填完整的啟用中學生（缺地點、Diagnosis、Age、Grade、Classroom、Case manager、IEP/504 日期、Frequency、Goals 或看診時段），在學生名單上會以橘色加 ⚠ 標示，名單下方寫出共有幾位；滑鼠移到名字上可看缺哪些，右鍵選「編輯基本資訊…」直接補齊，補好後標示即消失。
 
 ```bash
 uv sync
