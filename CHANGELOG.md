@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.27] - 2026-11-27
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- KeepCurrent：填寫前先查那位學生的 Session Notes，同一天已有開始時間與時長都相同的 Occupational Therapy 就標「已存在」並跳過，避免重複填寫；同一天但時間或時長不同就標「需確認」，由使用者選「照樣填寫」或「跳過」。
+
 ## [0.7.0.37.26] - 2026-11-27
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
