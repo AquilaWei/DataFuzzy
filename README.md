@@ -78,8 +78,21 @@ uv run theranote
   安裝：Chrome 開 `chrome://extensions` → 開啟「開發人員模式」→「載入未封裝項目」→ 選 `chrome-extension/` 資料夾
   （Chrome 直接使用這個資料夾，請勿搬動；更新後在 `chrome://extensions` 按重新載入）。擴充功能的圖示和版本號與 TheraNote 相同。
   面板平常不顯示，在 ACE 頁面點工具列上的 TheraNote 圖示才打開，再點一次或按 ✕ 關閉。
-  擴充功能只在 acestudentcare.com 上執行、不連線到其他地方；填寫檔與進度只放在瀏覽器記憶體，關掉 Chrome 就清除。
+  擴充功能只在 acestudentcare.com 和 mykeepcurrent.com 上執行、不連線到其他地方；填寫檔與進度只放在瀏覽器記憶體，關掉 Chrome 就清除。
   **填寫檔含學生姓名與英文病歷且未加密，填完請刪除。**
+- **KeepCurrent 自動填寫（Pre-School 學生）**：同一份「ACE 填寫檔」也會存進 Grade 是 Pre-School 的學生的病歷。
+  在 KeepCurrent 的 Dashboard 點工具列的 TheraNote 圖示，選填寫檔，按「開始」：擴充功能依名字找出每位學生的
+  「+ Create Service History」，一筆一筆打開表單填好後停下，**勾好 Routines（和需要的 Treatment Keys）、檢查後自己按 Save**；
+  存好會自動打開下一筆，不存就按「跳過」。
+
+  | TheraNote 類型 | Service Application Type | Direct Time | 其他 |
+  |---|---|---|---|
+  | Direct Therapy Time／Make-Up | D - Direct／DM - Direct Session | 結束減開始 | 勾當天計畫裡分數為 met、not met 的 IEP 目標；Strategies 勾 Verbal/Visual Redirection、Verbal/Visual Prompting；Description 填英文 comment；Student Progress 選 PR - Progressing |
+  | Absent Student、No-Show／Therapist Absent／School Not in Session／Unavailable Student | SA／PA／School Closed／SNA | 0 | Description 填該類型的名稱 |
+
+  每筆都填 Session Date、Session Type、Title（Occupational Therapist）、Start Time（End Time 由網站算），並勾 Include Session Note；
+  Attendance、Staff Note 不動。其他類型（Collaboration、Scheduling…）不會填進 KeepCurrent。
+  IEP 目標依文字比對 KeepCurrent 的勾選項，明確對上的才勾；不確定的面板會標「需確認」並寫出最像的一項。
 - **資料位置**：macOS 為 `~/Library/Application Support/TheraNote/theranote.db`，
   Linux 為 `~/.local/share/TheraNote/theranote.db`（遵循 `XDG_DATA_HOME`）。
   可用 `THERANOTE_DB=/path/to/charts.db uv run theranote` 指定其他資料庫。

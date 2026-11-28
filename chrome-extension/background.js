@@ -7,7 +7,7 @@ allowPanel();
 chrome.runtime.onInstalled.addListener(allowPanel);
 chrome.runtime.onStartup.addListener(allowPanel);
 
-// The toolbar button shows or hides the panel; it only exists on ACE Portal's pages.
+// The toolbar button shows or hides the panel; it only exists on ACE Portal's and KeepCurrent's pages.
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (!msg || msg.theranoteAce !== "allow") return false;
   allowPanel().then(() => reply(true), () => reply(false));
@@ -16,6 +16,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 
 chrome.action.onClicked.addListener((tab) => {
   chrome.tabs.sendMessage(tab.id, {theranoteAce: "toggle"}).catch(() => {
-    // Not an ACE page (no panel there): nothing to show.
+    // Neither an ACE nor a KeepCurrent page (no panel there): nothing to show.
   });
 });

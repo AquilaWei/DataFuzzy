@@ -1,6 +1,11 @@
 import json
+import shutil
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).parents[1]
 MANIFEST = json.loads((ROOT / "chrome-extension" / "manifest.json").read_text())
@@ -19,3 +24,79 @@ def test_chrome_s_version_is_the_app_s_first_four_numbers():
 def test_every_icon_the_manifest_names_exists():
     icons = list(MANIFEST["icons"].values()) + list(MANIFEST["action"]["default_icon"].values())
     assert [icon for icon in icons if not (ROOT / "chrome-extension" / icon).exists()] == []
+
+
+# --- KeepCurrent ----------------------------------------------------------------------------
+
+KC_SCRIPTS = ["kc-match.js", "keepcurrent.js"]
+
+
+def test_keepcurrent_pages_get_their_own_scripts():
+    sites = ["https://www.mykeepcurrent.com/*", "https://mykeepcurrent.com/*"]
+    assert set(sites) <= set(MANIFEST["host_permissions"])
+    [entry] = [c for c in MANIFEST["content_scripts"] if c["matches"] == sites]
+    assert entry["js"] == KC_SCRIPTS
+    assert all((ROOT / "chrome-extension" / js).exists() for js in KC_SCRIPTS)
+
+
+def test_ace_pages_do_not_load_the_keepcurrent_scripts():
+    ace = [c for c in MANIFEST["content_scripts"] if "acestudentcare" in c["matches"][0]]
+    assert ace and all(js not in c["js"] for c in ace for js in KC_SCRIPTS)
+
+
+def run_match(expression):
+    """`expression` evaluated with kc-match.js loaded, in macOS's JavaScript engine, as JSON."""
+    if sys.platform != "darwin" or not shutil.which("osascript"):
+        pytest.skip("needs macOS's osascript to run JavaScript")
+    source = (ROOT / "chrome-extension" / "kc-match.js").read_text()
+    script = f"{source}\nJSON.stringify({expression})"
+    out = subprocess.run(["osascript", "-l", "JavaScript", "-e", script], capture_output=True, text=True, check=True)
+    return json.loads(out.stdout)
+
+
+GOAL = ("Using a variety of sensory strategies, Dree will participate in non-preferred group tasks. "
+        "This goal will be achieved when Dree participates in group tasks for 10 minutes over 10 group tasks.")
+OPTIONS = [
+    "Participate in non preferred group tasks " + GOAL,
+    ("Alerting to name and following routine directions- speech Dree will alert to his name and follow "
+    "routine/familiar directions during the day on 10 occasions over 4 consecutive school days"),
+    ("Ball Skills Dree will participate in reciprocal catch and throw using a medium ball, accurately catching "
+    "and throwing 7 out of 10 repetitions with a partner such as therapist or teacher seated 3-4 feet away."),
+]
+
+
+def match(goals, options=OPTIONS, names=("Dree", "Todd")):
+    return run_match(f"TheraNoteKcMatch.matchGoals({json.dumps(list(goals))}, {json.dumps(options)}, "
+                     f"{json.dumps(list(names))})")
+
+
+def test_a_goal_copied_from_the_iep_is_ticked():
+    [m] = match([GOAL])
+    assert (m["option"], m["tick"], m["score"]) == (0, True, 1)
+
+
+def test_a_goal_reworded_a_little_is_still_ticked():
+    [m] = match([("Student will participate in reciprocal catch and throw with a medium ball, catching and "
+                 "throwing 7 of 10 repetitions with a partner (therapist or teacher) 3-4 feet away.")])
+    assert (m["option"], m["tick"]) == (2, True)
+
+
+def test_a_goal_written_with_he_matches_one_written_with_the_name():
+    [m] = match([GOAL.replace("Dree participates", "he participates")])
+    assert (m["option"], m["tick"]) == (0, True)
+
+
+def test_an_unrelated_goal_ticks_nothing():
+    [m] = match(["Copy upper case letters with correct formation on lined paper."])
+    assert (m["option"], m["tick"], m["best"]) == (-1, False, -1)
+
+
+def test_each_option_is_ticked_for_one_goal_at_most():
+    first, second = match([GOAL, GOAL + " Again."])
+    assert first["option"] == 0 and second["option"] != 0
+
+
+def test_a_doubtful_match_is_left_for_the_user_naming_the_likeliest():
+    [m] = match(["Dree will follow familiar routine directions in class."])
+    assert m["tick"] is False
+    assert m["best"] in (1, -1)

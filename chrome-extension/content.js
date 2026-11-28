@@ -5,7 +5,8 @@
 // browser quits.
 (() => {
   "use strict";
-  const FORMAT = "theranote-ace/1";
+  const FORMAT = "theranote-ace/2";
+  const FORMATS = ["theranote-ace/1", FORMAT]; // 2 only added the charts for KeepCurrent
   const KEY = "theranoteAce";
   const PROBLEMS = {
     manual_type: "Consult：ACE 沒有對應類型，請手動填",
@@ -79,7 +80,7 @@
 
   function openFile(text) {
     const file = JSON.parse(text);
-    if (file.format !== FORMAT) throw new Error(`這不是 TheraNote 的 ACE 填寫檔（${FORMAT}）`);
+    if (!FORMATS.includes(file.format)) throw new Error(`這不是 TheraNote 的 ACE 填寫檔（${FORMAT}）`);
     state = {file, status: file.cells.map((c) => (c.problems.length ? "problem" : "todo")),
       notes: file.cells.map(() => []), current: 0};
     state.current = nextTodo(0);
