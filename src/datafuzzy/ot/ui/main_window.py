@@ -51,7 +51,7 @@ from .exchange_dialogs import (
 from .followup_dialog import offer_followup_review
 from .i18n import language, mode_names, save_language, tr
 from .location_view import NO_LOCATION, LocationRecordsView
-from .profile_dialog import StudentProfileDialog, profile_gaps
+from .profile_dialog import GAPS_COLOR, StudentProfileDialog, profile_gaps
 from .settings_dialog import SettingsDialog
 from .student_view import StudentRecordsView
 from .timetable_view import TimetableView
@@ -61,7 +61,6 @@ STUDENT_MODE = 0
 DATE_MODE = 1
 LOCATION_MODE = 2
 TIMETABLE_MODE = 3
-GAPS_COLOR = "#e07b00"  # orange, readable light or dark: a student whose 基本資訊 is not filled in yet
 
 # Content pages
 PLACEHOLDER, STUDENT_PAGE, DAY_PAGE, EDITOR_PAGE, LOCATION_PAGE, TIMETABLE_PAGE = range(6)

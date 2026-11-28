@@ -410,3 +410,32 @@ def test_a_preschool_profile_needs_its_times_per_days_and_units():
     preschool = replace(FULL, grade="Pre-School", frequency=0)
     assert profile_gaps(preschool) == ["Frequency"]
     assert profile_gaps(replace(preschool, visits=1, days=7, units=2)) == []
+
+
+def test_dialog_says_what_is_not_filled_in_and_marks_those_rows(qtbot):
+    dialog = StudentProfileDialog("王小明", replace(FULL, age="", goals=()), today=date(2026, 10, 26))
+    qtbot.addWidget(dialog)
+    assert dialog.gaps() == ["Age", "Goals"]
+    assert not dialog.gaps_note.isHidden()
+    assert "缺：Age、Goals" in dialog.gaps_note.text()
+    assert dialog._gap_labels["Age"].text() == "⚠ Age"
+    assert dialog._gap_labels["Diagnosis"].text() == "Diagnosis"
+
+
+def test_dialog_takes_the_marks_off_as_the_parts_are_filled_in(qtbot):
+    dialog = StudentProfileDialog("王小明", replace(FULL, age="", goals=()), today=date(2026, 10, 26))
+    qtbot.addWidget(dialog)
+    dialog.age.setText("7")
+    assert dialog._gap_labels["Age"].text() == "Age"
+    dialog.goals.add_row().edit.setPlainText("Button three buttons")
+    assert dialog.gaps_note.isHidden()
+    assert dialog._gap_labels["Goals"].text() == "Goals"
+    dialog.sessions.remove_row(dialog.sessions.rows[0])
+    assert dialog.gaps() == ["看診時段"]
+
+
+def test_a_filled_in_profile_shows_no_note(qtbot):
+    dialog = StudentProfileDialog("王小明", FULL, today=date(2026, 10, 26))
+    qtbot.addWidget(dialog)
+    assert dialog.gaps_note.isHidden()
+    assert dialog.profile().goals == FULL.goals  # checking changed nothing

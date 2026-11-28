@@ -141,6 +141,8 @@ class SessionRow(QWidget):
 class SessionsEditor(QWidget):
     """The student's weekly session times, as many as needed."""
 
+    changed = Signal()  # a row added, taken out or edited
+
     def __init__(self, sessions: tuple[Session, ...] = (), classrooms: list[str] | None = None,
                  parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -161,14 +163,18 @@ class SessionsEditor(QWidget):
     def add_row(self, session: Session | None = None) -> SessionRow:
         row = SessionRow(session, self.classrooms)
         row.removed.connect(self.remove_row)
+        row.start.editTextChanged.connect(self.changed)
+        row.end.editTextChanged.connect(self.changed)
         self.rows.append(row)
         self._rows.addWidget(row)
+        self.changed.emit()
         return row
 
     def remove_row(self, row: SessionRow) -> None:
         self.rows.remove(row)
         row.setParent(None)
         row.deleteLater()
+        self.changed.emit()
 
     def sessions(self) -> tuple[Session, ...]:
         """The filled-in rows (blank ones are left out). Raises ValueError for a time that
@@ -205,6 +211,8 @@ class GoalsEditor(QWidget):
     """The student's goals, as many as they have. Their order is their number on the form,
     Goal 1 first; taking one out renumbers those after it."""
 
+    changed = Signal()  # a goal added, taken out or edited
+
     def __init__(self, goals: tuple[str, ...] = (), parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.rows: list[GoalRow] = []
@@ -232,8 +240,10 @@ class GoalsEditor(QWidget):
     def add_row(self, goal: str = "") -> GoalRow:
         row = GoalRow(len(self.rows) + 1, goal)
         row.removed.connect(self.remove_row)
+        row.edit.textChanged.connect(self.changed)
         self.rows.append(row)
         self._rows.addWidget(row)
+        self.changed.emit()
         return row
 
     def remove_row(self, row: GoalRow) -> None:
@@ -242,6 +252,7 @@ class GoalsEditor(QWidget):
         row.deleteLater()
         for number, other in enumerate(self.rows, start=1):
             other.number(number)
+        self.changed.emit()
 
     def goals(self) -> tuple[str, ...]:
         """The filled-in goals in order (blank ones are left out)."""
@@ -457,6 +468,13 @@ class PlanEditor(QWidget):
         box.setDefaultButton(QMessageBox.StandardButton.Cancel)  # a stray Return keeps the plan
         return box.exec() == QMessageBox.StandardButton.Yes
 
+    def as_edited(self) -> list[Plan]:
+        """Every plan, the shown one as edited so far, without taking its edits into the list
+        (it may be half loaded)."""
+        plans = list(self._plans)
+        plans[self._shown] = self._shown_plan(self.goals.goals())
+        return plans
+
     def plans(self) -> list[Plan]:
         """Every plan, as edited, newest first as listed."""
         self._keep()
@@ -516,6 +534,9 @@ class StudentProfileDialog(QDialog):
         self.sessions = SessionsEditor(profile.sessions, classrooms)
         self.problem = QLabel("")
         self.problem.setStyleSheet("color: #ff453a;")  # as in the unlock prompt
+        self.gaps_note = QLabel("")  # what is not filled in yet, kept up to date while editing
+        self.gaps_note.setWordWrap(True)
+        self.gaps_note.setStyleSheet(f"color: {GAPS_COLOR};")
 
         school_year = QHBoxLayout()
         school_year.addWidget(self.year_from)
@@ -544,10 +565,55 @@ class StudentProfileDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout = QVBoxLayout(self)
+        layout.addWidget(self.gaps_note)
         layout.addLayout(form)
         layout.addStretch(1)  # spare height below the form, not inside the goals
         layout.addWidget(self.problem)
         layout.addWidget(buttons)
+
+        # The row of each part profile_gaps names, to mark it while it is blank.
+        self._gap_labels = {gap: form.labelForField(widget) for gap, widget in (
+            ("地點", self.location), ("Diagnosis", self.diagnosis), ("Age", self.age), ("Grade", self.grade),
+            ("Classroom", self.classroom), ("Case manager", self.case_manager), ("IEP/504 Date", self.plan_date),
+            ("Frequency", self.plans.frequency_stack), ("Goals", self.goals), ("看診時段", self.sessions))}
+        self._gap_texts = {gap: label.text() for gap, label in self._gap_labels.items()}
+        for edit in (self.diagnosis, self.age, self.classroom, self.case_manager):
+            edit.textChanged.connect(self.show_gaps)
+        self.location.editTextChanged.connect(self.show_gaps)
+        self.grade.currentTextChanged.connect(self.show_gaps)
+        self.plan_date.dateChanged.connect(self.show_gaps)
+        for box in (self.plans.picker, self.plans.frequency, self.plans.visits, self.plans.days, self.plans.units):
+            box.currentIndexChanged.connect(self.show_gaps)
+        for button in (self.plans.add_btn, self.plans.remove_btn):
+            button.clicked.connect(self.show_gaps)
+        self.goals.changed.connect(self.show_gaps)
+        self.sessions.changed.connect(self.show_gaps)
+        self.show_gaps()
+
+    def gaps(self) -> list[str]:
+        """What profile_gaps finds blank in the profile as edited so far; a session time that
+        cannot be read yet counts as filled in (accept() tells about it)."""
+        try:
+            sessions = self.sessions.sessions()
+        except ValueError:
+            sessions = (Session(0, "", ""),)
+        start, end = (e.date() for e in (self.year_from, self.year_to))
+        profile = StudentProfile(
+            diagnosis=self.diagnosis.text(), age=self.age.text(), grade=self.grade.currentText(),
+            classroom=self.classroom.text(), case_manager=self.case_manager.text(),
+            school_year=format_school_year(date(start.year(), start.month(), 1), date(end.year(), end.month(), 1)),
+            location=self.location.currentText(), sessions=sessions).with_plans(self.plans.as_edited())
+        return profile_gaps(profile)
+
+    def show_gaps(self) -> None:
+        """Say above the form what is not filled in yet, and mark those rows in orange."""
+        gaps = self.gaps()
+        self.gaps_note.setText(tr("⚠ 基本資訊還沒填完整，缺：{parts}", parts="、".join(tr(g) for g in gaps)))
+        self.gaps_note.setVisible(bool(gaps))
+        for gap, label in self._gap_labels.items():
+            missing = gap in gaps
+            label.setText(f"⚠ {self._gap_texts[gap]}" if missing else self._gap_texts[gap])
+            label.setStyleSheet(f"color: {GAPS_COLOR};" if missing else "")
 
     def accept(self) -> None:
         """Close only when every session time and plan date can be read; otherwise say so and
@@ -650,6 +716,9 @@ def summary_value(profile: StudentProfile, field: str, plan: Plan | None = None)
     if field == "ma_billing":
         return "Yes" if profile.ma_billing else ""
     return getattr(profile, field)
+
+
+GAPS_COLOR = "#e07b00"  # orange, readable light or dark: what is not filled in yet
 
 
 def profile_gaps(profile: StudentProfile, location: str = "") -> list[str]:
