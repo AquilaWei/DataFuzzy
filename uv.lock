@@ -170,7 +170,7 @@ wheels = [
 
 [[package]]
 name = "datafuzzy"
-version = "0.7.0.37.24"
+version = "0.7.0.37.25"
 source = { editable = "." }
 dependencies = [
     { name = "certifi" },

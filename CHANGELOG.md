@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Versions follow `MAJOR.MINOR.PATCH`: MINOR for tested new features, PATCH for bug fixes.
 
+## [0.7.0.37.25] - 2026-11-27
+
+TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
+
+### 新增
+- ACE 填寫檔一併存入 Pre-School 學生的病歷（格式 `theranote-ace/2`），供 KeepCurrent 使用；ACE 照舊可讀。
+- Chrome 擴充功能支援 KeepCurrent（mykeepcurrent.com）：從 Dashboard 開始，自動逐位打開 Create Service History 填好 Session Date、Service Application Type、Session Type、Title、Direct Time、Start Time、Include Session Note、IEP 目標、Strategies、Description 和 Student Progress，停下來讓使用者勾 Routines、檢查後按 Save，存好自動到下一筆。
+
 ## [0.7.0.37.24] - 2026-11-21
 
 TheraNote 分支測試版，尚待實機驗收。本次不建立 tag、不發佈。
