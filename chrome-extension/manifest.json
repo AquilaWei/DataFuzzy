@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "TheraNote Filler",
   "version": "0.7.0.37",
-  "version_name": "0.7.0.37.28",
+  "version_name": "0.7.0.37.29",
   "description": "Fills ACE Portal time entries and KeepCurrent service histories from a TheraNote fill-in file, for you to check and save.",
   "icons": {
     "16": "icons/icon-16.png",
